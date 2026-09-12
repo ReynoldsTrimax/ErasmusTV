@@ -11,6 +11,8 @@ import { getActiveCatalogMaturity } from "@/lib/media/catalog-context";
 import { getGenrePage, isCatalogConfigured } from "@/lib/media/catalog";
 import { parseDiscoverFilters } from "@/lib/media/filters";
 
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;

@@ -58,6 +58,7 @@ export default async function TvDetailPage({ params }: PageProps) {
         genreIds: show.genres.map((g) => g.id),
       },
       maturity,
+      { requireCertification: maturity.age < 17 },
     )
   ) {
     return (

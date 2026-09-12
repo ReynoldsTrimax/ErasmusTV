@@ -59,6 +59,8 @@ interface StreamingTheaterModalProps {
   currentEpisode?: number;
   isAnime?: boolean;
   onEpisodeChange?: (season: number, episode: number) => void;
+  posterPath?: string | null;
+  backdropPath?: string | null;
 }
 
 export function StreamingTheaterModal({
@@ -72,6 +74,8 @@ export function StreamingTheaterModal({
   currentEpisode = 1,
   isAnime: _isAnime = false,
   onEpisodeChange,
+  posterPath,
+  backdropPath,
 }: StreamingTheaterModalProps) {
   const [activeSeason, setActiveSeason] = React.useState(currentSeason);
   const [activeEpisode, setActiveEpisode] = React.useState(currentEpisode);
@@ -240,9 +244,13 @@ export function StreamingTheaterModal({
     (seconds: number, duration: number | null) => {
       if (seconds < 5) return;
       lastKnownRef.current = { seconds, duration };
-      savePlaybackProgress(progressInput, seconds, duration);
+      savePlaybackProgress(progressInput, seconds, duration, {
+        title,
+        posterPath,
+        backdropPath,
+      });
     },
-    [progressInput],
+    [progressInput, title, posterPath, backdropPath],
   );
 
   React.useEffect(() => {

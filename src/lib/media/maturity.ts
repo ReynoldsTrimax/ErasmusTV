@@ -6,6 +6,7 @@ export interface CatalogMaturity {
   /** TMDB movie certification.lte when under 17. */
   movieCertLte: "G" | "PG" | "PG-13" | null;
   excludeGenreIds: string[];
+  tvRatings: string[] | null;
 }
 
 const HORROR = "27";
@@ -50,6 +51,7 @@ export function maturityFromBirthYear(
       includeAdult: false,
       movieCertLte: "G",
       excludeGenreIds: [HORROR, THRILLER, CRIME, WAR, ROMANCE],
+      tvRatings: ["TV-Y", "TV-Y7", "TV-G"],
     };
   }
   if (age < 13) {
@@ -58,6 +60,7 @@ export function maturityFromBirthYear(
       includeAdult: false,
       movieCertLte: "PG",
       excludeGenreIds: [HORROR, CRIME, WAR],
+      tvRatings: ["TV-Y", "TV-Y7", "TV-G", "TV-PG"],
     };
   }
   if (age < 17) {
@@ -66,6 +69,7 @@ export function maturityFromBirthYear(
       includeAdult: false,
       movieCertLte: "PG-13",
       excludeGenreIds: [],
+      tvRatings: ["TV-Y", "TV-Y7", "TV-G", "TV-PG", "TV-14"],
     };
   }
   return {
@@ -73,6 +77,7 @@ export function maturityFromBirthYear(
     includeAdult: age >= 18,
     movieCertLte: null,
     excludeGenreIds: [],
+    tvRatings: null,
   };
 }
 
@@ -95,11 +100,19 @@ export function isTitleAllowedForAge(
     genres?: { id: string }[] | null;
   },
   maturity: CatalogMaturity,
+  options: { requireCertification?: boolean } = {},
 ): boolean {
   if (item.adult && maturity.age < 18) return false;
   const mediaType = item.mediaType === "tv" ? "tv" : "movie";
-  if (certificationMinimumAge(item.certification, mediaType) > maturity.age) {
+  const cert = item.certification?.trim() || null;
+  if (options.requireCertification && maturity.age < 17 && !cert) {
     return false;
+  }
+  if (certificationMinimumAge(cert, mediaType) > maturity.age) {
+    return false;
+  }
+  if (maturity.tvRatings && mediaType === "tv" && cert) {
+    if (!maturity.tvRatings.includes(cert.toUpperCase())) return false;
   }
   if (maturity.excludeGenreIds.length) {
     const ids = new Set([
@@ -128,8 +141,10 @@ export function applyMaturityToFilters(
     includeAdult: maturity.includeAdult,
     certificationLte:
       kind === "movie" ? (maturity.movieCertLte ?? undefined) : undefined,
+    certificationGte: kind === "movie" && maturity.movieCertLte ? "G" : undefined,
     certificationCountry:
       kind === "movie" && maturity.movieCertLte ? "US" : undefined,
+    contentRatings: kind === "tv" ? (maturity.tvRatings ?? undefined) : undefined,
     withoutGenreIds: maturity.excludeGenreIds.length
       ? maturity.excludeGenreIds
       : filters.withoutGenreIds,

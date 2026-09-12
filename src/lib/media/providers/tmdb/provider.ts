@@ -296,10 +296,13 @@ export class TmdbMediaProvider implements MediaProvider {
       watch_region: filters.watchRegion ?? (filters.watchProviderId ? "US" : undefined),
       include_adult: filters.includeAdult ?? false,
       certification_country:
-        filters.certificationLte || filters.certificationCountry
+        filters.certificationLte ||
+        filters.certificationGte ||
+        filters.certificationCountry
           ? (filters.certificationCountry ?? "US")
           : undefined,
       "certification.lte": filters.certificationLte,
+      "certification.gte": filters.certificationGte,
       without_genres: filters.withoutGenreIds?.join(","),
     });
     return data
@@ -325,6 +328,7 @@ export class TmdbMediaProvider implements MediaProvider {
       watch_region: filters.watchRegion ?? (filters.watchProviderId ? "US" : undefined),
       include_adult: filters.includeAdult ?? false,
       without_genres: filters.withoutGenreIds?.join(","),
+      with_content_rating: filters.contentRatings?.join("|"),
     });
     return data ? mapPaginated(data, (i) => mapMediaSummary(i, "tv")) : emptyPage();
   }

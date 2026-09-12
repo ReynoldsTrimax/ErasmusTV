@@ -172,6 +172,7 @@ export interface MediaSummary {
   genreIds?: string[];
   adult?: boolean;
   originalLanguage?: string | null;
+  certification?: string | null;
 }
 
 export interface MovieDetails extends MediaSummary {
@@ -382,9 +383,12 @@ export interface MediaDiscoverFilters {
   releaseStatus?: string;
   /** US movie certification ceiling, e.g. PG-13. */
   certificationLte?: string;
+  certificationGte?: string;
   certificationCountry?: string;
   withoutGenreIds?: string[];
   includeAdult?: boolean;
+  /** TV content ratings, e.g. TV-G|TV-PG */
+  contentRatings?: string[];
 }
 
 export interface DiscoverySection {

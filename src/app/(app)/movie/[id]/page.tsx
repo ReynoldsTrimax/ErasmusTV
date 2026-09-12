@@ -67,6 +67,7 @@ export default async function MovieDetailPage({ params }: PageProps) {
         genreIds: movie.genres.map((g) => g.id),
       },
       maturity,
+      { requireCertification: maturity.age < 17 },
     )
   ) {
     return (

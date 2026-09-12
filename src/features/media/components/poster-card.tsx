@@ -158,6 +158,8 @@ export function PosterCard({
             title={item.title}
             tmdbId={item.id}
             mediaType={item.mediaType}
+            posterPath={item.posterPath}
+            backdropPath={item.backdropPath}
             variant="compact"
             className="h-7 flex-1 border-0 bg-white px-1.5 text-[10px] font-semibold text-black hover:bg-white/90 hover:text-black"
           />

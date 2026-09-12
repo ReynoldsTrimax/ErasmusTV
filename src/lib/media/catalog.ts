@@ -22,9 +22,9 @@ import { enrichRatings } from "@/lib/media/ratings";
 import { CREDIBILITY_VOTE_FLOOR } from "@/lib/media/filters";
 import {
   applyMaturityToFilters,
-  filterSummariesForAge,
   type CatalogMaturity,
 } from "@/lib/media/maturity";
+import { enforceMaturityOnSummaries } from "@/lib/media/title-certification";
 
 export function isCatalogConfigured(): boolean {
   return isTmdbConfigured();
@@ -36,24 +36,27 @@ export async function searchCatalog(
   maturity?: CatalogMaturity,
 ): Promise<SearchResponse> {
   const result = await getMediaProvider().search(query, { page });
-  if (!maturity) return result;
+  if (!maturity || maturity.age >= 18) return result;
+  const titles = result.results.filter(
+    (item) => item.kind === "movie" || item.kind === "tv",
+  );
+  const allowed = await enforceMaturityOnSummaries(
+    titles.map((item) => ({
+      id: item.id,
+      mediaType: item.kind as "movie" | "tv",
+      title: item.title,
+      posterPath: item.imagePath,
+      backdropPath: null,
+      adult: item.adult,
+    })),
+    maturity,
+  );
+  const allowedKeys = new Set(allowed.map((item) => `${item.mediaType}:${item.id}`));
   return {
     ...result,
     results: result.results.filter((item) => {
       if (item.kind !== "movie" && item.kind !== "tv") return true;
-      return filterSummariesForAge(
-        [
-          {
-            id: item.id,
-            mediaType: item.kind,
-            title: item.title,
-            posterPath: item.imagePath,
-            backdropPath: null,
-            adult: item.adult,
-          },
-        ],
-        maturity,
-      ).length > 0;
+      return allowedKeys.has(`${item.kind}:${item.id}`);
     }),
   };
 }
@@ -117,9 +120,11 @@ export async function discoverMovies(
     ? applyMaturityToFilters(filters, maturity, "movie")
     : filters;
   const page = await getMediaProvider().discoverMovies(next);
-  return maturity
-    ? { ...page, results: filterSummariesForAge(page.results, maturity) }
-    : page;
+  if (!maturity) return page;
+  return {
+    ...page,
+    results: await enforceMaturityOnSummaries(page.results, maturity),
+  };
 }
 
 export async function discoverTv(
@@ -128,9 +133,11 @@ export async function discoverTv(
 ): Promise<PaginatedResult<MediaSummary>> {
   const next = maturity ? applyMaturityToFilters(filters, maturity, "tv") : filters;
   const page = await getMediaProvider().discoverTv(next);
-  return maturity
-    ? { ...page, results: filterSummariesForAge(page.results, maturity) }
-    : page;
+  if (!maturity) return page;
+  return {
+    ...page,
+    results: await enforceMaturityOnSummaries(page.results, maturity),
+  };
 }
 
 const EMPTY_PAGE: PaginatedResult<MediaSummary> = {
@@ -177,8 +184,8 @@ export async function getDiscoveryHome(
   genres: Genre[];
 }> {
   const provider = getMediaProvider();
-  const clip = (items: MediaSummary[]) =>
-    maturity ? filterSummariesForAge(items, maturity) : items;
+  const clip = async (items: MediaSummary[]) =>
+    maturity ? enforceMaturityOnSummaries(items, maturity) : items;
   const restricted = Boolean(maturity && maturity.age < 17);
 
   const [
@@ -254,82 +261,102 @@ export async function getDiscoveryHome(
     settledGenres(provider.getMovieGenres(), "movie-genres"),
   ]);
 
-  // Prefer a rotating pool of trending + popular titles for the discover banner
   const heroPool = [
     ...trending.results,
     ...popularMovies.results,
     ...popularTv.results,
   ];
   const seen = new Set<string>();
-  const heroItems = clip(
-    heroPool.filter((item) => {
-      const key = `${item.mediaType}:${item.id}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return Boolean(item.backdropPath || item.posterPath);
-    }),
-  ).slice(0, 12);
-  const hero = heroItems[0] ?? trending.results[0] ?? popularMovies.results[0] ?? null;
+  const uniqueHero = heroPool.filter((item) => {
+    const key = `${item.mediaType}:${item.id}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return Boolean(item.backdropPath || item.posterPath);
+  });
 
-  // Soft approach — use top trending items as "Editor's picks" placeholder
-  const editorsPicks = clip([...topMovies.results, ...topTv.results])
-    .sort((a, b) => (b.voteAverage ?? 0) - (a.voteAverage ?? 0))
-    .slice(0, 12);
+  const [
+    heroItems,
+    trendingItems,
+    popularMovieItems,
+    popularTvItems,
+    nowPlayingItems,
+    upcomingItems,
+    topMovieItems,
+    topTvItems,
+    recentItems,
+    editorsPicks,
+  ] = await Promise.all([
+    clip(uniqueHero).then((items) => items.slice(0, 12)),
+    clip(trending.results).then((items) => items.slice(0, 18)),
+    clip(popularMovies.results).then((items) => items.slice(0, 18)),
+    clip(popularTv.results).then((items) => items.slice(0, 18)),
+    clip(nowPlaying.results).then((items) => items.slice(0, 18)),
+    clip(upcoming.results).then((items) => items.slice(0, 18)),
+    clip(topMovies.results).then((items) => items.slice(0, 18)),
+    clip(topTv.results).then((items) => items.slice(0, 18)),
+    clip(recentMovies.results).then((items) => items.slice(0, 18)),
+    clip([...topMovies.results, ...topTv.results]).then((items) =>
+      items
+        .sort((a, b) => (b.voteAverage ?? 0) - (a.voteAverage ?? 0))
+        .slice(0, 12),
+    ),
+  ]);
+  const hero = heroItems[0] ?? null;
 
   const sections: DiscoverySection[] = [
     {
       id: "trending",
       title: "Trending Today",
       href: "/discover?section=trending",
-      items: clip(trending.results).slice(0, 18),
+      items: trendingItems,
     },
     {
       id: "popular-movies",
       title: "Popular Movies",
       href: "/movies?sort=popularity.desc",
-      items: clip(popularMovies.results).slice(0, 18),
+      items: popularMovieItems,
     },
     {
       id: "popular-tv",
       title: "Popular TV Shows",
       href: "/tv?sort=popularity.desc",
-      items: clip(popularTv.results).slice(0, 18),
+      items: popularTvItems,
     },
     {
       id: "now-playing",
       title: "Now Playing",
       href: "/movies?section=now_playing",
-      items: clip(nowPlaying.results).slice(0, 18),
+      items: nowPlayingItems,
     },
     {
       id: "upcoming",
       title: "Upcoming Movies",
       href: "/movies?section=upcoming",
-      items: clip(upcoming.results).slice(0, 18),
+      items: upcomingItems,
     },
     {
       id: "top-movies",
       title: "Top Rated Movies",
       href: "/movies?sort=vote_average.desc",
-      items: clip(topMovies.results).slice(0, 18),
+      items: topMovieItems,
     },
     {
       id: "top-tv",
       title: "Top Rated Shows",
       href: "/tv?sort=vote_average.desc",
-      items: clip(topTv.results).slice(0, 18),
+      items: topTvItems,
     },
     {
       id: "recent",
       title: "Recently Released",
       href: "/movies?sort=release_date.desc",
-      items: clip(recentMovies.results).slice(0, 18),
+      items: recentItems,
     },
     {
       id: "streaming",
       title: "New on Streaming",
       href: "/discover?section=streaming",
-      items: clip(popularMovies.results).slice(4, 16),
+      items: popularMovieItems.slice(4, 16),
     },
     {
       id: "editors",

@@ -50,6 +50,17 @@ describe("maturity", () => {
     ).toBe(true);
   });
 
+  it("hides unrated titles from under-17 profiles when a rating is required", () => {
+    const m = maturityFromBirthYear(2014);
+    expect(
+      isTitleAllowedForAge(
+        { mediaType: "movie", adult: false },
+        m,
+        { requireCertification: true },
+      ),
+    ).toBe(false);
+  });
+
   it("filters a list by genre exclusions", () => {
     const m = maturityFromBirthYear(2020);
     const kept = filterSummariesForAge(

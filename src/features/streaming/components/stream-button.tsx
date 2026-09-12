@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Play } from "lucide-react";
 
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
 import { StreamingTheaterModal } from "./streaming-theater-modal";
 import {
@@ -22,6 +24,8 @@ interface StreamButtonProps {
   episode?: number;
   variant?: "hero" | "compact" | "icon" | "panel";
   className?: string;
+  posterPath?: string | null;
+  backdropPath?: string | null;
 }
 
 export function StreamButton({
@@ -33,6 +37,8 @@ export function StreamButton({
   episode = 1,
   variant = "hero",
   className,
+  posterPath,
+  backdropPath,
 }: StreamButtonProps) {
   const [theaterOpen, setTheaterOpen] = React.useState(false);
   const [openToken, setOpenToken] = React.useState(0);
@@ -52,7 +58,21 @@ export function StreamButton({
     setResumeAt(shouldResume(saved) && saved ? saved.seconds : null);
   }, [theaterOpen, mediaType, tmdbId, playSeason, playEpisode]);
 
-  const openTheater = () => {
+  const openTheater = async (event?: React.MouseEvent) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    try {
+      const query = new URLSearchParams({ type: mediaType, id: tmdbId });
+      const response = await fetch(`/api/media/allowed?${query}`);
+      const data = (await response.json()) as { allowed?: boolean };
+      if (!response.ok || !data.allowed) {
+        toast.error("This title is not available on this profile.");
+        return;
+      }
+    } catch {
+      toast.error("Could not verify this title for the current profile.");
+      return;
+    }
     setOpenToken((n) => n + 1);
     setTheaterOpen(true);
   };
@@ -144,6 +164,8 @@ export function StreamButton({
           identity={identity}
           currentSeason={playSeason}
           currentEpisode={playEpisode}
+          posterPath={posterPath ?? identity?.posterPath}
+          backdropPath={backdropPath ?? identity?.backdropPath}
         />
       ) : null}
     </>

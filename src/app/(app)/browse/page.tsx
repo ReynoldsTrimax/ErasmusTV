@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
+import { ContinueWatchingRow } from "@/features/media/components/continue-watching-row";
 import { HeroBanner } from "@/features/media/components/hero-banner";
 import { MediaRow } from "@/features/media/components/media-row";
 import { GenreChips } from "@/features/media/components/genre-chips";
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
   description: "Discover movies and TV shows to watch now",
 };
 
-export const revalidate = 900;
+export const dynamic = "force-dynamic";
 
 export default async function BrowsePage() {
   const maturity = await getActiveCatalogMaturity();
@@ -47,6 +48,8 @@ export default async function BrowsePage() {
           <HeroBanner items={heroItems} intervalMs={3000} />
         </ScrollReveal>
       ) : null}
+
+      <ContinueWatchingRow />
 
       <Suspense fallback={<Skeleton className="h-12 w-full rounded-xl" />}>
         <ScrollReveal delay={0.05}>

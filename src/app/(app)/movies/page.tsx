@@ -9,10 +9,12 @@ import { PaginationControls } from "@/features/media/components/pagination-contr
 import { CatalogConfigBanner } from "@/features/media/components/catalog-config-banner";
 import { getActiveCatalogMaturity } from "@/lib/media/catalog-context";
 import { discoverMovies, getMovieGenres, isCatalogConfigured } from "@/lib/media/catalog";
-import { filterSummariesForAge, isTitleAllowedForAge } from "@/lib/media/maturity";
+import { enforceMaturityOnSummaries } from "@/lib/media/title-certification";
 import { getMediaProvider } from "@/lib/media/providers";
 import { parseDiscoverFilters } from "@/lib/media/filters";
 import { getImdbTopRated, PAGE_SIZE } from "@/lib/media/imdb-top";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Movies",
@@ -57,7 +59,12 @@ export default async function MoviesPage({ searchParams }: PageProps) {
   /* Top-rated shelf — a fixed ranked list, so the filter bar does not apply. */
   if (section === "top_rated") {
     const top = await getImdbTopRated("movie", pageParam);
-    top.items = top.items.filter((row) => isTitleAllowedForAge(row.item, maturity));
+    const allowed = await enforceMaturityOnSummaries(
+      top.items.map((row) => row.item),
+      maturity,
+    );
+    const allowedIds = new Set(allowed.map((item) => item.id));
+    top.items = top.items.filter((row) => allowedIds.has(row.item.id));
 
     return (
       <div className="animate-fade-up space-y-6">
@@ -107,7 +114,7 @@ export default async function MoviesPage({ searchParams }: PageProps) {
     genres = g;
     result =
       section === "now_playing" || section === "upcoming"
-        ? { ...r, results: filterSummariesForAge(r.results, maturity) }
+        ? { ...r, results: await enforceMaturityOnSummaries(r.results, maturity) }
         : r;
   } catch (error) {
     loadError = error instanceof Error ? error.message : "Failed to load movies";

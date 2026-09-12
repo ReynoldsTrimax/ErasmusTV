@@ -2,6 +2,28 @@ export interface PlaybackProgress {
   seconds: number;
   duration: number | null;
   updatedAt: number;
+  title?: string;
+  posterPath?: string | null;
+  backdropPath?: string | null;
+}
+
+export interface ContinueWatchingItem {
+  mediaType: "movie" | "tv";
+  tmdbId: string;
+  season?: number;
+  episode?: number;
+  title: string;
+  posterPath: string | null;
+  backdropPath: string | null;
+  seconds: number;
+  duration: number | null;
+  updatedAt: number;
+}
+
+export interface PlaybackMeta {
+  title?: string;
+  posterPath?: string | null;
+  backdropPath?: string | null;
 }
 
 export interface ProgressKeyInput {
@@ -118,11 +140,16 @@ export function savePlaybackProgress(
   input: ProgressKeyInput,
   seconds: number,
   duration: number | null,
+  meta?: PlaybackMeta,
 ): PlaybackProgress | null {
+  const existing = getPlaybackProgress(input);
   const next: PlaybackProgress = {
     seconds: Math.max(0, Math.floor(seconds)),
     duration: duration != null && duration > 0 ? Math.floor(duration) : null,
     updatedAt: Date.now(),
+    title: meta?.title ?? existing?.title,
+    posterPath: meta?.posterPath ?? existing?.posterPath,
+    backdropPath: meta?.backdropPath ?? existing?.backdropPath,
   };
 
   if (next.duration && next.seconds / next.duration >= COMPLETE_RATIO) {
@@ -136,6 +163,71 @@ export function savePlaybackProgress(
     return next;
   }
   return next;
+}
+
+function parseKey(rawKey: string, scope: string): ProgressKeyInput | null {
+  if (!rawKey.startsWith(scope)) return null;
+  const rest = rawKey.slice(scope.length);
+  const tv = rest.match(/^tv:([^:]+):s(\d+):e(\d+)$/);
+  if (tv) {
+    return {
+      mediaType: "tv",
+      tmdbId: tv[1] ?? "",
+      season: Number(tv[2]),
+      episode: Number(tv[3]),
+    };
+  }
+  const movie = rest.match(/^movie:(.+)$/);
+  if (movie) {
+    return { mediaType: "movie", tmdbId: movie[1] ?? "" };
+  }
+  return null;
+}
+
+export function listContinueWatching(limit = 20): ContinueWatchingItem[] {
+  if (typeof window === "undefined") return [];
+  const profile = activeProfileId();
+  const scope = profile ? `${PREFIX}${profile}:` : PREFIX;
+  const items: ContinueWatchingItem[] = [];
+
+  try {
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(scope)) continue;
+      const parsedKey = parseKey(key, scope);
+      if (!parsedKey) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const progress = JSON.parse(raw) as PlaybackProgress;
+      if (!shouldResume(progress) || !progress.title) continue;
+      items.push({
+        mediaType: parsedKey.mediaType,
+        tmdbId: parsedKey.tmdbId,
+        season: parsedKey.season,
+        episode: parsedKey.episode,
+        title: progress.title,
+        posterPath: progress.posterPath ?? null,
+        backdropPath: progress.backdropPath ?? null,
+        seconds: progress.seconds,
+        duration: progress.duration,
+        updatedAt: progress.updatedAt,
+      });
+    }
+  } catch {
+    return [];
+  }
+
+  items.sort((a, b) => b.updatedAt - a.updatedAt);
+  const seen = new Set<string>();
+  const unique: ContinueWatchingItem[] = [];
+  for (const item of items) {
+    const id = `${item.mediaType}:${item.tmdbId}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    unique.push(item);
+    if (unique.length >= limit) break;
+  }
+  return unique;
 }
 
 export function clearPlaybackProgress(input: ProgressKeyInput): void {

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
+
+import { getActiveCatalogMaturity } from "@/lib/media/catalog-context";
+import { isMediaAllowedForMaturity } from "@/lib/media/title-certification";
 import { extractDirectStream } from "@/lib/streaming/direct-stream";
+import { getCurrentUser } from "@/lib/services/user-service";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -16,6 +20,19 @@ export async function GET(request: Request) {
   const imdbId = searchParams.get("imdb") || undefined;
   if (!tmdbId) {
     return NextResponse.json({ ok: false, error: "missing id" }, { status: 400 });
+  }
+
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  }
+  const maturity = await getActiveCatalogMaturity();
+  const allowed = await isMediaAllowedForMaturity(type, tmdbId, maturity);
+  if (!allowed) {
+    return NextResponse.json(
+      { ok: false, error: "not available on this profile" },
+      { status: 403 },
+    );
   }
 
   const result = await extractDirectStream({

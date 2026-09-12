@@ -9,9 +9,11 @@ import { PaginationControls } from "@/features/media/components/pagination-contr
 import { CatalogConfigBanner } from "@/features/media/components/catalog-config-banner";
 import { getActiveCatalogMaturity } from "@/lib/media/catalog-context";
 import { discoverTv, getTvGenres, isCatalogConfigured } from "@/lib/media/catalog";
-import { isTitleAllowedForAge } from "@/lib/media/maturity";
+import { enforceMaturityOnSummaries } from "@/lib/media/title-certification";
 import { parseDiscoverFilters } from "@/lib/media/filters";
 import { getImdbTopRated, PAGE_SIZE } from "@/lib/media/imdb-top";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "TV Shows",
@@ -56,7 +58,12 @@ export default async function TvBrowsePage({ searchParams }: PageProps) {
   /* Top-rated shelf — a fixed ranked list, so the filter bar does not apply. */
   if (section === "top_rated") {
     const top = await getImdbTopRated("tv", pageParam);
-    top.items = top.items.filter((row) => isTitleAllowedForAge(row.item, maturity));
+    const allowed = await enforceMaturityOnSummaries(
+      top.items.map((row) => row.item),
+      maturity,
+    );
+    const allowedIds = new Set(allowed.map((item) => item.id));
+    top.items = top.items.filter((row) => allowedIds.has(row.item.id));
 
     return (
       <div className="animate-fade-up space-y-6">
