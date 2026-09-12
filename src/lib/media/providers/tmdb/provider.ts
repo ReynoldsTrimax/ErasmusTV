@@ -294,7 +294,13 @@ export class TmdbMediaProvider implements MediaProvider {
       "vote_count.gte": filters.voteCountGte,
       with_watch_providers: filters.watchProviderId,
       watch_region: filters.watchRegion ?? (filters.watchProviderId ? "US" : undefined),
-      include_adult: false,
+      include_adult: filters.includeAdult ?? false,
+      certification_country:
+        filters.certificationLte || filters.certificationCountry
+          ? (filters.certificationCountry ?? "US")
+          : undefined,
+      "certification.lte": filters.certificationLte,
+      without_genres: filters.withoutGenreIds?.join(","),
     });
     return data
       ? mapPaginated(data, (i) => mapMediaSummary(i, "movie"))
@@ -317,7 +323,8 @@ export class TmdbMediaProvider implements MediaProvider {
       "vote_count.gte": filters.voteCountGte,
       with_watch_providers: filters.watchProviderId,
       watch_region: filters.watchRegion ?? (filters.watchProviderId ? "US" : undefined),
-      include_adult: false,
+      include_adult: filters.includeAdult ?? false,
+      without_genres: filters.withoutGenreIds?.join(","),
     });
     return data ? mapPaginated(data, (i) => mapMediaSummary(i, "tv")) : emptyPage();
   }

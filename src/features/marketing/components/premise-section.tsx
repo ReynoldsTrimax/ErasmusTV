@@ -5,19 +5,19 @@ import { SectionHeader } from "./section-header";
 
 const PRINCIPLES = [
   {
-    key: "Status",
-    title: "Six states, not two",
-    body: "Watching, completed, paused, dropped, wishlist, rewatching. Because “watched / not watched” was never the truth.",
+    key: "Discover",
+    title: "Find the next title fast",
+    body: "Trending films, series, and genres in one browse — then open a title and play.",
   },
   {
-    key: "Progress",
-    title: "Episode-level precision",
-    body: "Minutes for films, episodes and seasons for series. Continue watching picks up exactly where you stopped.",
+    key: "Watch",
+    title: "Play without leaving the site",
+    body: "A native player with resume, subtitles, and a server switch if a source fails.",
   },
   {
-    key: "Memory",
-    title: "Ratings keep their history",
-    body: "Re-rate freely. Argus records the change instead of overwriting what you once thought.",
+    key: "Profiles",
+    title: "One account, several people",
+    body: "Household profiles keep resume points and preferences separate, without extra logins.",
   },
 ] as const;
 
@@ -28,8 +28,8 @@ export function PremiseSection() {
       className="content-container relative scroll-mt-24 py-20 sm:py-28"
     >
       <SectionHeader
-        title="Nothing you watch should ever go missing."
-        lead="Discovery lives in one app, progress in another, opinions nowhere at all. Argus keeps all three together, so the series you meant to finish never quietly disappears."
+        title="A streaming home, not a spreadsheet."
+        lead="Browse the catalog, see where a title is available, and pick up exactly where you stopped — under the profile that is watching."
       />
 
       <div className="mt-14 grid gap-x-10 gap-y-12 sm:mt-16 sm:grid-cols-3">

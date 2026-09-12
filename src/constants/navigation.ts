@@ -1,22 +1,10 @@
 import {
-  Activity,
-  BarChart3,
   Bookmark,
-  CalendarDays,
   Clapperboard,
   Compass,
   Film,
-  Heart,
-  History,
-  Home,
-  LayoutDashboard,
-  Library,
-  Lightbulb,
   Settings,
-  Sparkles,
-  Target,
   Tv,
-  User,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -34,75 +22,9 @@ export interface NavItem {
 export const MAIN_NAV: readonly NavItem[] = [
   {
     title: "Home",
-    href: ROUTES.dashboard,
-    icon: LayoutDashboard,
-    description: "Intelligence dashboard",
-  },
-  {
-    title: "Discover",
-    href: ROUTES.discover,
+    href: ROUTES.browse,
     icon: Compass,
-    description: "Explore entertainment",
-  },
-  {
-    title: "For You",
-    href: ROUTES.recommendations,
-    icon: Target,
-    description: "Personalized recommendations",
-  },
-  {
-    title: "Library",
-    href: ROUTES.library,
-    icon: Library,
-    description: "Your personal library",
-  },
-  {
-    title: "Friends",
-    href: ROUTES.friends,
-    icon: Users,
-    description: "What friends are watching",
-  },
-  {
-    title: "Stats",
-    href: ROUTES.stats,
-    icon: BarChart3,
-    description: "Statistics & charts",
-  },
-  {
-    title: "Insights",
-    href: ROUTES.insights,
-    icon: Lightbulb,
-    description: "Personal insights",
-  },
-  {
-    title: "Calendar",
-    href: ROUTES.calendar,
-    icon: CalendarDays,
-    description: "Activity heatmap",
-  },
-  {
-    title: "Timeline",
-    href: ROUTES.timeline,
-    icon: Sparkles,
-    description: "Journal timeline",
-  },
-  {
-    title: "Watchlist",
-    href: ROUTES.watchlist,
-    icon: Bookmark,
-    description: "Plan to watch",
-  },
-  {
-    title: "Favorites",
-    href: ROUTES.favorites,
-    icon: Heart,
-    description: "Titles you love",
-  },
-  {
-    title: "Collections",
-    href: ROUTES.collections,
-    icon: Clapperboard,
-    description: "Custom collections",
+    description: "Discover what to watch",
   },
   {
     title: "Movies",
@@ -116,39 +38,33 @@ export const MAIN_NAV: readonly NavItem[] = [
     icon: Tv,
     description: "Browse series",
   },
+  {
+    title: "Genres",
+    href: ROUTES.genres,
+    icon: Clapperboard,
+    description: "Browse by genre",
+  },
+  {
+    title: "Watchlist",
+    href: ROUTES.watchlist,
+    icon: Bookmark,
+    description: "Plan to watch",
+  },
 ] as const;
 
 export const SECONDARY_NAV: readonly NavItem[] = [
   {
-    title: "History",
-    href: ROUTES.history,
-    icon: History,
-    description: "Watch sessions",
-  },
-  {
-    title: "Activity",
-    href: ROUTES.activity,
-    icon: Activity,
-    description: "Recent activity",
-  },
-  {
-    title: "Profile",
-    href: ROUTES.profile,
-    icon: User,
-    description: "Your profile",
+    title: "Profiles",
+    href: ROUTES.profiles,
+    icon: Users,
+    description: "Switch or manage profiles",
   },
   {
     title: "Settings",
     href: ROUTES.settings,
     icon: Settings,
-    description: "Preferences",
+    description: "Account preferences",
   },
 ] as const;
 
-export const MARKETING_NAV: readonly NavItem[] = [
-  {
-    title: "Home",
-    href: ROUTES.home,
-    icon: Home,
-  },
-] as const;
+export const MARKETING_NAV: readonly NavItem[] = [] as const;

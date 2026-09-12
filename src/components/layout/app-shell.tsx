@@ -4,19 +4,27 @@ import { PageTransition } from "@/components/layout/page-transition";
 import { KeyboardShortcutsProvider } from "@/components/layout/keyboard-shortcuts-provider";
 import { CommandPalette } from "@/features/command/command-palette";
 import type { UserMenuUser } from "@/components/layout/user-menu";
+import { WatchlistProvider } from "@/features/watchlist/watchlist-provider";
+import type { WatchProfile } from "@/types/watch-profile";
 
 interface AppShellProps {
   user: UserMenuUser;
+  profiles: WatchProfile[];
+  activeProfile: WatchProfile | null;
+  watchlistKeys: string[];
   children: React.ReactNode;
 }
 
-/**
- * Resizable sidebar + content side by side. The rail is layout width —
- * nothing stacks on top of posters.
- */
-export function AppShell({ user, children }: AppShellProps) {
+export function AppShell({
+  user,
+  profiles,
+  activeProfile,
+  watchlistKeys,
+  children,
+}: AppShellProps) {
   return (
-    <KeyboardShortcutsProvider>
+    <WatchlistProvider initialKeys={watchlistKeys}>
+      <KeyboardShortcutsProvider>
       <div className="relative flex min-h-dvh w-full bg-background">
         <div
           className="pointer-events-none absolute inset-0 overflow-hidden opacity-50 dark:opacity-40"
@@ -30,7 +38,11 @@ export function AppShell({ user, children }: AppShellProps) {
         <div className="relative z-[1] flex min-h-dvh w-full">
           <Sidebar />
           <div className="relative z-0 flex min-w-0 flex-1 flex-col bg-background">
-            <AppHeader user={user} />
+            <AppHeader
+              user={user}
+              profiles={profiles}
+              activeProfile={activeProfile}
+            />
             <main
               id="main-content"
               className="relative z-0 min-w-0 flex-1 overflow-y-auto scroll-smooth bg-background"
@@ -44,6 +56,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
         <CommandPalette />
       </div>
-    </KeyboardShortcutsProvider>
+      </KeyboardShortcutsProvider>
+    </WatchlistProvider>
   );
 }

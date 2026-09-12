@@ -28,7 +28,7 @@ export default function OfflinePage() {
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         <Button asChild>
-          <Link href={ROUTES.dashboard}>
+          <Link href={ROUTES.browse}>
             <RefreshCw className="h-4 w-4" />
             Try dashboard
           </Link>

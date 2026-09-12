@@ -23,13 +23,10 @@ export function LandingHero({ posters = [] }: { posters?: ShowcasePoster[] }) {
           <div className="lg:col-span-6">
             <h1 className="landing-display text-silver">
               <span className="lx-charge block" style={{ animationDelay: "220ms" }}>
-                One clear view
+                Movies and TV
               </span>
               <span className="lx-charge block" style={{ animationDelay: "300ms" }}>
-                of <span className="charged-word">everything</span>
-              </span>
-              <span className="lx-charge block" style={{ animationDelay: "380ms" }}>
-                you watch
+                in <span className="charged-word">one place</span>
               </span>
             </h1>
 

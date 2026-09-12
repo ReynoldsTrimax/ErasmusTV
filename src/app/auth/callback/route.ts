@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       // Concatenating to `origin` already keeps this on-host, but `next` is
       // attacker-supplied and the same sanitiser is used here so both auth
       // redirect paths behave identically and neither can drift.
-      return NextResponse.redirect(safeRedirectUrl(origin, next, ROUTES.dashboard));
+      return NextResponse.redirect(safeRedirectUrl(origin, next, ROUTES.profiles));
     }
   }
 

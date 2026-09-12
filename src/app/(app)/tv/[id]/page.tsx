@@ -11,17 +11,12 @@ import { StreamingProviders } from "@/features/media/components/streaming-provid
 import { SeasonEpisodes } from "@/features/media/components/season-episodes";
 import { Badge } from "@/components/ui/badge";
 import { CatalogConfigBanner } from "@/features/media/components/catalog-config-banner";
-import { PersonalMediaPanel } from "@/features/library/components/personal-media-panel";
-import { DecisionScoreCard } from "@/features/intelligence/components/decision-score-card";
+import { getActiveCatalogMaturity } from "@/lib/media/catalog-context";
 import { getTvShow, isCatalogConfigured } from "@/lib/media/catalog";
+import { isTitleAllowedForAge } from "@/lib/media/maturity";
 import { formatDate, formatNumber, formatRuntime } from "@/lib/media/format";
 import { mediaHref } from "@/lib/media/routes";
-import { getPersonalMediaState } from "@/lib/library/personal-state";
-import { listTags, listCollections } from "@/lib/library/tags-collections";
-import { loadIntelligenceData } from "@/lib/intelligence/load-profile";
-import { computeUserStats } from "@/lib/intelligence/stats-engine";
-import { computeDecisionScore } from "@/lib/intelligence/decision-score";
-import type { MediaIdentity } from "@/types/library";
+import type { MediaIdentity } from "@/types/media";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -52,6 +47,29 @@ export default async function TvDetailPage({ params }: PageProps) {
   const show = await getTvShow(id);
   if (!show) notFound();
 
+  const maturity = await getActiveCatalogMaturity();
+  if (
+    !isTitleAllowedForAge(
+      {
+        adult: show.adult,
+        certification: show.certification,
+        mediaType: "tv",
+        genres: show.genres,
+        genreIds: show.genres.map((g) => g.id),
+      },
+      maturity,
+    )
+  ) {
+    return (
+      <div className="mx-auto max-w-lg py-20 text-center">
+        <h1 className="text-xl font-semibold">Not available on this profile</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This title is outside the age range for the current profile.
+        </p>
+      </div>
+    );
+  }
+
   const runtime =
     show.episodeRunTime?.length
       ? show.episodeRunTime[0]
@@ -72,36 +90,6 @@ export default async function TvDetailPage({ params }: PageProps) {
     genres: show.genres.map((g) => g.name),
     originalLanguage: show.originalLanguage,
   };
-
-  const personal = await getPersonalMediaState("tv", show.id, identity);
-  const [allTags, allCollections, intelligence] = await Promise.all([
-    personal.userId ? listTags(personal.userId) : Promise.resolve([]),
-    personal.userId ? listCollections(personal.userId) : Promise.resolve([]),
-    personal.userId
-      ? loadIntelligenceData(personal.userId)
-      : Promise.resolve(null),
-  ]);
-
-  const decision =
-    intelligence != null
-      ? computeDecisionScore(
-          {
-            title: show.title,
-            mediaType: "tv",
-            genres: show.genres,
-            voteAverage: show.voteAverage,
-            popularity: show.popularity,
-            runtime,
-            episodeRunTime: show.episodeRunTime,
-            releaseDate: show.firstAirDate,
-            overview: show.overview,
-            crew: show.crew,
-            cast: show.cast,
-          },
-          computeUserStats(intelligence),
-          intelligence.entries,
-        )
-      : null;
 
   return (
     <div className="space-y-10 animate-fade-up">
@@ -161,8 +149,7 @@ export default async function TvDetailPage({ params }: PageProps) {
           <SeasonEpisodes
             showId={show.id}
             seasons={show.seasons}
-            identity={personal.userId ? identity : undefined}
-            episodeProgress={personal.episodeProgress}
+            title={show.title}
           />
 
           <CastRow people={show.cast} />
@@ -176,17 +163,6 @@ export default async function TvDetailPage({ params }: PageProps) {
         </div>
 
         <aside className="min-w-0 w-full space-y-6 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-5.5rem)] lg:w-auto lg:overflow-y-auto lg:overflow-x-hidden lg:pr-0.5">
-          {personal.userId ? (
-            <PersonalMediaPanel
-              identity={identity}
-              initial={personal}
-              allTags={allTags}
-              allCollections={allCollections}
-            />
-          ) : null}
-
-          {decision ? <DecisionScoreCard decision={decision} /> : null}
-
           <div className="rounded-3xl border-0 bg-muted/40 dark:bg-white/[0.05] p-5">
             <h2 className="mb-3 text-sm font-semibold">Details</h2>
             <MediaMeta

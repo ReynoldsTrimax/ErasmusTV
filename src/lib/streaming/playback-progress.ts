@@ -12,17 +12,26 @@ export interface ProgressKeyInput {
 }
 
 const PREFIX = "argus:playback:";
+const PROFILE_COOKIE = "argus_profile";
+
+function activeProfileId(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${PROFILE_COOKIE}=([^;]*)`));
+  return match?.[1] ? decodeURIComponent(match[1]) : undefined;
+}
 const MIN_RESUME_SECONDS = 15;
 const COMPLETE_RATIO = 0.9;
 const COMPLETE_REMAINING_SECONDS = 30;
 
 export function progressKey(input: ProgressKeyInput): string {
+  const profile = activeProfileId();
+  const scope = profile ? `${PREFIX}${profile}:` : PREFIX;
   if (input.mediaType === "tv") {
     const season = Math.max(1, input.season ?? 1);
     const episode = Math.max(1, input.episode ?? 1);
-    return `${PREFIX}tv:${input.tmdbId}:s${season}:e${episode}`;
+    return `${scope}tv:${input.tmdbId}:s${season}:e${episode}`;
   }
-  return `${PREFIX}movie:${input.tmdbId}`;
+  return `${scope}movie:${input.tmdbId}`;
 }
 
 export function shouldResume(progress: PlaybackProgress | null | undefined): boolean {

@@ -28,7 +28,7 @@
 
 import type { MediaSummary, PaginatedResult } from "@/types/media";
 import { getMediaProvider } from "@/lib/media/providers";
-import { TtlCache } from "@/lib/recommendations/cache";
+import { TtlCache } from "@/lib/utils/ttl-cache";
 
 import { CREDIBILITY_VOTE_FLOOR } from "./filters";
 import {

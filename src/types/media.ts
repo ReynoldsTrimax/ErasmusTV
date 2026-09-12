@@ -289,6 +289,23 @@ export interface CollectionDetails {
   parts: MediaSummary[];
 }
 
+/** Snapshot used to open playback for a catalog title. */
+export interface MediaIdentity {
+  provider?: string;
+  mediaType: "movie" | "tv";
+  externalId: string;
+  title: string;
+  originalTitle?: string | null;
+  posterPath?: string | null;
+  backdropPath?: string | null;
+  releaseDate?: string | null;
+  overview?: string | null;
+  runtimeMinutes?: number | null;
+  totalEpisodes?: number | null;
+  genres?: string[];
+  originalLanguage?: string | null;
+}
+
 export interface PaginatedResult<T> {
   page: number;
   totalPages: number;
@@ -313,6 +330,7 @@ export interface SearchResultItem {
   year?: string | null;
   mediaType?: "movie" | "tv";
   popularity?: number | null;
+  adult?: boolean;
   href: string;
 }
 
@@ -362,6 +380,11 @@ export interface MediaDiscoverFilters {
   watchProviderId?: string;
   watchRegion?: string;
   releaseStatus?: string;
+  /** US movie certification ceiling, e.g. PG-13. */
+  certificationLte?: string;
+  certificationCountry?: string;
+  withoutGenreIds?: string[];
+  includeAdult?: boolean;
 }
 
 export interface DiscoverySection {

@@ -42,7 +42,7 @@ export function MobileNav() {
       <SheetContent side="left" className="w-[min(100%,20rem)] p-0">
         <SheetHeader className="border-0 px-4 py-4 text-left">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <Logo href={ROUTES.dashboard} />
+          <Logo href={ROUTES.browse} />
         </SheetHeader>
         <nav className="flex flex-col gap-1 p-3" aria-label="Mobile navigation">
           {[...MAIN_NAV, ...SECONDARY_NAV].map((item, index) => {

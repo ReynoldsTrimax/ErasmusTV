@@ -10,7 +10,7 @@ import {
   getPlaybackProgress,
   shouldResume,
 } from "@/lib/streaming/playback-progress";
-import type { MediaIdentity } from "@/types/library";
+import type { MediaIdentity } from "@/types/media";
 import { cn } from "@/lib/utils";
 
 interface StreamButtonProps {

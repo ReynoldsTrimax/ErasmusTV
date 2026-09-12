@@ -7,6 +7,7 @@ import { FilterBar } from "@/features/media/components/filter-bar";
 import { PaginationControls } from "@/features/media/components/pagination-controls";
 import { CatalogConfigBanner } from "@/features/media/components/catalog-config-banner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getActiveCatalogMaturity } from "@/lib/media/catalog-context";
 import { getGenrePage, isCatalogConfigured } from "@/lib/media/catalog";
 import { parseDiscoverFilters } from "@/lib/media/filters";
 
@@ -35,7 +36,8 @@ export default async function GenreDetailPage({ params, searchParams }: PageProp
     genreIds: [id],
   });
 
-  const data = await getGenrePage(id, mediaType, filters);
+  const maturity = await getActiveCatalogMaturity();
+  const data = await getGenrePage(id, mediaType, filters, maturity);
   const title = data.genre?.name ?? "Genre";
 
   const flatParams: Record<string, string | undefined> = {};

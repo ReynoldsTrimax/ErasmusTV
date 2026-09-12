@@ -85,24 +85,21 @@ export default async function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Privacy & data</CardTitle>
+          <CardTitle className="text-base">Privacy</CardTitle>
           <CardDescription>
-            Export your journal data or review how Argus stores personal media.
+            How Argus uses your account while you watch.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Personal library, ratings, reviews, and notes live in your Supabase project
-            under RLS. Catalog metadata comes from TMDB and is not stored as a full
-            mirror.
+            Your account and household profiles are stored in Supabase with row-level
+            security. Catalog metadata comes from TMDB. Playback resume is stored on
+            this device.
           </p>
           <Separator />
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href={ROUTES.library}>Open library</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href={ROUTES.profile}>Edit profile</Link>
+              <Link href={ROUTES.profiles}>Manage profiles</Link>
             </Button>
             <Button asChild variant="outline" size="sm">
               <Link href={ROUTES.privacy}>Privacy Policy</Link>
@@ -111,12 +108,6 @@ export default async function SettingsPage() {
               <Link href={ROUTES.terms}>Terms of Service</Link>
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Full JSON export via{" "}
-            <code className="rounded bg-muted px-1">buildArgusExport</code> is scaffolded
-            in <code className="rounded bg-muted px-1">features/import-export</code> for a
-            future UI action.
-          </p>
         </CardContent>
       </Card>
     </div>

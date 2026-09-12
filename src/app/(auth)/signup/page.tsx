@@ -22,7 +22,7 @@ export default function SignupPage() {
       <CardHeader className="space-y-1">
         <CardTitle className="text-xl">Create your account</CardTitle>
         <CardDescription>
-          Set it up once, then everything you watch lives here.
+          Create an account, add profiles, and start watching.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

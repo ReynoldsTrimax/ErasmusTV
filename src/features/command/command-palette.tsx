@@ -4,19 +4,17 @@ import * as React from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
+  Bookmark,
   Building2,
   Clapperboard,
   Compass,
   Film,
   FolderOpen,
   History,
-  LayoutDashboard,
-  Library,
   Loader2,
   Settings,
   TrendingUp,
   Tv,
-  User,
   Users,
 } from "lucide-react";
 
@@ -198,35 +196,10 @@ export function CommandPalette() {
           <CommandSeparator />
 
           <CommandGroup heading="Navigation">
-            <CommandItem onSelect={() => go(ROUTES.dashboard)}>
-              <LayoutDashboard />
-              Home
-              <CommandShortcut>G D</CommandShortcut>
-            </CommandItem>
-            <CommandItem onSelect={() => go(ROUTES.discover)}>
+            <CommandItem onSelect={() => go(ROUTES.browse)}>
               <Compass />
-              Discover
-              <CommandShortcut>G X</CommandShortcut>
-            </CommandItem>
-            <CommandItem onSelect={() => go(ROUTES.library)}>
-              <Library />
-              Library
-              <CommandShortcut>G L</CommandShortcut>
-            </CommandItem>
-            <CommandItem onSelect={() => go(ROUTES.collections)}>
-              <FolderOpen />
-              Collections
-              <CommandShortcut>G C</CommandShortcut>
-            </CommandItem>
-            <CommandItem onSelect={() => go(ROUTES.watchlist)}>
-              <Clapperboard />
-              Watchlist
-              <CommandShortcut>G W</CommandShortcut>
-            </CommandItem>
-            <CommandItem onSelect={() => go(ROUTES.stats)}>
-              <TrendingUp />
-              Statistics
-              <CommandShortcut>G S</CommandShortcut>
+              Home
+              <CommandShortcut>G H</CommandShortcut>
             </CommandItem>
             <CommandItem onSelect={() => go(ROUTES.movies)}>
               <Film />
@@ -236,9 +209,18 @@ export function CommandPalette() {
               <Tv />
               TV Shows
             </CommandItem>
-            <CommandItem onSelect={() => go(ROUTES.profile)}>
-              <User />
-              Profile
+            <CommandItem onSelect={() => go(ROUTES.genres)}>
+              <Clapperboard />
+              Genres
+            </CommandItem>
+            <CommandItem onSelect={() => go(ROUTES.watchlist)}>
+              <Bookmark />
+              Watchlist
+              <CommandShortcut>G W</CommandShortcut>
+            </CommandItem>
+            <CommandItem onSelect={() => go(ROUTES.profiles)}>
+              <Users />
+              Profiles
               <CommandShortcut>G P</CommandShortcut>
             </CommandItem>
             <CommandItem onSelect={() => go(ROUTES.settings)}>

@@ -699,6 +699,7 @@ export function mapSearchResponse(
         year,
         mediaType: "movie",
         popularity: item.popularity,
+        adult: item.adult,
         href: mediaHref("movie", item.id),
       });
     } else if (item.media_type === "tv") {
@@ -712,6 +713,7 @@ export function mapSearchResponse(
         year,
         mediaType: "tv",
         popularity: item.popularity,
+        adult: item.adult,
         href: mediaHref("tv", item.id),
       });
     } else if (item.media_type === "person") {

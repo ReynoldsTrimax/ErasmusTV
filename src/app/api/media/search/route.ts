@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { getActiveCatalogMaturity } from "@/lib/media/catalog-context";
 import { isCatalogConfigured, searchCatalog } from "@/lib/media/catalog";
 import {
   RATE_LIMITS,
@@ -51,7 +52,8 @@ export async function GET(request: NextRequest) {
     const page = Number.isFinite(pageRaw)
       ? Math.min(Math.max(1, Math.trunc(pageRaw)), 500)
       : 1;
-    const data = await searchCatalog(q, page);
+    const maturity = await getActiveCatalogMaturity();
+    const data = await searchCatalog(q, page, maturity);
     return NextResponse.json(data, {
       headers: {
         // Per-user results are not involved, but the response is now behind a

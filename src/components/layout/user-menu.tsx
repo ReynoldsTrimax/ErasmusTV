@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LogOut, Settings, User } from "lucide-react";
+import { LogOut, Settings, Users } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -70,9 +70,9 @@ export function UserMenu({ user }: UserMenuProps) {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href={ROUTES.profile}>
-            <User className="h-4 w-4" />
-            Profile
+          <Link href={ROUTES.profiles}>
+            <Users className="h-4 w-4" />
+            Switch profile
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

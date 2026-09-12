@@ -7,7 +7,9 @@ import { ImdbTopGrid } from "@/features/media/components/imdb-top-grid";
 import { MediaShelfTabs } from "@/features/media/components/media-shelf-tabs";
 import { PaginationControls } from "@/features/media/components/pagination-controls";
 import { CatalogConfigBanner } from "@/features/media/components/catalog-config-banner";
+import { getActiveCatalogMaturity } from "@/lib/media/catalog-context";
 import { discoverTv, getTvGenres, isCatalogConfigured } from "@/lib/media/catalog";
+import { isTitleAllowedForAge } from "@/lib/media/maturity";
 import { parseDiscoverFilters } from "@/lib/media/filters";
 import { getImdbTopRated, PAGE_SIZE } from "@/lib/media/imdb-top";
 
@@ -22,6 +24,8 @@ interface PageProps {
 
 export default async function TvBrowsePage({ searchParams }: PageProps) {
   const params = await searchParams;
+
+  const maturity = await getActiveCatalogMaturity();
 
   if (!isCatalogConfigured()) {
     return (
@@ -52,6 +56,7 @@ export default async function TvBrowsePage({ searchParams }: PageProps) {
   /* Top-rated shelf — a fixed ranked list, so the filter bar does not apply. */
   if (section === "top_rated") {
     const top = await getImdbTopRated("tv", pageParam);
+    top.items = top.items.filter((row) => isTitleAllowedForAge(row.item, maturity));
 
     return (
       <div className="animate-fade-up space-y-6">
@@ -89,7 +94,7 @@ export default async function TvBrowsePage({ searchParams }: PageProps) {
   let loadError: string | null = null;
 
   try {
-    const [g, r] = await Promise.all([getTvGenres(), discoverTv(filters)]);
+    const [g, r] = await Promise.all([getTvGenres(), discoverTv(filters, maturity)]);
     genres = g;
     result = r;
   } catch (error) {

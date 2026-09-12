@@ -23,7 +23,7 @@
  * changes, so a warm cache serves a page with no upstream traffic at all.
  */
 
-import { TtlCache } from "@/lib/recommendations/cache";
+import { TtlCache } from "@/lib/utils/ttl-cache";
 import { fetchOmdbByImdbId, isOmdbConfigured } from "@/lib/media/providers/omdb/client";
 import { tmdbFetch } from "@/lib/media/providers/tmdb/client";
 import type { MediaSummary } from "@/types/media";

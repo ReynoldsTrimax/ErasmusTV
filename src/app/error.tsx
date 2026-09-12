@@ -43,7 +43,7 @@ export default function GlobalError({
         ) : null}
         <div className="flex justify-center gap-2">
           <Button asChild variant="ghost" size="sm">
-            <Link href={ROUTES.dashboard}>Dashboard</Link>
+            <Link href={ROUTES.browse}>Home</Link>
           </Button>
           <Button asChild variant="ghost" size="sm">
             <Link href={ROUTES.home}>Marketing home</Link>

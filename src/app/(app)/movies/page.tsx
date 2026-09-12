@@ -7,7 +7,9 @@ import { ImdbTopGrid } from "@/features/media/components/imdb-top-grid";
 import { MediaShelfTabs } from "@/features/media/components/media-shelf-tabs";
 import { PaginationControls } from "@/features/media/components/pagination-controls";
 import { CatalogConfigBanner } from "@/features/media/components/catalog-config-banner";
+import { getActiveCatalogMaturity } from "@/lib/media/catalog-context";
 import { discoverMovies, getMovieGenres, isCatalogConfigured } from "@/lib/media/catalog";
+import { filterSummariesForAge, isTitleAllowedForAge } from "@/lib/media/maturity";
 import { getMediaProvider } from "@/lib/media/providers";
 import { parseDiscoverFilters } from "@/lib/media/filters";
 import { getImdbTopRated, PAGE_SIZE } from "@/lib/media/imdb-top";
@@ -24,6 +26,7 @@ interface PageProps {
 export default async function MoviesPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const configured = isCatalogConfigured();
+  const maturity = await getActiveCatalogMaturity();
 
   if (!configured) {
     return (
@@ -54,6 +57,7 @@ export default async function MoviesPage({ searchParams }: PageProps) {
   /* Top-rated shelf — a fixed ranked list, so the filter bar does not apply. */
   if (section === "top_rated") {
     const top = await getImdbTopRated("movie", pageParam);
+    top.items = top.items.filter((row) => isTitleAllowedForAge(row.item, maturity));
 
     return (
       <div className="animate-fade-up space-y-6">
@@ -98,10 +102,13 @@ export default async function MoviesPage({ searchParams }: PageProps) {
         ? provider.getNowPlayingMovies(filters.page)
         : section === "upcoming"
           ? provider.getUpcomingMovies(filters.page)
-          : discoverMovies(filters),
+          : discoverMovies(filters, maturity),
     ]);
     genres = g;
-    result = r;
+    result =
+      section === "now_playing" || section === "upcoming"
+        ? { ...r, results: filterSummariesForAge(r.results, maturity) }
+        : r;
   } catch (error) {
     loadError = error instanceof Error ? error.message : "Failed to load movies";
   }

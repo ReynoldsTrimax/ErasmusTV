@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
 import type { Database } from "@/types/database";
+import { PROFILE_COOKIE } from "@/constants/app";
 import { AUTH_ROUTES, PROTECTED_ROUTES, ROUTES } from "@/constants/routes";
 import { createTimeoutFetch, withAuthBudget } from "@/lib/supabase/fetch";
 
@@ -84,7 +85,23 @@ export async function updateSession(request: NextRequest) {
 
   if (isAuthRoute && user) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = ROUTES.dashboard;
+    const hasProfile = Boolean(request.cookies.get(PROFILE_COOKIE)?.value);
+    redirectUrl.pathname = hasProfile ? ROUTES.browse : ROUTES.profiles;
+    redirectUrl.search = "";
+    return NextResponse.redirect(redirectUrl);
+  }
+
+  const isProfiles = pathname === ROUTES.profiles || pathname.startsWith(`${ROUTES.profiles}/`);
+  const isSettings = pathname === ROUTES.settings || pathname.startsWith(`${ROUTES.settings}/`);
+  if (
+    user &&
+    isProtected &&
+    !isProfiles &&
+    !isSettings &&
+    !request.cookies.get(PROFILE_COOKIE)?.value
+  ) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = ROUTES.profiles;
     redirectUrl.search = "";
     return NextResponse.redirect(redirectUrl);
   }

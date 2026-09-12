@@ -31,6 +31,14 @@ export async function getCurrentUser() {
   }, null);
 }
 
+export async function requireUser() {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("You need to be signed in.");
+  }
+  return user;
+}
+
 export async function getProfile(userId: string): Promise<Profile | null> {
   const supabase = await createClient();
   const { data, error } = await supabase

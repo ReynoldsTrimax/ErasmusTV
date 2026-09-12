@@ -11,22 +11,22 @@ const CAPABILITIES = [
   {
     icon: Clapperboard,
     title: "Cinematic catalog",
-    body: "Films, series, anime, documentaries and limited series, with galleries, trailers, cast, collections and streaming availability.",
+    body: "Films and series with trailers, cast, collections, and where they are available to stream.",
   },
   {
     icon: Layers,
-    title: "A library that scales",
-    body: "Tags, collections, watchlist, favorites, history and private notes. Unlimited organization without a rigid folder tree.",
+    title: "A player that belongs here",
+    body: "Resume, subtitles, and a server picker when a source does not load — without leaving the title.",
   },
   {
     icon: Search,
     title: "Command-driven",
-    body: "⌘K reaches everything: titles, people, genres, collections and every page in the app. Keyboard first, always.",
+    body: "⌘K reaches titles, people, and genres. Keyboard first, always.",
   },
   {
     icon: Star,
-    title: "Opinions on record",
-    body: "Rate, review, flag spoilers, keep notes to yourself. Your take on a title is data, not a throwaway star.",
+    title: "Household profiles",
+    body: "Switch who is watching without signing in again. Each profile keeps its own resume point.",
   },
 ] as const;
 
@@ -37,8 +37,8 @@ export function CapabilitiesSection() {
       className="content-container relative scroll-mt-24 py-20 sm:py-28"
     >
       <SectionHeader
-        title="A command center, not another list."
-        lead="Every surface is built for long sessions: dark, dense where it should be, and navigable entirely from the keyboard."
+        title="Built to watch, not to log."
+        lead="Dark, fast, and navigable from the keyboard — a home for discovery and playback."
       />
 
       <div className="mt-14 grid gap-4 sm:mt-16 sm:grid-cols-2 lg:grid-cols-4">

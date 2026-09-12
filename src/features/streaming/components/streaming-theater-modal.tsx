@@ -39,11 +39,7 @@ import {
   resumeSeconds,
   savePlaybackProgress,
 } from "@/lib/streaming/playback-progress";
-import type { MediaIdentity } from "@/types/library";
-import {
-  actionSetMovieProgress,
-  actionUpsertAndSetStatus,
-} from "@/features/library/actions/library-actions";
+import type { MediaIdentity } from "@/types/media";
 import { cn } from "@/lib/utils";
 
 function relayUrl(url: string, referer?: string) {
@@ -71,20 +67,20 @@ export function StreamingTheaterModal({
   title,
   tmdbId,
   mediaType,
-  identity,
+  identity: _identity,
   currentSeason = 1,
   currentEpisode = 1,
-  isAnime = false,
+  isAnime: _isAnime = false,
   onEpisodeChange,
 }: StreamingTheaterModalProps) {
   const [activeSeason, setActiveSeason] = React.useState(currentSeason);
   const [activeEpisode, setActiveEpisode] = React.useState(currentEpisode);
-  const [key, setKey] = React.useState(0);
+  const [, setKey] = React.useState(0);
   const [extractNonce, setExtractNonce] = React.useState(0);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [directSrc, setDirectSrc] = React.useState<string | null>(null);
   const [directKind, setDirectKind] = React.useState<"hls" | "file">("hls");
-  const [directTried, setDirectTried] = React.useState(false);
+  const [, setDirectTried] = React.useState(false);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [selectedServerId, setSelectedServerId] = React.useState("lisbon");
   const [serversOpen, setServersOpen] = React.useState(false);
@@ -111,7 +107,6 @@ export function StreamingTheaterModal({
   const wallStartRef = React.useRef<number | null>(null);
   const hasPlayerTimeRef = React.useRef(false);
   const didResumeToastRef = React.useRef(false);
-  const lastLibrarySyncRef = React.useRef(0);
 
   const selectedServer =
     STREAMING_SERVERS.find((server) => server.id === selectedServerId) ??
@@ -246,25 +241,9 @@ export function StreamingTheaterModal({
       if (seconds < 5) return;
       lastKnownRef.current = { seconds, duration };
       savePlaybackProgress(progressInput, seconds, duration);
-      if (
-        identity &&
-        mediaType === "movie" &&
-        Date.now() - lastLibrarySyncRef.current > 60_000
-      ) {
-        lastLibrarySyncRef.current = Date.now();
-        actionSetMovieProgress(identity, Math.max(1, Math.round(seconds / 60))).catch(
-          () => {},
-        );
-      }
     },
-    [identity, mediaType, progressInput],
+    [progressInput],
   );
-
-  React.useEffect(() => {
-    if (open && identity) {
-      actionUpsertAndSetStatus(identity, "watching").catch(() => {});
-    }
-  }, [open, identity]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -343,14 +322,8 @@ export function StreamingTheaterModal({
       window.clearInterval(interval);
       window.removeEventListener("pagehide", flushWallClock);
       document.removeEventListener("visibilitychange", onHide);
-      if (identity && mediaType === "movie" && lastKnownRef.current.seconds >= 15) {
-        actionSetMovieProgress(
-          identity,
-          Math.max(1, Math.round(lastKnownRef.current.seconds / 60)),
-        ).catch(() => {});
-      }
     };
-  }, [open, persistProgress, identity, mediaType]);
+  }, [open, persistProgress]);
 
   const handleMouseMove = React.useCallback(() => {
     setShowControls(true);

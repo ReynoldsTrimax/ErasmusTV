@@ -11,9 +11,9 @@ import { StreamingProviders } from "@/features/media/components/streaming-provid
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { CatalogConfigBanner } from "@/features/media/components/catalog-config-banner";
-import { PersonalMediaPanel } from "@/features/library/components/personal-media-panel";
-import { DecisionScoreCard } from "@/features/intelligence/components/decision-score-card";
+import { getActiveCatalogMaturity } from "@/lib/media/catalog-context";
 import { getMovie, isCatalogConfigured } from "@/lib/media/catalog";
+import { isTitleAllowedForAge } from "@/lib/media/maturity";
 import {
   formatDate,
   formatMoney,
@@ -21,12 +21,7 @@ import {
   formatRuntime,
 } from "@/lib/media/format";
 import { mediaHref } from "@/lib/media/routes";
-import { getPersonalMediaState } from "@/lib/library/personal-state";
-import { listTags, listCollections } from "@/lib/library/tags-collections";
-import { loadIntelligenceData } from "@/lib/intelligence/load-profile";
-import { computeUserStats } from "@/lib/intelligence/stats-engine";
-import { computeDecisionScore } from "@/lib/intelligence/decision-score";
-import type { MediaIdentity } from "@/types/library";
+import type { MediaIdentity } from "@/types/media";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -61,6 +56,29 @@ export default async function MovieDetailPage({ params }: PageProps) {
   const movie = await getMovie(id);
   if (!movie) notFound();
 
+  const maturity = await getActiveCatalogMaturity();
+  if (
+    !isTitleAllowedForAge(
+      {
+        adult: movie.adult,
+        certification: movie.certification,
+        mediaType: "movie",
+        genres: movie.genres,
+        genreIds: movie.genres.map((g) => g.id),
+      },
+      maturity,
+    )
+  ) {
+    return (
+      <div className="mx-auto max-w-lg py-20 text-center">
+        <h1 className="text-xl font-semibold">Not available on this profile</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This title is outside the age range for the current profile.
+        </p>
+      </div>
+    );
+  }
+
   const identity: MediaIdentity = {
     provider: "tmdb",
     mediaType: "movie",
@@ -75,35 +93,6 @@ export default async function MovieDetailPage({ params }: PageProps) {
     genres: movie.genres.map((g) => g.name),
     originalLanguage: movie.originalLanguage,
   };
-
-  const personal = await getPersonalMediaState("movie", movie.id, identity);
-  const [allTags, allCollections, intelligence] = await Promise.all([
-    personal.userId ? listTags(personal.userId) : Promise.resolve([]),
-    personal.userId ? listCollections(personal.userId) : Promise.resolve([]),
-    personal.userId
-      ? loadIntelligenceData(personal.userId)
-      : Promise.resolve(null),
-  ]);
-
-  const decision =
-    intelligence != null
-      ? computeDecisionScore(
-          {
-            title: movie.title,
-            mediaType: "movie",
-            genres: movie.genres,
-            voteAverage: movie.voteAverage,
-            popularity: movie.popularity,
-            runtime: movie.runtime,
-            releaseDate: movie.releaseDate,
-            overview: movie.overview,
-            crew: movie.crew,
-            cast: movie.cast,
-          },
-          computeUserStats(intelligence),
-          intelligence.entries,
-        )
-      : null;
 
   // Crew jobs may be merged ("Director · Writer") — match token, not exact string
   const directors = movie.crew.filter((c) =>
@@ -169,17 +158,6 @@ export default async function MovieDetailPage({ params }: PageProps) {
         </div>
 
         <aside className="min-w-0 w-full space-y-6 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-5.5rem)] lg:w-auto lg:overflow-y-auto lg:overflow-x-hidden lg:pr-0.5">
-          {personal.userId ? (
-            <PersonalMediaPanel
-              identity={identity}
-              initial={personal}
-              allTags={allTags}
-              allCollections={allCollections}
-            />
-          ) : null}
-
-          {decision ? <DecisionScoreCard decision={decision} /> : null}
-
           <div className="rounded-3xl border-0 bg-muted/40 dark:bg-white/[0.05] p-5">
             <h2 className="mb-3 text-sm font-semibold">Details</h2>
             <MediaMeta

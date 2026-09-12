@@ -1,12 +1,8 @@
-/**
- * Application-level constants.
- */
-export const APP_NAME = "Argus";
-export const APP_TAGLINE = "See everything you watch";
+export const APP_NAME = "Erasmus";
+export const APP_TAGLINE = "Watch what you want, when you want";
 export const APP_DESCRIPTION =
-  "Every film and series you have watched, are watching, and keep meaning to start. All in one place, with your ratings and notes attached.";
+  "Discover movies and TV shows, see where they stream, and play them in one place.";
 
-/** Default metadata for SEO and social sharing. */
 export const APP_METADATA = {
   name: APP_NAME,
   tagline: APP_TAGLINE,
@@ -14,7 +10,6 @@ export const APP_METADATA = {
   locale: "en_US",
 } as const;
 
-/** Layout measurements (mirrored in CSS variables). */
 export const LAYOUT = {
   headerHeight: 56,
   sidebarWidth: 260,
@@ -22,7 +17,6 @@ export const LAYOUT = {
   contentMaxWidth: 1440,
 } as const;
 
-/** Local storage keys for client-persisted preferences. */
 export const STORAGE_KEYS = {
   sidebarCollapsed: "argus:sidebar-collapsed",
   commandRecent: "argus:command-recent",
@@ -30,3 +24,5 @@ export const STORAGE_KEYS = {
   posterDensity: "argus:poster-density",
   pinnedSearches: "argus:pinned-searches",
 } as const;
+
+export const PROFILE_COOKIE = "argus_profile";

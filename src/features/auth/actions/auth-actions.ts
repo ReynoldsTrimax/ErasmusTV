@@ -9,6 +9,7 @@ import { isAuthCircuitOpen, isTimeoutError } from "@/lib/supabase/fetch";
 import { loginSchema, signupSchema } from "@/lib/validations/auth";
 import { safeNextPath } from "@/lib/utils/safe-redirect";
 import { ROUTES } from "@/constants/routes";
+import { clearProfileCookie } from "@/lib/watch-profiles/cookie";
 import type { ActionResult, OAuthProvider } from "@/types";
 
 function getOriginFromHeaders(headerStore: Headers): string {
@@ -128,7 +129,7 @@ export async function signInWithPassword(
   revalidatePath("/", "layout");
   // `next` arrives from a query parameter on the sign-in link, so it is
   // attacker-controlled; sanitise before it becomes a Location header.
-  redirect(safeNextPath(typeof next === "string" ? next : null, ROUTES.dashboard));
+  redirect(safeNextPath(typeof next === "string" ? next : null, ROUTES.profiles));
 }
 
 /**
@@ -186,7 +187,7 @@ export async function signUpWithPassword(
   }
 
   revalidatePath("/", "layout");
-  redirect(ROUTES.dashboard);
+  redirect(ROUTES.profiles);
 }
 
 /**
@@ -245,6 +246,7 @@ export async function signOut(): Promise<void> {
     });
   }
 
+  await clearProfileCookie().catch(() => {});
   revalidatePath("/", "layout");
   redirect(ROUTES.home);
 }

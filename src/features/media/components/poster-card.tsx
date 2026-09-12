@@ -3,31 +3,26 @@
 import * as React from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Bookmark, Check, Loader2, Play, Star } from "lucide-react";
-import { toast } from "sonner";
+import { motion, useReducedMotion } from "framer-motion";
+import { Star } from "lucide-react";
+
+import { StreamButton } from "@/features/streaming/components/stream-button";
+import { PlanToWatchButton } from "@/features/watchlist/plan-button";
 
 import { cn } from "@/lib/utils";
 import { posterUrl } from "@/lib/media/image";
 import { formatNumber, formatVote, formatYear } from "@/lib/media/format";
 import { mediaHref } from "@/lib/media/routes";
-import { actionUpsertAndSetStatus } from "@/features/library/actions/library-actions";
 import type { MediaSummary } from "@/types/media";
-import type { MediaIdentity, WatchStatus } from "@/types/library";
 
 interface PosterCardProps {
   item: MediaSummary;
   className?: string;
   priority?: boolean;
   size?: "sm" | "md" | "lg";
-  /** Show Plan / Watching / Completed on hover (default true). */
   quickActions?: boolean;
-  /** Position in a ranked shelf. Takes the audience-score badge's corner. */
   rank?: number;
-  /** IMDb score for ranked shelves — shown instead of the TMDB star. */
   imdbRating?: number | null;
-  /** IMDb vote count, shown in the caption in place of the media type. */
   imdbVotes?: number | null;
 }
 
@@ -37,29 +32,6 @@ const sizeClass = {
   lg: "w-40 sm:w-48",
 };
 
-const QUICK_STATUSES = [
-  "plan_to_watch",
-  "watching",
-  "completed",
-] as const satisfies readonly WatchStatus[];
-
-const STATUS_TOAST: Record<(typeof QUICK_STATUSES)[number], (title: string) => string> = {
-  plan_to_watch: (title) => `Added “${title}” to Plan to Watch`,
-  watching: (title) => `Added “${title}” to Watching`,
-  completed: (title) => `Marked “${title}” as Completed`,
-};
-
-const STATUS_BADGE: Record<(typeof QUICK_STATUSES)[number], string> = {
-  plan_to_watch: "Plan",
-  watching: "Watching",
-  completed: "Done",
-};
-
-/** ~66% of previous h-9 (36px) → ~24px */
-const actionBtnClass =
-  "inline-flex h-6 w-full items-center justify-center gap-1.5 rounded-md text-[10px] font-semibold shadow-sm backdrop-blur-md transition disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
-
-/** Smooth settle — no snappy bounce that fights the layout. */
 const popTransition = {
   type: "spring" as const,
   stiffness: 260,
@@ -67,68 +39,22 @@ const popTransition = {
   mass: 0.9,
 };
 
-function toIdentity(item: MediaSummary): MediaIdentity {
-  return {
-    provider: "tmdb",
-    mediaType: item.mediaType,
-    externalId: item.id,
-    title: item.title,
-    originalTitle: item.originalTitle,
-    posterPath: item.posterPath,
-    backdropPath: item.backdropPath,
-    releaseDate: item.releaseDate,
-    overview: item.overview,
-    originalLanguage: item.originalLanguage,
-  };
-}
-
-/**
- * Catalog poster with smooth hover pop + translucent quick-list actions.
- */
 export function PosterCard({
   item,
   className,
   priority,
   size = "md",
-  quickActions = true,
   rank,
   imdbRating,
   imdbVotes,
 }: PosterCardProps) {
-  const router = useRouter();
   const reduceMotion = useReducedMotion();
   const [loaded, setLoaded] = React.useState(false);
   const [hovered, setHovered] = React.useState(false);
-  const [pending, setPending] = React.useState<WatchStatus | null>(null);
-  const [lastStatus, setLastStatus] = React.useState<WatchStatus | null>(null);
 
   const href = mediaHref(item.mediaType, item.id);
   const src = posterUrl(item.posterPath, "w342");
   const year = formatYear(item.releaseDate);
-  const showActions = quickActions && hovered;
-
-  const setStatus = async (status: WatchStatus, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (pending) return;
-
-    setPending(status);
-    try {
-      const res = await actionUpsertAndSetStatus(toIdentity(item), status);
-      if (!res.success) {
-        toast.error(res.error ?? "Could not update status");
-        return;
-      }
-      setLastStatus(status);
-      const toastFor = STATUS_TOAST[status as (typeof QUICK_STATUSES)[number]];
-      toast.success(toastFor ? toastFor(item.title) : `Updated “${item.title}”`);
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setPending(null);
-    }
-  };
 
   const motionTarget = reduceMotion
     ? { y: 0, scale: 1, zIndex: hovered ? 8 : 0 }
@@ -214,106 +140,29 @@ export function PosterCard({
           </div>
         ) : null}
 
-        {/* Steps aside for the quick actions, which claim the same corner on hover */}
-        {imdbRating != null ? (
-          <span
-            className={cn(
-              "pointer-events-none absolute bottom-1.5 left-1.5 z-[1] inline-flex items-center",
-              "gap-1 rounded bg-[#f5c518] px-1.5 py-0.5 text-[10px] font-bold text-black",
-              "transition-opacity duration-200 ease-out",
-              showActions ? "opacity-0" : "opacity-100",
-            )}
-          >
+        {imdbRating != null && !hovered ? (
+          <span className="pointer-events-none absolute bottom-1.5 left-1.5 z-[1] inline-flex items-center gap-1 rounded bg-[#f5c518] px-1.5 py-0.5 text-[10px] font-bold text-black">
             IMDb {imdbRating.toFixed(1)}
           </span>
         ) : null}
 
-        <AnimatePresence>
-          {lastStatus && lastStatus in STATUS_BADGE ? (
-            <motion.div
-              key="status-badge"
-              initial={
-                reduceMotion ? { opacity: 1 } : { opacity: 0, transform: "scale(0.92)" }
-              }
-              animate={{ opacity: 1, transform: "scale(1)" }}
-              exit={
-                reduceMotion ? { opacity: 0 } : { opacity: 0, transform: "scale(0.96)" }
-              }
-              transition={{
-                duration: reduceMotion ? 0.01 : 0.18,
-                ease: [0.22, 1, 0.36, 1],
-              }}
-              className="pointer-events-none absolute top-2 right-2 z-[1] rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm"
-            >
-              {STATUS_BADGE[lastStatus as (typeof QUICK_STATUSES)[number]]}
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {showActions ? (
-            <motion.div
-              key="quick-actions"
-              initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
-              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1 p-2"
-            >
-              <button
-                type="button"
-                disabled={pending != null}
-                onClick={(e) => void setStatus("plan_to_watch", e)}
-                className={cn(
-                  actionBtnClass,
-                  "bg-black/55 text-white ring-1 ring-white/10 hover:bg-black/70",
-                )}
-                aria-label={`Add ${item.title} to plan to watch`}
-              >
-                {pending === "plan_to_watch" ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Bookmark className="h-3 w-3" />
-                )}
-                Plan to Watch
-              </button>
-              <button
-                type="button"
-                disabled={pending != null}
-                onClick={(e) => void setStatus("watching", e)}
-                className={cn(
-                  actionBtnClass,
-                  "bg-white/35 text-white ring-1 ring-white/35 hover:bg-white/50",
-                )}
-                aria-label={`Add ${item.title} to watching`}
-              >
-                {pending === "watching" ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Play className="h-3 w-3 fill-current" />
-                )}
-                Watching
-              </button>
-              <button
-                type="button"
-                disabled={pending != null}
-                onClick={(e) => void setStatus("completed", e)}
-                className={cn(
-                  actionBtnClass,
-                  "bg-primary/45 ring-primary/40 hover:bg-primary/60 text-white ring-1",
-                )}
-                aria-label={`Mark ${item.title} as completed`}
-              >
-                {pending === "completed" ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Check className="h-3 w-3" />
-                )}
-                Completed
-              </button>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+        <div
+          className={cn(
+            "absolute inset-x-0 bottom-0 z-[3] flex gap-1 p-1.5 transition-opacity duration-200",
+            hovered
+              ? "pointer-events-auto opacity-100"
+              : "pointer-events-none opacity-0 max-sm:pointer-events-auto max-sm:opacity-100",
+          )}
+        >
+          <StreamButton
+            title={item.title}
+            tmdbId={item.id}
+            mediaType={item.mediaType}
+            variant="compact"
+            className="h-7 flex-1 border-0 bg-white px-1.5 text-[10px] font-semibold text-black hover:bg-white/90 hover:text-black"
+          />
+          <PlanToWatchButton item={item} />
+        </div>
       </div>
 
       <Link href={href} prefetch className="mt-2 block space-y-0.5 px-0.5">
