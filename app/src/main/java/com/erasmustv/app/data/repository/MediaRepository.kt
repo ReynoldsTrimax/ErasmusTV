@@ -196,7 +196,6 @@ class MediaRepository(
 
     suspend fun getMovieDetails(id: String): Result<MovieDetails> = runCatching {
         val raw = tmdbApi.getMovieDetails(id, apiKey)
-        val providers = getWhereToWatch("movie", id).getOrDefault(emptyList())
         val bestLogo = raw.images?.logos?.let { logos ->
             val enLogos = logos.filter { it.iso6391 == "en" }
             (enLogos.ifEmpty { logos })
@@ -236,14 +235,12 @@ class MediaRepository(
             cast = raw.credits?.cast ?: emptyList(),
             similar = raw.similar?.results?.map { it.copy(mediaType = "movie") } ?: emptyList(),
             ratings = ratings,
-            whereToWatch = providers,
             tagline = raw.tagline
         )
     }
 
     suspend fun getTvDetails(id: String): Result<TvDetails> = runCatching {
         val raw = tmdbApi.getTvDetails(id, apiKey)
-        val providers = getWhereToWatch("tv", id).getOrDefault(emptyList())
         val bestLogo = raw.images?.logos?.let { logos ->
             val enLogos = logos.filter { it.iso6391 == "en" }
             (enLogos.ifEmpty { logos })
@@ -284,7 +281,6 @@ class MediaRepository(
             cast = raw.credits?.cast ?: emptyList(),
             similar = raw.similar?.results?.map { it.copy(mediaType = "tv") } ?: emptyList(),
             ratings = ratings,
-            whereToWatch = providers,
             tagline = raw.tagline
         )
     }
@@ -306,29 +302,6 @@ class MediaRepository(
 
     suspend fun getTvGenres(): Result<List<Genre>> = runCatching {
         tmdbApi.getTvGenres(apiKey).genres
-    }
-
-    suspend fun getWhereToWatch(mediaType: String, id: String, region: String = "US"): Result<List<WatchProvider>> = runCatching {
-        val response = if (mediaType == "tv") {
-            tmdbApi.getTvWatchProviders(id, apiKey)
-        } else {
-            tmdbApi.getMovieWatchProviders(id, apiKey)
-        }
-
-        val regionProviders = response.results[region] ?: response.results["US"] ?: response.results["IN"]
-        val list = mutableListOf<WatchProvider>()
-
-        regionProviders?.flatrate?.forEach {
-            list.add(WatchProvider(it.providerId, it.providerName, it.logoPath, "flatrate"))
-        }
-        regionProviders?.rent?.forEach {
-            list.add(WatchProvider(it.providerId, it.providerName, it.logoPath, "rent"))
-        }
-        regionProviders?.buy?.forEach {
-            list.add(WatchProvider(it.providerId, it.providerName, it.logoPath, "buy"))
-        }
-
-        list.distinctBy { it.id }
     }
 
     suspend fun getStudioContent(providerId: Int, page: Int = 1): Result<Pair<List<MediaItem>, List<MediaItem>>> = runCatching {
