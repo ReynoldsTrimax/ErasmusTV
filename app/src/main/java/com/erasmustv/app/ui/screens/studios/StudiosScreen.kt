@@ -27,6 +27,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.erasmustv.app.R
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -89,15 +93,15 @@ import com.erasmustv.app.ui.components.TvPivotBringIntoViewSpec
 import com.erasmustv.app.ui.navigation.NavRoutes
 
 val STUDIOS_DATA = listOf(
-    StudioInfo("netflix", "Netflix", "NETFLIX", "Netflix", providerId = 8),
-    StudioInfo("hulu", "Hulu", "hulu", "Hulu", providerId = 15),
-    StudioInfo("prime", "Prime Video", "prime video", "Amazon", providerId = 9),
-    StudioInfo("appletv", "Apple TV+", "Apple tv+", "Apple", providerId = 350),
-    StudioInfo("disney", "Disney+", "Disney+", "Disney", providerId = 337),
-    StudioInfo("hbo", "HBO Max", "HBO\nmax", "HBO", providerId = 1899),
-    StudioInfo("peacock", "Peacock", "peacock", "Universal", providerId = 386),
-    StudioInfo("paramount", "Paramount+", "Paramount+", "Paramount", providerId = 531),
-    StudioInfo("hotstar", "Hotstar Specials", "hotstar\nspecials", "Marvel", providerId = 122)
+    StudioInfo("netflix", "Netflix", "NETFLIX", "Netflix", providerId = 8, logoDrawableRes = R.drawable.ic_studio_netflix),
+    StudioInfo("hulu", "Hulu", "hulu", "Hulu", providerId = 15, logoDrawableRes = R.drawable.ic_studio_hulu),
+    StudioInfo("prime", "Prime Video", "prime video", "Amazon", providerId = 9, logoDrawableRes = R.drawable.ic_studio_prime),
+    StudioInfo("appletv", "Apple TV+", "Apple tv+", "Apple", providerId = 350, logoDrawableRes = R.drawable.ic_studio_appletv),
+    StudioInfo("disney", "Disney+", "Disney+", "Disney", providerId = 337, logoDrawableRes = R.drawable.ic_studio_disney),
+    StudioInfo("hbo", "HBO Max", "HBO\nmax", "HBO", providerId = 1899, logoDrawableRes = R.drawable.ic_studio_hbo),
+    StudioInfo("peacock", "Peacock", "peacock", "Universal", providerId = 386, logoDrawableRes = R.drawable.ic_studio_peacock),
+    StudioInfo("paramount", "Paramount+", "Paramount+", "Paramount", providerId = 531, logoDrawableRes = R.drawable.ic_studio_paramount),
+    StudioInfo("hotstar", "Hotstar Specials", "hotstar\nspecials", "Marvel", providerId = 122, logoDrawableRes = R.drawable.ic_studio_hotstar)
 )
 
 /**
@@ -460,33 +464,50 @@ private fun StudioTile(
 
 @Composable
 private fun StudioTileContent(studio: StudioInfo, isFocused: Boolean) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
-        Text(
-            text = studio.name.uppercase(),
-            style = ErasmusTvTypography.HeroTitleLarge.copy(
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 2.sp,
-                color = if (isFocused) FocusWhite else TextPrimary
-            ),
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = "ORIGINALS",
-            style = ErasmusTvTypography.Badge.copy(
-                fontSize = 8.5.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.5.sp,
-                color = if (isFocused) FocusWhite.copy(alpha = 0.85f) else TextMuted
+        if (studio.logoDrawableRes != null) {
+            Image(
+                painter = painterResource(id = studio.logoDrawableRes),
+                contentDescription = studio.name,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
             )
-        )
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = studio.name.uppercase(),
+                    style = ErasmusTvTypography.HeroTitleLarge.copy(
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 2.sp,
+                        color = if (isFocused) FocusWhite else TextPrimary
+                    ),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "ORIGINALS",
+                    style = ErasmusTvTypography.Badge.copy(
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                        color = if (isFocused) FocusWhite.copy(alpha = 0.85f) else TextMuted
+                    )
+                )
+            }
+        }
     }
 }
 

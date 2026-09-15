@@ -1,5 +1,6 @@
 package com.erasmustv.app.ui.screens.studios
 
+import androidx.annotation.DrawableRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.erasmustv.app.data.local.ProfileManager
@@ -28,7 +29,8 @@ data class StudioInfo(
     val name: String,
     val brandText: String,
     val queryTerm: String,
-    val providerId: Int = 8
+    val providerId: Int = 8,
+    @DrawableRes val logoDrawableRes: Int? = null
 )
 
 class StudiosViewModel(
