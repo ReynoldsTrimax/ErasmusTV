@@ -52,6 +52,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -146,14 +147,23 @@ fun TvPlayerScreen(
     val activeSubtitleCues by viewModel.activeSubtitleCues.collectAsState()
     val referenceSubtitleCues by viewModel.referenceSubtitleCues.collectAsState()
 
+    var exoPlayerCueText by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(activeSubtitleCues, referenceSubtitleCues) {
         subtitleSyncEngine.setActiveCues(activeSubtitleCues, referenceSubtitleCues)
     }
 
-    // Active Cue at current position with auto-sync offset applied
-    val activeCueText = remember(currentPositionMs, currentOffsetMs, activeSubtitleCues) {
+    // Active Cue at current position with auto-sync offset applied (or native ExoPlayer cues as dual-engine fallback)
+    val customCueText = remember(currentPositionMs, currentOffsetMs, activeSubtitleCues) {
         val pos = currentPositionMs
         activeSubtitleCues.firstOrNull { it.isActiveAt(pos, currentOffsetMs) }?.text
+    }
+
+    val isSubtitleOff = subtitleTracks.find { it.isSelected }?.isOff == true
+
+    val activeCueText = remember(isSubtitleOff, customCueText, exoPlayerCueText) {
+        if (isSubtitleOff) null
+        else customCueText ?: exoPlayerCueText
     }
 
     // ExoPlayer Instance with TeeAudioProcessor for real-time speech activity detection
@@ -347,6 +357,11 @@ fun TvPlayerScreen(
                 updateTracksFromPlayer(tracks)
             }
 
+            override fun onCues(cueGroup: CueGroup) {
+                val text = cueGroup.cues.joinToString("\n") { it.text?.toString().orEmpty() }.trim()
+                exoPlayerCueText = if (text.isNotBlank()) text else null
+            }
+
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 isBuffering = false
                 viewModel.onPlaybackError(error.message ?: "Playback error encountered. Please retry or choose another server.")
@@ -403,16 +418,19 @@ fun TvPlayerScreen(
                 val subMime = when {
                     sub.mimeType.isNotBlank() -> sub.mimeType
                     sub.url.contains(".vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
+                    sub.url.contains(".ass", ignoreCase = true) || sub.url.contains(".ssa", ignoreCase = true) || sub.url.contains("wyzie", ignoreCase = true) -> MimeTypes.TEXT_SSA
                     sub.url.contains(".srt", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
                     sub.url.contains("strem.io", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
-                    sub.url.contains("wyzie", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
                     else -> MimeTypes.APPLICATION_SUBRIP
                 }
+                val isDefault = sub.language.startsWith("en", ignoreCase = true) ||
+                        sub.language.equals("eng", ignoreCase = true) ||
+                        sub.label.contains("English", ignoreCase = true)
                 Media3Item.SubtitleConfiguration.Builder(Uri.parse(sub.url))
                     .setMimeType(subMime)
                     .setLanguage(sub.language)
                     .setLabel(sub.label)
-                    .setSelectionFlags(if (sub.language.equals("en", ignoreCase = true) || sub.language.equals("eng", ignoreCase = true)) C.SELECTION_FLAG_DEFAULT else 0)
+                    .setSelectionFlags(if (isDefault) C.SELECTION_FLAG_DEFAULT else 0)
                     .build()
             }
 
@@ -937,14 +955,26 @@ fun TvPlayerScreen(
             onSelectSubtitleTrack = { track ->
                 if (track.isOff) {
                     viewModel.loadSubtitleTrack(null)
+                    exoPlayerCueText = null
                     exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
                         .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                         .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                         .build()
                 } else {
                     val readyState = viewModel.streamState.value as? PlayerStreamState.Ready
-                    val matchedTrack = readyState?.captions?.find { it.label == track.label }
-                    viewModel.loadSubtitleTrack(matchedTrack)
+                    val matchedTrack = readyState?.captions?.find { it.label.equals(track.label, ignoreCase = true) }
+                        ?: readyState?.captions?.find {
+                            it.language.isNotBlank() && (it.language.equals(track.language, ignoreCase = true) ||
+                                    (it.language.startsWith("en", ignoreCase = true) && track.language.startsWith("en", ignoreCase = true)))
+                        }
+                        ?: readyState?.captions?.find {
+                            it.label.contains(track.label, ignoreCase = true) || track.label.contains(it.label, ignoreCase = true)
+                        }
+                        ?: readyState?.captions?.firstOrNull { it.language.startsWith("en", ignoreCase = true) }
+
+                    if (matchedTrack != null) {
+                        viewModel.loadSubtitleTrack(matchedTrack)
+                    }
                     if (track.mediaTrackGroup != null && track.trackIndex >= 0) {
                         exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
                             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)

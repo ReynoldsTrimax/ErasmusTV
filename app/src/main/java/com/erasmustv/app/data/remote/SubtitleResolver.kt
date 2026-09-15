@@ -131,10 +131,10 @@ class SubtitleResolver(
                                 val lang = item.optString("language").lowercase()
                                 val display = item.optString("display").takeIf { it.isNotBlank() }
                                     ?: LANG_NAMES[lang] ?: lang.uppercase()
-                                val mime = if (subUrl.contains(".vtt", ignoreCase = true)) {
-                                    "text/vtt"
-                                } else {
-                                    "application/x-subrip"
+                                val mime = when {
+                                    subUrl.contains(".vtt", ignoreCase = true) -> "text/vtt"
+                                    subUrl.contains(".ass", ignoreCase = true) || subUrl.contains(".ssa", ignoreCase = true) || subUrl.contains("wyzie", ignoreCase = true) -> "text/x-ssa"
+                                    else -> "application/x-subrip"
                                 }
                                 results.add(SubtitleTrack(label = display, language = lang, url = subUrl, mimeType = mime))
                             }
@@ -186,10 +186,11 @@ class SubtitleResolver(
                                             fileName.contains("[CC]", ignoreCase = true)
                                     val baseDisplay = LANG_NAMES[lang] ?: lang.uppercase()
                                     val display = if (isSdh) "$baseDisplay [CC]" else baseDisplay
-                                    val mime = if (fileName.endsWith(".vtt", ignoreCase = true) || subUrl.contains(".vtt", ignoreCase = true)) {
-                                        "text/vtt"
-                                    } else {
-                                        "application/x-subrip"
+                                    val mime = when {
+                                        fileName.endsWith(".vtt", ignoreCase = true) || subUrl.contains(".vtt", ignoreCase = true) -> "text/vtt"
+                                        fileName.endsWith(".ass", ignoreCase = true) || fileName.endsWith(".ssa", ignoreCase = true) ||
+                                                subUrl.contains(".ass", ignoreCase = true) || subUrl.contains(".ssa", ignoreCase = true) -> "text/x-ssa"
+                                        else -> "application/x-subrip"
                                     }
                                     results.add(SubtitleTrack(label = display, language = lang, url = subUrl, mimeType = mime))
                                 }

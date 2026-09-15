@@ -46,6 +46,18 @@ class TvPlayerViewModel(
 
     private val subtitleTextCache = java.util.concurrent.ConcurrentHashMap<String, List<com.erasmustv.app.data.subtitle.SubtitleCue>>()
 
+    private val subtitleClient: okhttp3.OkHttpClient = okHttpClient?.newBuilder()
+        ?.followRedirects(true)
+        ?.followSslRedirects(true)
+        ?.connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        ?.readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        ?.build() ?: okhttp3.OkHttpClient.Builder()
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+
 
     private val _streamState = MutableStateFlow<PlayerStreamState>(PlayerStreamState.Resolving)
     val streamState: StateFlow<PlayerStreamState> = _streamState.asStateFlow()
@@ -101,7 +113,12 @@ class TvPlayerViewModel(
                             captions = subTracks
                         )
                         // Select primary English caption track by default
-                        val primaryTrack = subTracks.firstOrNull { it.language.equals("en", ignoreCase = true) } ?: subTracks.firstOrNull()
+                        val primaryTrack = subTracks.firstOrNull {
+                            it.language.equals("en", ignoreCase = true) ||
+                                    it.language.equals("eng", ignoreCase = true) ||
+                                    it.language.startsWith("en-", ignoreCase = true) ||
+                                    it.label.contains("English", ignoreCase = true)
+                        } ?: subTracks.firstOrNull()
                         if (primaryTrack != null) {
                             loadSubtitleTrack(primaryTrack)
                         }
@@ -132,13 +149,20 @@ class TvPlayerViewModel(
                 return@launch
             }
 
-            val client = okHttpClient ?: okhttp3.OkHttpClient()
             try {
+                val referer = when {
+                    track.url.contains("vidfast", ignoreCase = true) || track.url.contains("wyzie", ignoreCase = true) -> "https://vidfast.vc/"
+                    track.url.contains("cinejoy", ignoreCase = true) -> "https://cinejoy.to/"
+                    track.url.contains("strem.io", ignoreCase = true) -> "https://opensubtitles-v3.strem.io/"
+                    else -> "https://cinejoy.to/"
+                }
                 val req = okhttp3.Request.Builder()
                     .url(track.url)
                     .header("User-Agent", com.erasmustv.app.core.config.AppConfig.STREAM_USER_AGENT)
+                    .header("Referer", referer)
+                    .header("Accept", "*/*")
                     .build()
-                val resp = client.newCall(req).execute()
+                val resp = subtitleClient.newCall(req).execute()
                 val body = resp.body?.string() ?: ""
                 if (body.isNotBlank()) {
                     val parsed = com.erasmustv.app.data.subtitle.SubtitleParser.parse(body)
@@ -159,13 +183,20 @@ class TvPlayerViewModel(
                 return@launch
             }
 
-            val client = okHttpClient ?: okhttp3.OkHttpClient()
             try {
+                val referer = when {
+                    track.url.contains("vidfast", ignoreCase = true) || track.url.contains("wyzie", ignoreCase = true) -> "https://vidfast.vc/"
+                    track.url.contains("cinejoy", ignoreCase = true) -> "https://cinejoy.to/"
+                    track.url.contains("strem.io", ignoreCase = true) -> "https://opensubtitles-v3.strem.io/"
+                    else -> "https://cinejoy.to/"
+                }
                 val req = okhttp3.Request.Builder()
                     .url(track.url)
                     .header("User-Agent", com.erasmustv.app.core.config.AppConfig.STREAM_USER_AGENT)
+                    .header("Referer", referer)
+                    .header("Accept", "*/*")
                     .build()
-                val resp = client.newCall(req).execute()
+                val resp = subtitleClient.newCall(req).execute()
                 val body = resp.body?.string() ?: ""
                 if (body.isNotBlank()) {
                     val parsed = com.erasmustv.app.data.subtitle.SubtitleParser.parse(body)
