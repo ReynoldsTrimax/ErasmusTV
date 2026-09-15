@@ -71,8 +71,17 @@ fun WatchlistScreen(
         label = "watchlistContentShift"
     )
 
-    // Deterministic Back Handler: pressing BACK navigates back to Home screen
-    BackHandler {
+    // Deterministic Back Handler:
+    // When in content, pressing BACK hops focus cleanly to the sidebar rail
+    BackHandler(enabled = !isRailFocused) {
+        try {
+            railFocusRequester.requestFocus()
+        } catch (_: Exception) {
+            onNavigate(NavRoutes.HOME)
+        }
+    }
+    // When in rail, pressing BACK returns to Home screen
+    BackHandler(enabled = isRailFocused) {
         onNavigate(NavRoutes.HOME)
     }
 
@@ -158,16 +167,31 @@ fun WatchlistScreen(
                             ) {
                                 itemsIndexed(state.items, key = { _, it -> "${it.mediaType}:${it.id}" }) { index, item ->
                                     val isFirstCol = index % 5 == 0
+                                    val isTopRow = index < 5
+                                    val isBottomRow = index >= (state.items.size - ((state.items.size - 1) % 5 + 1))
                                     Box(
                                         modifier = Modifier
                                             .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier)
                                             .onKeyEvent { event ->
-                                                if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft && isFirstCol) {
-                                                    try {
-                                                        railFocusRequester.requestFocus()
-                                                        true
-                                                    } catch (_: Exception) {
-                                                        false
+                                                if (event.type == KeyEventType.KeyDown) {
+                                                    when (event.key) {
+                                                        Key.DirectionLeft -> {
+                                                            if (isFirstCol) {
+                                                                try {
+                                                                    railFocusRequester.requestFocus()
+                                                                    true
+                                                                } catch (_: Exception) {
+                                                                    false
+                                                                }
+                                                            } else false
+                                                        }
+                                                        Key.DirectionUp -> {
+                                                            if (isTopRow) true else false
+                                                        }
+                                                        Key.DirectionDown -> {
+                                                            if (isBottomRow) true else false
+                                                        }
+                                                        else -> false
                                                     }
                                                 } else false
                                             }

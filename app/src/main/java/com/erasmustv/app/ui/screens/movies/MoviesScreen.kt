@@ -136,8 +136,16 @@ fun MoviesScreen(
                 }
 
                 // Deterministic Back Button Handling:
-                // When in content or rail, pressing BACK returns to Home screen
-                androidx.activity.compose.BackHandler {
+                // When in content, pressing BACK hops focus cleanly to the sidebar rail
+                androidx.activity.compose.BackHandler(enabled = !isRailFocused) {
+                    try {
+                        railFocusRequester.requestFocus()
+                    } catch (_: Exception) {
+                        onNavigate(NavRoutes.HOME)
+                    }
+                }
+                // When in rail, pressing BACK returns to Home screen
+                androidx.activity.compose.BackHandler(enabled = isRailFocused) {
                     onNavigate(NavRoutes.HOME)
                 }
 

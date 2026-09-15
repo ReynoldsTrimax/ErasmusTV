@@ -27,6 +27,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BookmarkBorder
@@ -49,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -126,13 +129,26 @@ fun MediaDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     val activeProfile by viewModel.activeProfile.collectAsState()
 
+    val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     val primaryActionFocusRequester = remember { FocusRequester() }
+    val similarFocusRequester = remember { FocusRequester() }
+    val episodesFocusRequester = remember { FocusRequester() }
     val railFocusRequester = remember { FocusRequester() }
     var isRailFocused by remember { mutableStateOf(false) }
+    var activeContentFocusRequester by remember { mutableStateOf(primaryActionFocusRequester) }
 
-    // Deterministic Back Navigation:
-    // Single Back press on the TV remote always exits directly back to previous screen
-    BackHandler {
+    // Remote BACK Button Handling:
+    // When in content, pressing BACK hops focus cleanly to the sidebar rail.
+    androidx.activity.compose.BackHandler(enabled = !isRailFocused) {
+        try {
+            railFocusRequester.requestFocus()
+        } catch (_: Exception) {
+            onBackClick()
+        }
+    }
+    // When in rail, pressing BACK exits the detail screen back to previous screen.
+    androidx.activity.compose.BackHandler(enabled = isRailFocused) {
         onBackClick()
     }
 
@@ -209,7 +225,6 @@ fun MediaDetailScreen(
             }
             is DetailUiState.MovieSuccess -> {
                 val movie = state.movie
-                val listState = rememberLazyListState()
 
                 CompositionLocalProvider(LocalBringIntoViewSpec provides detailBringIntoViewSpec) {
                     LazyColumn(
@@ -221,37 +236,45 @@ fun MediaDetailScreen(
                             }
                     ) {
                     item {
-                        DetailHero(
-                            isTv = false,
-                            title = movie.title,
-                            backdropPath = movie.backdropPath ?: movie.posterPath,
-                            logoPath = movie.logoPath,
-                            tagline = movie.tagline,
-                            voteAverage = movie.voteAverage,
-                            voteCount = movie.voteCount,
-                            year = movie.year,
-                            runtimeOrSeasons = movie.durationFormatted,
-                            certification = movie.certification ?: "PG-13",
-                            status = movie.status,
-                            genres = movie.genres.map { it.name },
-                            overview = movie.overview,
-                            cast = movie.cast,
-                            ratings = movie.ratings,
-                            inWatchlist = state.inWatchlist,
-                            resumePosition = state.resumePosition,
-                            primaryActionLabel = if (state.resumePosition > 0) "Resume" else "Play Movie",
-                            playFocusRequester = primaryActionFocusRequester,
-                            onPlayClick = {
-                                onPlayClick("movie", movie.id, movie.title, null, null, movie.posterPath, movie.backdropPath)
-                            },
-                            onToggleWatchlist = { viewModel.toggleWatchlist() },
-                            onNavigateLeftToRail = {
-                                try {
-                                    railFocusRequester.requestFocus()
-                                } catch (_: Exception) {}
-                            },
-                            onBackClick = onBackClick
-                        )
+                        Box(
+                            modifier = Modifier.onFocusChanged {
+                                if (it.hasFocus) {
+                                    activeContentFocusRequester = primaryActionFocusRequester
+                                }
+                            }
+                        ) {
+                            DetailHero(
+                                isTv = false,
+                                title = movie.title,
+                                backdropPath = movie.backdropPath ?: movie.posterPath,
+                                logoPath = movie.logoPath,
+                                tagline = movie.tagline,
+                                voteAverage = movie.voteAverage,
+                                voteCount = movie.voteCount,
+                                year = movie.year,
+                                runtimeOrSeasons = movie.durationFormatted,
+                                certification = movie.certification ?: "PG-13",
+                                status = movie.status,
+                                genres = movie.genres.map { it.name },
+                                overview = movie.overview,
+                                cast = movie.cast,
+                                ratings = movie.ratings,
+                                inWatchlist = state.inWatchlist,
+                                resumePosition = state.resumePosition,
+                                primaryActionLabel = if (state.resumePosition > 0) "Resume" else "Play Movie",
+                                playFocusRequester = primaryActionFocusRequester,
+                                onPlayClick = {
+                                    onPlayClick("movie", movie.id, movie.title, null, null, movie.posterPath, movie.backdropPath)
+                                },
+                                onToggleWatchlist = { viewModel.toggleWatchlist() },
+                                onNavigateLeftToRail = {
+                                    try {
+                                        railFocusRequester.requestFocus()
+                                    } catch (_: Exception) {}
+                                },
+                                onBackClick = onBackClick
+                            )
+                        }
                     }
 
                     // Cast row
@@ -266,16 +289,35 @@ fun MediaDetailScreen(
                     if (movie.similar.isNotEmpty()) {
                         item {
                             Spacer(modifier = Modifier.height(32.dp))
-                            MediaSectionRow(
-                                title = "More Like This",
-                                items = movie.similar,
-                                onItemClick = onSimilarClick,
-                                onNavigateLeftToRail = {
-                                    try {
-                                        railFocusRequester.requestFocus()
-                                    } catch (_: Exception) {}
+                            Box(
+                                modifier = Modifier.onFocusChanged {
+                                    if (it.hasFocus) {
+                                        activeContentFocusRequester = similarFocusRequester
+                                    }
                                 }
-                            )
+                            ) {
+                                MediaSectionRow(
+                                    title = "More Like This",
+                                    items = movie.similar,
+                                    onItemClick = onSimilarClick,
+                                    firstItemFocusRequester = similarFocusRequester,
+                                    onNavigateLeftToRail = {
+                                        try {
+                                            railFocusRequester.requestFocus()
+                                        } catch (_: Exception) {}
+                                    },
+                                    onNavigateDown = null,
+                                    onNavigateUp = {
+                                        coroutineScope.launch {
+                                            try {
+                                                listState.animateScrollToItem(0)
+                                                kotlinx.coroutines.delay(40)
+                                                primaryActionFocusRequester.requestFocus()
+                                            } catch (_: Exception) {}
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -287,8 +329,6 @@ fun MediaDetailScreen(
             }
             is DetailUiState.TvSuccess -> {
                 val tv = state.tv
-                val listState = rememberLazyListState()
-                val coroutineScope = rememberCoroutineScope()
 
                 val selectedSeasonNum = state.selectedSeason?.seasonNumber ?: 1
                 val primaryLabel = if (state.resumePosition > 0) {
@@ -307,57 +347,79 @@ fun MediaDetailScreen(
                             }
                     ) {
                     item {
-                        DetailHero(
-                            isTv = true,
-                            title = tv.title,
-                            backdropPath = tv.backdropPath ?: tv.posterPath,
-                            logoPath = tv.logoPath,
-                            tagline = tv.tagline,
-                            voteAverage = tv.voteAverage,
-                            voteCount = tv.voteCount,
-                            year = tv.year,
-                            runtimeOrSeasons = "${tv.numberOfSeasons ?: 1} Seasons",
-                            certification = tv.certification ?: "TV-MA",
-                            status = tv.status ?: "Returning Series",
-                            genres = tv.genres.map { it.name },
-                            overview = tv.overview,
-                            cast = tv.cast,
-                            ratings = tv.ratings,
-                            inWatchlist = state.inWatchlist,
-                            resumePosition = state.resumePosition,
-                            primaryActionLabel = primaryLabel,
-                            playFocusRequester = primaryActionFocusRequester,
-                            onPlayClick = {
-                                val s = state.selectedSeason?.seasonNumber ?: 1
-                                onPlayClick("tv", tv.id, tv.title, s, 1, tv.posterPath, tv.backdropPath)
-                            },
-                            onToggleWatchlist = { viewModel.toggleWatchlist() },
-                            onNavigateLeftToRail = {
-                                try {
-                                    railFocusRequester.requestFocus()
-                                } catch (_: Exception) {}
-                            },
-                            onMoreEpisodesClick = {
-                                coroutineScope.launch {
-                                    listState.animateScrollToItem(1)
+                        Box(
+                            modifier = Modifier.onFocusChanged {
+                                if (it.hasFocus) {
+                                    activeContentFocusRequester = primaryActionFocusRequester
                                 }
-                            },
-                            onBackClick = onBackClick
-                        )
+                            }
+                        ) {
+                            DetailHero(
+                                isTv = true,
+                                title = tv.title,
+                                backdropPath = tv.backdropPath ?: tv.posterPath,
+                                logoPath = tv.logoPath,
+                                tagline = tv.tagline,
+                                voteAverage = tv.voteAverage,
+                                voteCount = tv.voteCount,
+                                year = tv.year,
+                                runtimeOrSeasons = "${tv.numberOfSeasons ?: 1} Seasons",
+                                certification = tv.certification ?: "TV-MA",
+                                status = tv.status ?: "Returning Series",
+                                genres = tv.genres.map { it.name },
+                                overview = tv.overview,
+                                cast = tv.cast,
+                                ratings = tv.ratings,
+                                inWatchlist = state.inWatchlist,
+                                resumePosition = state.resumePosition,
+                                primaryActionLabel = primaryLabel,
+                                playFocusRequester = primaryActionFocusRequester,
+                                onPlayClick = {
+                                    val s = state.selectedSeason?.seasonNumber ?: 1
+                                    onPlayClick("tv", tv.id, tv.title, s, 1, tv.posterPath, tv.backdropPath)
+                                },
+                                onToggleWatchlist = { viewModel.toggleWatchlist() },
+                                onNavigateLeftToRail = {
+                                    try {
+                                        railFocusRequester.requestFocus()
+                                    } catch (_: Exception) {}
+                                },
+                                onMoreEpisodesClick = {
+                                    coroutineScope.launch {
+                                        listState.animateScrollToItem(1)
+                                    }
+                                },
+                                onBackClick = onBackClick
+                            )
+                        }
                     }
 
                     // TV Season Selector & Episode List
                     if (tv.seasons.isNotEmpty()) {
                         item {
                             Spacer(modifier = Modifier.height(28.dp))
-                            TvEpisodesSection(
-                                seasons = tv.seasons,
-                                selectedSeason = state.selectedSeason,
-                                onSeasonSelect = { viewModel.selectSeason(it) },
-                                onEpisodeClick = { ep ->
-                                    onPlayClick("tv", tv.id, tv.title, ep.seasonNumber, ep.episodeNumber, tv.posterPath, ep.stillPath ?: tv.backdropPath)
+                            Box(
+                                modifier = Modifier.onFocusChanged {
+                                    if (it.hasFocus) {
+                                        activeContentFocusRequester = episodesFocusRequester
+                                    }
                                 }
-                            )
+                            ) {
+                                TvEpisodesSection(
+                                    seasons = tv.seasons,
+                                    selectedSeason = state.selectedSeason,
+                                    onSeasonSelect = { viewModel.selectSeason(it) },
+                                    onEpisodeClick = { ep ->
+                                        onPlayClick("tv", tv.id, tv.title, ep.seasonNumber, ep.episodeNumber, tv.posterPath, ep.stillPath ?: tv.backdropPath)
+                                    },
+                                    firstItemFocusRequester = episodesFocusRequester,
+                                    onNavigateLeftToRail = {
+                                        try {
+                                            railFocusRequester.requestFocus()
+                                        } catch (_: Exception) {}
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -373,16 +435,41 @@ fun MediaDetailScreen(
                     if (tv.similar.isNotEmpty()) {
                         item {
                             Spacer(modifier = Modifier.height(32.dp))
-                            MediaSectionRow(
-                                title = "More Like This",
-                                items = tv.similar,
-                                onItemClick = onSimilarClick,
-                                onNavigateLeftToRail = {
-                                    try {
-                                        railFocusRequester.requestFocus()
-                                    } catch (_: Exception) {}
+                            Box(
+                                modifier = Modifier.onFocusChanged {
+                                    if (it.hasFocus) {
+                                        activeContentFocusRequester = similarFocusRequester
+                                    }
                                 }
-                            )
+                            ) {
+                                MediaSectionRow(
+                                    title = "More Like This",
+                                    items = tv.similar,
+                                    onItemClick = onSimilarClick,
+                                    firstItemFocusRequester = similarFocusRequester,
+                                    onNavigateLeftToRail = {
+                                        try {
+                                            railFocusRequester.requestFocus()
+                                        } catch (_: Exception) {}
+                                    },
+                                    onNavigateDown = null,
+                                    onNavigateUp = {
+                                        coroutineScope.launch {
+                                            try {
+                                                if (tv.seasons.isNotEmpty()) {
+                                                    listState.animateScrollToItem(1)
+                                                    kotlinx.coroutines.delay(40)
+                                                    episodesFocusRequester.requestFocus()
+                                                } else {
+                                                    listState.animateScrollToItem(0)
+                                                    kotlinx.coroutines.delay(40)
+                                                    primaryActionFocusRequester.requestFocus()
+                                                }
+                                            } catch (_: Exception) {}
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -406,10 +493,30 @@ fun MediaDetailScreen(
                 onNavigateRight = {
                     var success = false
                     try {
-                        primaryActionFocusRequester.requestFocus()
+                        activeContentFocusRequester.requestFocus()
                         success = true
                     } catch (_: Exception) {
                         success = false
+                    }
+                    if (!success) {
+                        val candidates = listOf(similarFocusRequester, episodesFocusRequester, primaryActionFocusRequester)
+                        for (cand in candidates) {
+                            try {
+                                cand.requestFocus()
+                                success = true
+                                break
+                            } catch (_: Exception) {}
+                        }
+                    }
+                    if (!success) {
+                        coroutineScope.launch {
+                            try {
+                                listState.scrollToItem(0)
+                                kotlinx.coroutines.delay(40)
+                                primaryActionFocusRequester.requestFocus()
+                            } catch (_: Exception) {}
+                        }
+                        success = true
                     }
                     success
                 },
@@ -509,9 +616,15 @@ private fun DetailHero(
                         up = FocusRequester.Cancel
                     }
                     .onKeyEvent { keyEvent ->
-                        if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionLeft) {
-                            onNavigateLeftToRail?.invoke()
-                            true
+                        if (keyEvent.type == KeyEventType.KeyDown) {
+                            when (keyEvent.key) {
+                                Key.DirectionLeft -> {
+                                    onNavigateLeftToRail?.invoke()
+                                    true
+                                }
+                                Key.DirectionUp -> true
+                                else -> false
+                            }
                         } else false
                     }
             ) { isFocused ->
@@ -918,7 +1031,9 @@ private fun TvEpisodesSection(
     seasons: List<TvSeason>,
     selectedSeason: TvSeason?,
     onSeasonSelect: (Int) -> Unit,
-    onEpisodeClick: (TvEpisode) -> Unit
+    onEpisodeClick: (TvEpisode) -> Unit,
+    firstItemFocusRequester: FocusRequester? = null,
+    onNavigateLeftToRail: (() -> Unit)? = null
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -956,12 +1071,19 @@ private fun TvEpisodesSection(
             contentPadding = PaddingValues(horizontal = 82.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(seasons.filter { it.seasonNumber > 0 }) { season ->
+            itemsIndexed(seasons.filter { it.seasonNumber > 0 }) { index, season ->
                 val isSelected = season.seasonNumber == selectedSeason?.seasonNumber
                 TvFocusableCard(
                     onClick = { onSeasonSelect(season.seasonNumber) },
                     shape = RectangleShape,
-                    focusedBorderColor = Color.White
+                    focusedBorderColor = Color.White,
+                    modifier = (if (index == 0 && firstItemFocusRequester != null) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
+                        .onKeyEvent { keyEvent ->
+                            if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionLeft && index == 0) {
+                                onNavigateLeftToRail?.invoke()
+                                true
+                            } else false
+                        }
                 ) { isFocused ->
                     Text(
                         text = season.name,
@@ -1006,8 +1128,12 @@ private fun TvEpisodesSection(
             contentPadding = PaddingValues(horizontal = 82.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            items(episodes, key = { it.id }) { ep ->
-                EpisodeCard(episode = ep, onClick = { onEpisodeClick(ep) })
+            itemsIndexed(episodes, key = { _, it -> it.id }) { index, ep ->
+                EpisodeCard(
+                    episode = ep,
+                    onClick = { onEpisodeClick(ep) },
+                    onNavigateLeftToRail = if (index == 0) onNavigateLeftToRail else null
+                )
             }
         }
     }
@@ -1016,7 +1142,8 @@ private fun TvEpisodesSection(
 @Composable
 private fun EpisodeCard(
     episode: TvEpisode,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onNavigateLeftToRail: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val imageRequest = remember(episode.stillPath) {
@@ -1031,7 +1158,15 @@ private fun EpisodeCard(
             onClick = onClick,
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(16f / 9f),
+                .aspectRatio(16f / 9f)
+                .onKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionLeft) {
+                        if (onNavigateLeftToRail != null) {
+                            onNavigateLeftToRail()
+                            true
+                        } else false
+                    } else false
+                },
             shape = RectangleShape,
             focusedScale = 1.0f,
             focusedBorderColor = Color.White,

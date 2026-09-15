@@ -129,6 +129,7 @@ fun SearchScreen(
     // Deterministic Back Handler:
     // 1. If query or category exists, back clears and returns focus to keyboard
     // 2. If query is empty and keyboard/results focused, back focuses the sidebar rail
+    // 3. If rail is focused, back navigates to Home
     androidx.activity.compose.BackHandler(enabled = query.isNotEmpty() || selectedCategory != null || !isRailFocused) {
         if (query.isNotEmpty() || selectedCategory != null) {
             viewModel.onQueryChange("")
@@ -140,6 +141,10 @@ fun SearchScreen(
                 railFocusRequester.requestFocus()
             } catch (_: Exception) {}
         }
+    }
+
+    androidx.activity.compose.BackHandler(enabled = isRailFocused) {
+        onNavigate(NavRoutes.HOME)
     }
 
     Box(
@@ -248,6 +253,7 @@ fun SearchScreen(
                                     onClick = { viewModel.onQueryChange(query + char) },
                                     onNavigateLeft = if (isFirstCol) { { railFocusRequester.requestFocus() } } else null,
                                     onNavigateRight = if (isLastCol) { { try { resultsFirstCardRequester.requestFocus() } catch (_: Exception) {} } } else null,
+                                    isTopRow = (rowIndex == 0),
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(34.dp)
@@ -379,6 +385,8 @@ fun SearchScreen(
                                 key = { _, item -> "${item.mediaType}:${item.id}" }
                             ) { index, item ->
                                 val isFirstColInResults = index % 3 == 0
+                                val isTopRow = index < 3
+                                val isBottomRow = index >= (displayItems.size - ((displayItems.size - 1) % 3 + 1))
                                 MediaPosterCard(
                                     item = item,
                                     onClick = { onMediaClick(item) },
@@ -386,12 +394,25 @@ fun SearchScreen(
                                     cardModifier = Modifier
                                         .then(if (index == 0) Modifier.focusRequester(resultsFirstCardRequester) else Modifier)
                                         .onKeyEvent { event ->
-                                            if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft && isFirstColInResults) {
-                                                try {
-                                                    initialKeyFocusRequester.requestFocus()
-                                                    true
-                                                } catch (_: Exception) {
-                                                    false
+                                            if (event.type == KeyEventType.KeyDown) {
+                                                when (event.key) {
+                                                    Key.DirectionLeft -> {
+                                                        if (isFirstColInResults) {
+                                                            try {
+                                                                initialKeyFocusRequester.requestFocus()
+                                                                true
+                                                            } catch (_: Exception) {
+                                                                false
+                                                            }
+                                                        } else false
+                                                    }
+                                                    Key.DirectionUp -> {
+                                                        if (isTopRow) true else false
+                                                    }
+                                                    Key.DirectionDown -> {
+                                                        if (isBottomRow) true else false
+                                                    }
+                                                    else -> false
                                                 }
                                             } else false
                                         }
@@ -436,6 +457,7 @@ private fun TvKeyboardKey(
     onClick: () -> Unit,
     onNavigateLeft: (() -> Unit)? = null,
     onNavigateRight: (() -> Unit)? = null,
+    isTopRow: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -471,6 +493,9 @@ private fun TvKeyboardKey(
                                 onNavigateRight()
                                 true
                             } else false
+                        }
+                        Key.DirectionUp -> {
+                            if (isTopRow) true else false
                         }
                         Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
                             onClick()

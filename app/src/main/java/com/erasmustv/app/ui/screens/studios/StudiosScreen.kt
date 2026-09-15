@@ -132,8 +132,16 @@ fun StudiosScreen(
         viewModel.backToHub()
     }
 
-    // Return from Hub to Home
-    androidx.activity.compose.BackHandler(enabled = uiState is StudiosUiState.Hub) {
+    // Return from Hub to Sidebar (or Home)
+    androidx.activity.compose.BackHandler(enabled = uiState is StudiosUiState.Hub && !isRailFocused) {
+        try {
+            railFocusRequester.requestFocus()
+        } catch (_: Exception) {
+            onNavigate(NavRoutes.HOME)
+        }
+    }
+
+    androidx.activity.compose.BackHandler(enabled = uiState is StudiosUiState.Hub && isRailFocused) {
         onNavigate(NavRoutes.HOME)
     }
 
@@ -190,6 +198,8 @@ fun StudiosScreen(
                             itemsIndexed(STUDIOS_DATA, key = { _, it -> it.id }) { index, studio ->
                                 val requester = studioFocusRequesters[studio.id]
                                 val isFirstColumn = (index % 3 == 0)
+                                val isTopRow = index < 3
+                                val isBottomRow = index >= (STUDIOS_DATA.size - ((STUDIOS_DATA.size - 1) % 3 + 1))
                                 StudioTile(
                                     studio = studio,
                                     onClick = { viewModel.selectStudio(studio) },
@@ -199,6 +209,8 @@ fun StudiosScreen(
                                         } catch (_: Exception) {}
                                     },
                                     isFirstColumn = isFirstColumn,
+                                    isTopRow = isTopRow,
+                                    isBottomRow = isBottomRow,
                                     modifier = if (requester != null) Modifier.focusRequester(requester) else Modifier
                                 )
                             }
@@ -394,6 +406,8 @@ private fun StudioTile(
     onClick: () -> Unit,
     onNavigateLeftToRail: (() -> Unit)? = null,
     isFirstColumn: Boolean = false,
+    isTopRow: Boolean = false,
+    isBottomRow: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     TvFocusableCard(
@@ -402,11 +416,22 @@ private fun StudioTile(
             .fillMaxWidth()
             .height(96.dp)
             .onKeyEvent { keyEvent ->
-                if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionLeft && isFirstColumn) {
-                    if (onNavigateLeftToRail != null) {
-                        onNavigateLeftToRail()
-                        true
-                    } else false
+                if (keyEvent.type == KeyEventType.KeyDown) {
+                    when (keyEvent.key) {
+                        Key.DirectionLeft -> {
+                            if (isFirstColumn && onNavigateLeftToRail != null) {
+                                onNavigateLeftToRail()
+                                true
+                            } else false
+                        }
+                        Key.DirectionUp -> {
+                            if (isTopRow) true else false
+                        }
+                        Key.DirectionDown -> {
+                            if (isBottomRow) true else false
+                        }
+                        else -> false
+                    }
                 } else false
             },
         shape = RectangleShape,

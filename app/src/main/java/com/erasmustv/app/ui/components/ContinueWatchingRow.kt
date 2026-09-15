@@ -111,17 +111,17 @@ fun ContinueWatchingRow(
                                     if (onNavigateDown != null) {
                                         try {
                                             onNavigateDown()
-                                            true
-                                        } catch (_: Exception) { false }
-                                    } else false
+                                        } catch (_: Exception) {}
+                                    }
+                                    true
                                 }
                                 Key.DirectionUp -> {
                                     if (onNavigateUp != null) {
                                         try {
                                             onNavigateUp()
-                                            true
-                                        } catch (_: Exception) { false }
-                                    } else false
+                                        } catch (_: Exception) {}
+                                    }
+                                    true
                                 }
                                 else -> false
                             }

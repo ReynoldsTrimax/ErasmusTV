@@ -311,11 +311,30 @@ private fun MinimalNavItem(
                             if (!handled) {
                                 handled = focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Right)
                             }
-                            handled
+                            true
                         }
                         android.view.KeyEvent.KEYCODE_BACK -> {
-                            if (currentRoute != NavRoutes.HOME) {
+                            // Pressing Back while focused in the sidebar returns focus directly to page content
+                            var handled = false
+                            if (onNavigateRight != null) {
+                                try {
+                                    handled = onNavigateRight()
+                                } catch (_: Exception) {
+                                    handled = false
+                                }
+                            }
+                            if (!handled) {
+                                handled = focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Right)
+                            }
+                            if (!handled && currentRoute != NavRoutes.HOME) {
                                 onNavigate(NavRoutes.HOME)
+                                handled = true
+                            }
+                            true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_UP -> {
+                            // Top item of sidebar (Home): consume to prevent wrapping or escaping upwards
+                            if (destination.route == NavRoutes.HOME) {
                                 true
                             } else false
                         }
@@ -439,13 +458,29 @@ private fun MinimalProfileItem(
                             if (!handled) {
                                 handled = focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Right)
                             }
-                            handled
+                            true
                         }
                         android.view.KeyEvent.KEYCODE_BACK -> {
-                            if (currentRoute != NavRoutes.HOME) {
+                            var handled = false
+                            if (onNavigateRight != null) {
+                                try {
+                                    handled = onNavigateRight()
+                                } catch (_: Exception) {
+                                    handled = false
+                                }
+                            }
+                            if (!handled) {
+                                handled = focusManager.moveFocus(androidx.compose.ui.focus.FocusDirection.Right)
+                            }
+                            if (!handled && currentRoute != NavRoutes.HOME) {
                                 onNavigate(NavRoutes.HOME)
-                                true
-                            } else false
+                                handled = true
+                            }
+                            true
+                        }
+                        android.view.KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            // Bottom-most item of sidebar (Profile): consume to prevent escaping downwards or wrapping
+                            true
                         }
                         else -> false
                     }

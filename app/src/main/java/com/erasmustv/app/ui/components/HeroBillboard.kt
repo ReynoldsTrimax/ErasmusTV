@@ -461,8 +461,12 @@ private fun HeroRectangleButton(
                         Key.DirectionDown -> {
                             if (onNavigateDown != null) {
                                 onNavigateDown()
-                                true
-                            } else false
+                            }
+                            true
+                        }
+                        Key.DirectionUp -> {
+                            // Top boundary of billboard: consume to prevent hopping to the sidebar
+                            true
                         }
                         else -> false
                     }
