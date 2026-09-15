@@ -3,17 +3,101 @@ package com.erasmustv.app.data.repository
 import com.erasmustv.app.core.config.AppConfig
 import com.erasmustv.app.data.model.Genre
 import com.erasmustv.app.data.model.MediaItem
+import com.erasmustv.app.data.model.MediaRating
 import com.erasmustv.app.data.model.MovieDetails
 import com.erasmustv.app.data.model.TvDetails
 import com.erasmustv.app.data.model.TvSeason
 import com.erasmustv.app.data.model.WatchProvider
+import com.erasmustv.app.data.remote.OmdbApiService
+import com.erasmustv.app.data.remote.OmdbResponse
 import com.erasmustv.app.data.remote.TmdbApiService
+import java.util.Locale
 
 class MediaRepository(
-    private val tmdbApi: TmdbApiService
+    private val tmdbApi: TmdbApiService,
+    private val omdbApi: OmdbApiService? = null
 ) {
     private val apiKey = AppConfig.TMDB_API_KEY
+    private val omdbApiKey = AppConfig.OMDB_API_KEY.ifBlank { "trilogy" }
     private val logoCache = java.util.concurrent.ConcurrentHashMap<String, String?>()
+
+    suspend fun resolveRatings(
+        voteAverage: Double?,
+        voteCount: Int?,
+        imdbId: String?,
+        title: String,
+        year: String?,
+        isTv: Boolean
+    ): List<MediaRating> {
+        val tmdbScore = if (voteAverage != null && voteAverage > 0) {
+            String.format(Locale.US, "%.1f/10", voteAverage)
+        } else "—"
+        val tmdbSub = if (voteCount != null && voteCount > 0) "$voteCount votes" else "—"
+
+        val tmdbRating = MediaRating(
+            provider = "tmdb",
+            label = "TMDB",
+            score = tmdbScore,
+            subText = tmdbSub
+        )
+
+        var omdb: OmdbResponse? = null
+        if (omdbApi != null) {
+            try {
+                if (!imdbId.isNullOrBlank()) {
+                    val cleanImdb = if (imdbId.startsWith("tt")) imdbId else "tt$imdbId"
+                    val res = omdbApi.getByImdbId(cleanImdb, omdbApiKey)
+                    if (res.response.equals("True", ignoreCase = true)) {
+                        omdb = res
+                    }
+                }
+                if (omdb == null && title.isNotBlank()) {
+                    val res = omdbApi.getByTitle(
+                        title = title,
+                        apiKey = omdbApiKey,
+                        year = year,
+                        type = if (isTv) "series" else "movie"
+                    )
+                    if (res.response.equals("True", ignoreCase = true)) {
+                        omdb = res
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        // IMDb Card
+        val imdbRatingVal = omdb?.imdbRating?.takeIf { it != "N/A" && it.isNotBlank() }
+        val imdbVotesVal = omdb?.imdbVotes?.takeIf { it != "N/A" && it.isNotBlank() }
+        val imdbRating = MediaRating(
+            provider = "imdb",
+            label = "IMDb",
+            score = if (imdbRatingVal != null) "$imdbRatingVal/10" else "—",
+            subText = if (imdbVotesVal != null) "$imdbVotesVal votes" else "—"
+        )
+
+        // Rotten Tomatoes Card
+        val rtVal = omdb?.ratings?.find { it.source.contains("Rotten Tomatoes", ignoreCase = true) }?.value
+            ?.takeIf { it != "N/A" && it.isNotBlank() }
+        val rtRating = MediaRating(
+            provider = "rotten_tomatoes",
+            label = "ROTTEN TOMATOES",
+            score = rtVal ?: "—",
+            subText = if (rtVal != null) "Tomatometer" else "—"
+        )
+
+        // Metacritic Card
+        val metaVal = omdb?.ratings?.find { it.source.contains("Metacritic", ignoreCase = true) }?.value
+            ?: omdb?.metascore?.takeIf { it != "N/A" && it.isNotBlank() }?.let { "$it/100" }
+        val metaClean = metaVal?.takeIf { it != "N/A" && it.isNotBlank() }
+        val metaRating = MediaRating(
+            provider = "metacritic",
+            label = "METACRITIC",
+            score = metaClean ?: "—",
+            subText = if (metaClean != null) "Metascore" else "—"
+        )
+
+        return listOf(tmdbRating, imdbRating, rtRating, metaRating)
+    }
 
     suspend fun getMediaLogo(mediaType: String, id: String): Result<String?> = runCatching {
         val mType = if (mediaType.equals("tv", ignoreCase = true)) "tv" else "movie"
@@ -124,6 +208,15 @@ class MediaRepository(
         }
         val logo = bestLogo ?: logoCache["movie:${raw.id}"]
 
+        val ratings = resolveRatings(
+            voteAverage = raw.voteAverage,
+            voteCount = raw.voteCount,
+            imdbId = raw.imdbId,
+            title = raw.title,
+            year = raw.releaseDate?.take(4),
+            isTv = false
+        )
+
         MovieDetails(
             id = raw.id,
             title = raw.title,
@@ -142,6 +235,7 @@ class MediaRepository(
             revenue = raw.revenue,
             cast = raw.credits?.cast ?: emptyList(),
             similar = raw.similar?.results?.map { it.copy(mediaType = "movie") } ?: emptyList(),
+            ratings = ratings,
             whereToWatch = providers,
             tagline = raw.tagline
         )
@@ -161,6 +255,16 @@ class MediaRepository(
         }
         val logo = bestLogo ?: logoCache["tv:${raw.id}"]
 
+        val imdbId = raw.externalIds?.imdbId
+        val ratings = resolveRatings(
+            voteAverage = raw.voteAverage,
+            voteCount = raw.voteCount,
+            imdbId = imdbId,
+            title = raw.title,
+            year = raw.firstAirDate?.take(4),
+            isTv = true
+        )
+
         TvDetails(
             id = raw.id,
             title = raw.title,
@@ -175,9 +279,11 @@ class MediaRepository(
             genres = raw.genres,
             voteAverage = raw.voteAverage,
             voteCount = raw.voteCount,
+            imdbId = imdbId,
             status = raw.status,
             cast = raw.credits?.cast ?: emptyList(),
             similar = raw.similar?.results?.map { it.copy(mediaType = "tv") } ?: emptyList(),
+            ratings = ratings,
             whereToWatch = providers,
             tagline = raw.tagline
         )

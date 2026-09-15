@@ -13,6 +13,7 @@ import com.erasmustv.app.data.local.ProfileManager
 import com.erasmustv.app.data.local.SessionManager
 import com.erasmustv.app.data.remote.CinejoyStreamResolver
 import com.erasmustv.app.data.remote.ErasmusStreamApiService
+import com.erasmustv.app.data.remote.OmdbApiService
 import com.erasmustv.app.data.remote.SubtitleResolver
 import com.erasmustv.app.data.remote.SupabaseApiService
 import com.erasmustv.app.data.remote.TmdbApiService
@@ -55,11 +56,12 @@ class AppContainer(
     val cinejoyResolver: CinejoyStreamResolver,
     val subtitleResolver: SubtitleResolver,
     val streamApi: ErasmusStreamApiService? = null,
+    val omdbApi: OmdbApiService? = null,
     val okHttpClient: okhttp3.OkHttpClient? = null
 ) {
     val authRepository = AuthRepository(supabaseApi, sessionManager)
     val profileRepository = ProfileRepository(supabaseApi, profileManager, sessionManager)
-    val mediaRepository = MediaRepository(tmdbApi)
+    val mediaRepository = MediaRepository(tmdbApi, omdbApi)
     val streamRepository = StreamRepository(cinejoyResolver, subtitleResolver, progressStore)
     val watchlistRepository = WatchlistRepository(supabaseApi, sessionManager)
 }

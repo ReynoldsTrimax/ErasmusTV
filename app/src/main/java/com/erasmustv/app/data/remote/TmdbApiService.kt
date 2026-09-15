@@ -137,7 +137,7 @@ interface TmdbApiService {
     suspend fun getTvDetails(
         @Path("series_id") seriesId: String,
         @Query("api_key") apiKey: String,
-        @Query("append_to_response") append: String = "credits,similar,content_ratings,images",
+        @Query("append_to_response") append: String = "credits,similar,content_ratings,images,external_ids",
         @Query("include_image_language") imageLanguage: String = "en,null"
     ): com.erasmustv.app.data.model.TvDetailsRaw
 

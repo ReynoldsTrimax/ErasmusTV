@@ -88,6 +88,11 @@ class MainActivity : ComponentActivity() {
                             if (AppConfig.BACKEND_BASE_URL.endsWith("/")) AppConfig.BACKEND_BASE_URL else "${AppConfig.BACKEND_BASE_URL}/",
                             okHttpClient
                         )
+                        val omdbApi = NetworkClient.createService(
+                            com.erasmustv.app.data.remote.OmdbApiService::class.java,
+                            if (AppConfig.OMDB_BASE_URL.endsWith("/")) AppConfig.OMDB_BASE_URL else "${AppConfig.OMDB_BASE_URL}/",
+                            okHttpClient
+                        )
 
                         AppContainer(
                             sessionManager = sessionManager,
@@ -98,6 +103,7 @@ class MainActivity : ComponentActivity() {
                             cinejoyResolver = cinejoyResolver,
                             subtitleResolver = subtitleResolver,
                             streamApi = streamApi,
+                            omdbApi = omdbApi,
                             okHttpClient = okHttpClient
                         )
                     }

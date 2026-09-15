@@ -46,12 +46,6 @@ class MediaDetailViewModel(
     private val _activeProfile = MutableStateFlow<com.erasmustv.app.data.model.WatchProfile?>(null)
     val activeProfile: StateFlow<com.erasmustv.app.data.model.WatchProfile?> = _activeProfile.asStateFlow()
 
-    private val _trailerStreamUrl = MutableStateFlow<String?>(null)
-    val trailerStreamUrl: StateFlow<String?> = _trailerStreamUrl.asStateFlow()
-
-    private val _trailerHeaders = MutableStateFlow<Map<String, String>>(emptyMap())
-    val trailerHeaders: StateFlow<Map<String, String>> = _trailerHeaders.asStateFlow()
-
     init {
         loadDetails()
     }
@@ -65,29 +59,6 @@ class MediaDetailViewModel(
 
             val inWatchlist = watchlistRepository.isItemInWatchlist(mediaType, tmdbId)
             val resumeSeconds = streamRepository.getResumePosition(profileId, mediaType, tmdbId)
-
-            // Asynchronously resolve preview stream for background video trailer (Netflix style)
-            launch {
-                try {
-                    val streamResult = streamRepository.extractStream(
-                        mediaType = mediaType,
-                        tmdbId = tmdbId,
-                        season = if (mediaType.equals("tv", ignoreCase = true)) 1 else null,
-                        episode = if (mediaType.equals("tv", ignoreCase = true)) 1 else null
-                    ).getOrNull()
-
-                    val firstServerUrl = streamResult?.servers?.firstOrNull()?.url
-                    if (streamResult != null && streamResult.ok && !firstServerUrl.isNullOrBlank()) {
-                        _trailerStreamUrl.value = firstServerUrl
-                        _trailerHeaders.value = mapOf(
-                            "Referer" to (streamResult.referer ?: "https://cinejoy.to/"),
-                            "Origin" to "https://cinejoy.to"
-                        )
-                    }
-                } catch (_: Exception) {
-                    // Preview video is non-blocking; UI falls back gracefully to high-res backdrop
-                }
-            }
 
             if (mediaType.equals("tv", ignoreCase = true)) {
                 mediaRepository.getTvDetails(tmdbId).fold(

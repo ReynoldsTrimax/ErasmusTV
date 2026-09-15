@@ -1,18 +1,11 @@
 package com.erasmustv.app.ui.screens.details
 
-import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
-import androidx.annotation.OptIn
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,26 +24,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.FormatListNumbered
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -80,35 +65,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.Player
-import androidx.media3.common.MediaItem as Media3Item
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.erasmustv.app.core.config.AppConfig
-import com.erasmustv.app.core.theme.BorderHairline
-import com.erasmustv.app.core.theme.BorderSubtle
 import com.erasmustv.app.core.theme.ErasmusTvTypography
 import com.erasmustv.app.core.theme.FocusWhite
 import com.erasmustv.app.core.theme.PitchBlack
-import com.erasmustv.app.core.theme.RatingGold
 import com.erasmustv.app.core.theme.SurfaceCard
 import com.erasmustv.app.core.theme.SurfaceDark
-import com.erasmustv.app.core.theme.SurfacePill
 import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
 import com.erasmustv.app.data.model.CastMember
 import com.erasmustv.app.data.model.MediaItem
+import com.erasmustv.app.data.model.MediaRating
 import com.erasmustv.app.data.model.TvEpisode
 import com.erasmustv.app.data.model.TvSeason
-import com.erasmustv.app.data.model.WatchProvider
 import com.erasmustv.app.ui.components.MediaSectionRow
 import com.erasmustv.app.ui.components.TvFocusableCard
 import com.erasmustv.app.ui.components.TvLeftNavRail
@@ -141,7 +113,6 @@ private val DetailHeroVerticalGradient = Brush.verticalGradient(
     )
 )
 
-@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @kotlin.OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun MediaDetailScreen(
@@ -153,8 +124,6 @@ fun MediaDetailScreen(
     onProfileClick: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val trailerUrl by viewModel.trailerStreamUrl.collectAsState()
-    val trailerHeaders by viewModel.trailerHeaders.collectAsState()
     val activeProfile by viewModel.activeProfile.collectAsState()
 
     val primaryActionFocusRequester = remember { FocusRequester() }
@@ -267,12 +236,10 @@ fun MediaDetailScreen(
                             genres = movie.genres.map { it.name },
                             overview = movie.overview,
                             cast = movie.cast,
-                            whereToWatch = movie.whereToWatch,
+                            ratings = movie.ratings,
                             inWatchlist = state.inWatchlist,
                             resumePosition = state.resumePosition,
                             primaryActionLabel = if (state.resumePosition > 0) "Resume" else "Play Movie",
-                            trailerUrl = trailerUrl,
-                            trailerHeaders = trailerHeaders,
                             playFocusRequester = primaryActionFocusRequester,
                             onPlayClick = {
                                 onPlayClick("movie", movie.id, movie.title, null, null, movie.posterPath, movie.backdropPath)
@@ -285,19 +252,6 @@ fun MediaDetailScreen(
                             },
                             onBackClick = onBackClick
                         )
-                    }
-
-                    // Tracking Widget (Reference Image 1: HAVE YOU WATCHED IT?)
-                    item {
-                        HaveYouWatchedSection()
-                    }
-
-                    // Where to watch providers section
-                    if (movie.whereToWatch.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(28.dp))
-                            WhereToWatchSection(movie.whereToWatch)
-                        }
                     }
 
                     // Cast row
@@ -368,12 +322,10 @@ fun MediaDetailScreen(
                             genres = tv.genres.map { it.name },
                             overview = tv.overview,
                             cast = tv.cast,
-                            whereToWatch = tv.whereToWatch,
+                            ratings = tv.ratings,
                             inWatchlist = state.inWatchlist,
                             resumePosition = state.resumePosition,
                             primaryActionLabel = primaryLabel,
-                            trailerUrl = trailerUrl,
-                            trailerHeaders = trailerHeaders,
                             playFocusRequester = primaryActionFocusRequester,
                             onPlayClick = {
                                 val s = state.selectedSeason?.seasonNumber ?: 1
@@ -406,20 +358,6 @@ fun MediaDetailScreen(
                                     onPlayClick("tv", tv.id, tv.title, ep.seasonNumber, ep.episodeNumber, tv.posterPath, ep.stillPath ?: tv.backdropPath)
                                 }
                             )
-                        }
-                    }
-
-                    // Tracking Widget (Reference Image 1: HAVE YOU WATCHED IT?)
-                    item {
-                        Spacer(modifier = Modifier.height(20.dp))
-                        HaveYouWatchedSection()
-                    }
-
-                    // Where to watch providers
-                    if (tv.whereToWatch.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(28.dp))
-                            WhereToWatchSection(tv.whereToWatch)
                         }
                     }
 
@@ -482,19 +420,15 @@ fun MediaDetailScreen(
 }
 
 /**
- * Immersive Movie Details Hero matching Reference Image 1.
+ * Immersive Movie Details Hero matching Reference Image.
  * Features:
- *  - Background trailer playing muted on loop via Media3 ExoPlayer (Netflix-style)
  *  - Frosted glass sidebar bleed underneath (x = 0)
  *  - Middle-left positioned large title logo with italic tagline
  *  - Subtle classification, year, status badges
  *  - Genre pills
  *  - Multi-provider rating score cards (TMDB, IMDb, Rotten Tomatoes, Metacritic)
- *  - Available On streaming provider chips
- *  - Play · S1:E1 Electric Blue pill CTA with creator / cast credit
- *  - Bottom-right trailer volume and pause/play toggle controls
+ *  - Play / Resume CTA with creator / cast credit
  */
-@OptIn(UnstableApi::class)
 @Composable
 private fun DetailHero(
     isTv: Boolean,
@@ -511,12 +445,10 @@ private fun DetailHero(
     genres: List<String>,
     overview: String?,
     cast: List<CastMember>,
-    whereToWatch: List<WatchProvider>,
+    ratings: List<MediaRating>,
     inWatchlist: Boolean,
     resumePosition: Long,
     primaryActionLabel: String,
-    trailerUrl: String?,
-    trailerHeaders: Map<String, String>,
     playFocusRequester: FocusRequester?,
     onPlayClick: () -> Unit,
     onToggleWatchlist: () -> Unit,
@@ -532,64 +464,6 @@ private fun DetailHero(
             .crossfade(true)
             .build()
     }
-
-    var isTrailerMuted by remember { mutableStateOf(true) }
-    var isTrailerPlaying by remember { mutableStateOf(true) }
-    var isVideoReady by remember { mutableStateOf(false) }
-
-    // Background looping video trailer player
-    val exoPlayer = remember(context) {
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent(AppConfig.STREAM_USER_AGENT)
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(15000)
-
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
-            .setDataSourceFactory {
-                if (trailerHeaders.isNotEmpty()) {
-                    httpDataSourceFactory.setDefaultRequestProperties(trailerHeaders)
-                }
-                httpDataSourceFactory.createDataSource()
-            }
-
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .build().apply {
-                volume = 0f
-                repeatMode = Player.REPEAT_MODE_ALL
-                playWhenReady = true
-            }
-    }
-
-    DisposableEffect(exoPlayer) {
-        val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_READY) {
-                    isVideoReady = true
-                }
-            }
-        }
-        exoPlayer.addListener(listener)
-        onDispose {
-            exoPlayer.removeListener(listener)
-            exoPlayer.release()
-        }
-    }
-
-    LaunchedEffect(trailerUrl) {
-        if (!trailerUrl.isNullOrBlank()) {
-            exoPlayer.setMediaItem(Media3Item.fromUri(trailerUrl))
-            exoPlayer.prepare()
-            exoPlayer.play()
-        }
-    }
-
-    val videoAlpha by animateFloatAsState(
-        targetValue = if (isVideoReady && isTrailerPlaying) 1.0f else 0.0f,
-        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
-        label = "hero_video_fade"
-    )
 
     val creatorOrStar = remember(cast) {
         cast.firstOrNull()?.name?.let { "Starring $it" } ?: ""
@@ -608,41 +482,21 @@ private fun DetailHero(
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Looping Video Trailer layer fading in over backdrop
-        if (!trailerUrl.isNullOrBlank()) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = exoPlayer
-                        useController = false
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { alpha = videoAlpha }
-            )
-        }
-
-        // 3. Dark Horizontal Vignette from left edge (x = 0)
+        // 2. Dark Horizontal Vignette from left edge (x = 0)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(DetailHeroHorizontalGradient)
         )
 
-        // 4. Dark Vertical Dissolve to PitchBlack at bottom
+        // 3. Dark Vertical Dissolve to PitchBlack at bottom
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(DetailHeroVerticalGradient)
         )
 
-        // 0. Top-Left Back Button (Always visible on movie detail screen)
+        // Top-Left Back Button (Always visible on detail screen)
         if (onBackClick != null) {
             TvFocusableCard(
                 onClick = onBackClick,
@@ -694,7 +548,7 @@ private fun DetailHero(
             }
         }
 
-        // 5. Middle-Left Hero Content Column with generous headroom
+        // 4. Middle-Left Hero Content Column with generous headroom
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.60f)
@@ -738,7 +592,7 @@ private fun DetailHero(
                 )
             }
 
-            // Italic Tagline (Reference Image 1: "Love was never part of the deal.")
+            // Italic Tagline
             if (!tagline.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
@@ -755,7 +609,7 @@ private fun DetailHero(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Metadata Badges Row: [TV SERIES] [TV-MA] [2026] [Returning Series]
+            // Metadata Badges Row: [TV SERIES / MOVIE] [CERTIFICATION] [YEAR] [STATUS / RUNTIME]
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -811,53 +665,7 @@ private fun DetailHero(
             Spacer(modifier = Modifier.height(10.dp))
 
             // Multi-Provider Rating Cards (TMDB, IMDb, Rotten Tomatoes, Metacritic)
-            RatingCardsRow(voteAverage = voteAverage, voteCount = voteCount)
-
-            // Available On Streaming Providers Row
-            if (whereToWatch.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "AVAILABLE ON",
-                        style = ErasmusTvTypography.Badge.copy(
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
-                        ),
-                        color = TextMuted
-                    )
-
-                    whereToWatch.take(2).forEach { provider ->
-                        Row(
-                            modifier = Modifier
-                                .background(Color(0x2B181822), RectangleShape)
-                                .border(1.dp, Color(0x26FFFFFF), RectangleShape)
-                                .padding(horizontal = 7.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
-                        ) {
-                            if (!provider.logoPath.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = ImageRequest.Builder(LocalContext.current)
-                                        .data(AppConfig.posterUrl(provider.logoPath))
-                                        .crossfade(true)
-                                        .build(),
-                                    contentDescription = provider.name,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                            Text(
-                                text = provider.name,
-                                style = ErasmusTvTypography.Badge.copy(fontSize = 10.sp),
-                                color = TextPrimary
-                            )
-                        }
-                    }
-                }
-            }
+            RatingCardsRow(ratings = ratings, voteAverage = voteAverage, voteCount = voteCount)
 
             // Synopsis / Overview
             overview?.let { ov ->
@@ -982,38 +790,6 @@ private fun DetailHero(
                 }
             }
         }
-
-        // 6. Bottom-Right Controls: Mute/Unmute & Pause/Play Video Trailer (Reference Image 1)
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 48.dp, bottom = 24.dp)
-                .focusProperties {
-                    up = FocusRequester.Cancel
-                },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            // Mute / Unmute Button
-            HeroControlButton(
-                icon = if (isTrailerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                contentDescription = if (isTrailerMuted) "Unmute Trailer" else "Mute Trailer",
-                onClick = {
-                    isTrailerMuted = !isTrailerMuted
-                    exoPlayer.volume = if (isTrailerMuted) 0f else 1f
-                }
-            )
-
-            // Pause / Play Button
-            HeroControlButton(
-                icon = if (isTrailerPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                contentDescription = if (isTrailerPlaying) "Pause Trailer" else "Play Trailer",
-                onClick = {
-                    isTrailerPlaying = !isTrailerPlaying
-                    exoPlayer.playWhenReady = isTrailerPlaying
-                }
-            )
-        }
     }
 }
 
@@ -1038,10 +814,25 @@ private fun DetailMetadataBadge(text: String) {
 }
 
 /**
- * 4 Multi-Provider Rating score cards matching Reference Image 1.
+ * 4 Multi-Provider Rating score cards matching Reference Image.
+ * TMDB, IMDb, Rotten Tomatoes, and Metacritic with real fetched ratings.
  */
 @Composable
-private fun RatingCardsRow(voteAverage: Double?, voteCount: Int?) {
+private fun RatingCardsRow(
+    ratings: List<MediaRating>,
+    voteAverage: Double?,
+    voteCount: Int?
+) {
+    val tmdbRating = ratings.firstOrNull { it.provider == "tmdb" || it.label.equals("tmdb", ignoreCase = true) }
+    val imdbRating = ratings.firstOrNull { it.provider == "imdb" || it.label.equals("imdb", ignoreCase = true) }
+    val rtRating = ratings.firstOrNull { it.provider == "rotten_tomatoes" || it.label.contains("rotten", ignoreCase = true) }
+    val metaRating = ratings.firstOrNull { it.provider == "metacritic" || it.label.contains("metacritic", ignoreCase = true) }
+
+    val tmdbScore = tmdbRating?.score?.takeIf { it.isNotBlank() && it != "—" }
+        ?: if (voteAverage != null && voteAverage > 0) String.format(java.util.Locale.US, "%.1f/10", voteAverage) else "—"
+    val tmdbSub = tmdbRating?.subText?.takeIf { it.isNotBlank() && it != "—" }
+        ?: if (voteCount != null && voteCount > 0) "$voteCount votes" else "—"
+
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -1049,29 +840,29 @@ private fun RatingCardsRow(voteAverage: Double?, voteCount: Int?) {
         // TMDB Card
         RatingScoreCard(
             label = "TMDB",
-            score = if (voteAverage != null && voteAverage > 0) String.format("%.1f/10", voteAverage) else "—",
-            subText = if (voteCount != null && voteCount > 0) "$voteCount votes" else "—"
+            score = tmdbScore,
+            subText = tmdbSub
         )
 
         // IMDb Card
         RatingScoreCard(
             label = "IMDb",
-            score = "—",
-            subText = "—"
+            score = imdbRating?.score ?: "—",
+            subText = imdbRating?.subText ?: "—"
         )
 
         // Rotten Tomatoes Card
         RatingScoreCard(
             label = "ROTTEN TOMATOES",
-            score = "—",
-            subText = "—"
+            score = rtRating?.score ?: "—",
+            subText = rtRating?.subText ?: "—"
         )
 
         // Metacritic Card
         RatingScoreCard(
             label = "METACRITIC",
-            score = "—",
-            subText = "—"
+            score = metaRating?.score ?: "—",
+            subText = metaRating?.subText ?: "—"
         )
     }
 }
@@ -1118,157 +909,6 @@ private fun RatingScoreCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-        }
-    }
-}
-
-@Composable
-private fun HeroControlButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-
-    Box(
-        modifier = Modifier
-            .clip(RectangleShape)
-            .background(if (isFocused) Color(0x66FFFFFF) else Color(0x2E1E1E28), RectangleShape)
-            .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) Color.White else Color(0x26FFFFFF),
-                shape = RectangleShape
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .focusable(interactionSource = interactionSource)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = Color.White,
-            modifier = Modifier.size(16.dp)
-        )
-    }
-}
-
-/**
- * "HAVE YOU WATCHED IT? Not tracked yet" Tracking Widget matching Reference Image 1.
- */
-@Composable
-private fun HaveYouWatchedSection() {
-    var userStatus by remember { mutableStateOf<String?>("none") }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 82.dp, vertical = 6.dp)
-            .background(Color(0x2614141E), RectangleShape)
-            .border(1.dp, Color(0x1FFFFFFF), RectangleShape)
-            .padding(horizontal = 20.dp, vertical = 12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "HAVE YOU WATCHED IT?",
-                    style = ErasmusTvTypography.Badge.copy(
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp
-                    ),
-                    color = Color.White
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = when (userStatus) {
-                        "watching" -> "Currently watching"
-                        "completed" -> "Completed"
-                        else -> "Not tracked yet"
-                    },
-                    style = ErasmusTvTypography.Badge.copy(fontSize = 10.sp),
-                    color = TextMuted
-                )
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TvFocusableCard(
-                    onClick = { userStatus = if (userStatus == "watching") "none" else "watching" },
-                    shape = RectangleShape,
-                    focusedBorderColor = Color.White
-                ) { isFocused ->
-                    Row(
-                        modifier = Modifier
-                            .background(
-                                when {
-                                    userStatus == "watching" -> Color.White
-                                    isFocused -> Color(0x40FFFFFF)
-                                    else -> Color(0x20FFFFFF)
-                                },
-                                RectangleShape
-                            )
-                            .border(1.dp, if (isFocused) Color.White else Color(0x26FFFFFF), RectangleShape)
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Watching",
-                            tint = if (userStatus == "watching") PitchBlack else Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = "Watching",
-                            style = ErasmusTvTypography.ButtonText.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
-                            color = if (userStatus == "watching") PitchBlack else Color.White
-                        )
-                    }
-                }
-
-                TvFocusableCard(
-                    onClick = { userStatus = if (userStatus == "completed") "none" else "completed" },
-                    shape = RectangleShape,
-                    focusedBorderColor = Color.White
-                ) { isFocused ->
-                    Row(
-                        modifier = Modifier
-                            .background(
-                                when {
-                                    userStatus == "completed" -> Color.White
-                                    isFocused -> Color(0x40FFFFFF)
-                                    else -> Color(0x20FFFFFF)
-                                },
-                                RectangleShape
-                            )
-                            .border(1.dp, if (isFocused) Color.White else Color(0x26FFFFFF), RectangleShape)
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Completed",
-                            tint = if (userStatus == "completed") PitchBlack else Color.White,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = "Completed",
-                            style = ErasmusTvTypography.ButtonText.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
-                            color = if (userStatus == "completed") PitchBlack else Color.White
-                        )
-                    }
-                }
-            }
         }
     }
 }
@@ -1530,57 +1170,6 @@ private fun CastMemberItem(member: CastMember) {
                 overflow = TextOverflow.Ellipsis
             )
         }
-    }
-}
-
-@Composable
-private fun WhereToWatchSection(providers: List<WatchProvider>) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Where to Watch",
-            style = ErasmusTvTypography.SectionTitle,
-            modifier = Modifier.padding(horizontal = 82.dp)
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 82.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(providers) { provider ->
-                ProviderItem(provider = provider)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProviderItem(provider: WatchProvider) {
-    val context = LocalContext.current
-    val imageRequest = remember(provider.logoPath) {
-        ImageRequest.Builder(context)
-            .data(AppConfig.posterUrl(provider.logoPath))
-            .crossfade(true)
-            .build()
-    }
-
-    Row(
-        modifier = Modifier
-            .background(Color(0x2614141E), RectangleShape)
-            .border(1.dp, Color(0x1FFFFFFF), RectangleShape)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        AsyncImage(
-            model = imageRequest,
-            contentDescription = provider.name,
-            modifier = Modifier
-                .size(24.dp)
-                .clip(RectangleShape)
-        )
-        Text(text = provider.name, style = ErasmusTvTypography.Badge, color = TextPrimary)
     }
 }
 

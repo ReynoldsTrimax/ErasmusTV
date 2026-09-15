@@ -142,6 +142,11 @@ data class MovieDetailsRaw(
 )
 
 @Serializable
+data class ExternalIdsResponse(
+    @SerialName("imdb_id") val imdbId: String? = null
+)
+
+@Serializable
 data class TvDetailsRaw(
     val id: String,
     @SerialName("name") val title: String,
@@ -159,6 +164,7 @@ data class TvDetailsRaw(
     val credits: CreditsResponse? = null,
     val similar: com.erasmustv.app.data.remote.TmdbPaginatedResponse<MediaItem>? = null,
     val images: com.erasmustv.app.data.remote.TmdbImagesResponse? = null,
+    @SerialName("external_ids") val externalIds: ExternalIdsResponse? = null,
     val tagline: String? = null
 )
 
@@ -209,7 +215,9 @@ data class Genre(
 data class MediaRating(
     val provider: String,
     val label: String,
-    val value: String,
+    val score: String,
+    val subText: String = "",
+    val value: String = score,
     val scale: Int = 10
 )
 
