@@ -1,258 +1,163 @@
-# Frame
+# ErasmusTV — Native Android TV Application
 
-**Your cinematic entertainment hub.**
-
-Frame is a premium personal entertainment tracking web application — a central place to discover, organize, track, review, and analyze every movie, TV show, anime, documentary, or limited series you watch.
-
-> **Phases 1–5** — Foundation through intelligence, plus **production polish**: PWA, keyboard shortcuts, refined motion, tests, security docs, and deployment readiness.
+**ErasmusTV** is a premium, native Android TV entertainment application built with modern Kotlin, Jetpack Compose for TV, and AndroidX Media3 (ExoPlayer).
 
 ---
 
-## Tech stack
+## Highlights & Features
+
+- **TV-First Remote UX**: Fully optimized for Android TV remote controls (D-pad Up/Down/Left/Right, Center/Select/OK, Back).
+- **Erasmus Design Language**: True pitch-black OLED background (`#000000`), elevated dark surfaces (`#0D0D0D`), vivid electric blue accent (`#1D90F5`), and signature Bostone wordmark.
+- **Hero Billboard**: Cinematic spotlight on trending movies and series with backdrop art, ratings, synopsis, and 1-click Watch Now.
+- **Profiles System**: Integrated with Supabase `watch_profiles` table, supporting multiple household profiles with 8 avatar color themes and age-based maturity filters.
+- **Catalog & Discovery**: Powered by TMDB & OMDb API integrations:
+  - Trending Today
+  - Popular Movies & Series
+  - Now Playing in Theaters & Upcoming Releases
+  - Top Rated Movies & Shows
+  - Search with debounced multi-search and poster grid
+  - Watchlist synchronized per profile
+  - TV Shows with Season switcher and Episode still cards
+  - "Where to Watch" regional legal streaming providers (Netflix, Prime, Disney+, etc.)
+- **Native Video Player (Media3 / ExoPlayer)**:
+  - Direct HLS (`.m3u8`) and MP4 video playback
+  - Custom HTTP headers (`Referer`, `Origin`, `User-Agent`) for stream extraction
+  - Multi-server cluster switcher (Lisbon flagship, Sakura, Nebula, Solara, Athens, Joy, Castle, Canaias)
+  - Subtitle track switching (Wyzie and Cinejoy captions)
+  - D-pad media key handling: OK to Play/Pause, Left/Right for 10s scrub, Up/Down for HUD overlay
+  - Profile-scoped playback resume tracking and "Continue Watching" carousel
+
+---
+
+## Tech Stack
 
 | Layer | Choice |
-| --- | --- |
-| Framework | Next.js (App Router) + React + TypeScript (strict) |
-| Styling | Tailwind CSS v4 + CSS variable design tokens |
-| Components | shadcn-style Radix primitives + Framer Motion |
-| Auth & DB | Supabase (Auth + PostgreSQL + RLS) |
-| Forms | React Hook Form + Zod |
-| Server state | TanStack Query |
-| Deploy | Vercel-ready |
+|---|---|
+| **Platform** | Native Android TV (`minSdk 26`, `targetSdk 35`) |
+| **Language** | Kotlin 2.1.0 + Coroutines |
+| **UI Framework** | Jetpack Compose for TV (`androidx.tv:tv-material`, `tv-foundation`) |
+| **Video Engine** | AndroidX Media3 (ExoPlayer 1.5.1 + HLS module) |
+| **Image Loading** | Coil Compose (with 250MB disk & 25% RAM cache) |
+| **Networking** | Retrofit 2 + OkHttp 4 + Kotlinx Serialization |
+| **Persistence** | Jetpack DataStore Preferences + SharedPreferences |
+| **Architecture** | Modern Android Clean Architecture (UI -> ViewModel -> Repository -> Remote/Local Data Sources) |
 
 ---
 
-## Features
+## Project Structure
 
-### Phase 1 — Foundation
-- **Authentication** — Google, GitHub, and email/password via Supabase Auth
-- **Secure sessions** — cookie-based SSR clients, proxy protection, OAuth callback
-- **Profiles & settings** — auto-provisioned on signup
-- **Design system & theming** — OLED dark only (no light mode), zero-flash
-- **App shell** — collapsible sidebar, responsive nav, user menu
-
-### Phase 2 — Catalog
-- **Provider-agnostic media layer** — TMDB adapter; ready for Watchmode / OMDb / etc.
-- **Global search (⌘K)** — movies, TV, people, collections, companies, genres
-- **Discover home** — trending, popular, now playing, top rated, genres, editor’s picks
-- **Detail pages** — cinematic movie / TV / person / collection experiences
-- **Galleries & trailers** — fullscreen image viewer, YouTube embeds
-- **Modular ratings & streaming** — TMDB live; other sources as placeholders
-- **Filters & browse** — genre, year, language, rating, runtime, sort
-
-### Phase 3 — Personal library
-- **Library entries** — watching, completed, paused, dropped, wishlist, rewatching, etc.
-- **Progress** — movie minutes, TV episode/season tracking, continue watching
-- **Watch sessions** — analytics-ready history
-- **Ratings with history** — never overwrite past scores
-- **Reviews & private notes** — markdown-friendly, spoiler flag
-- **Tags & collections** — unlimited custom organization
-- **Favorites, watchlist, history, activity**
-- **Library search** — titles, notes, reviews, tags, collections
-- **Import/export scaffold** — Letterboxd/Trakt ready architecture
-
-### Phase 4 — Intelligence
-- **Dashboard** — continue watching, rails, insights, recommendations, activity
-- **Statistics engine** — hours, streaks, distributions, completion rates
-- **Charts** — genre, ratings, monthly/weekly activity (Recharts)
-- **Calendar heatmap** — GitHub-style year view
-- **Timeline** — searchable, filterable journal
-- **Decision Score** — explainable per-title score
-- **Non-AI recommendations** — genre / history based
-- **Wrapped + monthly recap**
-- **Smart library filters** — rating, year range, genre, runtime
-
-### Phase 5 — Production polish
-- **PWA** — installable, offline shell, app icons, service worker
-- **Keyboard shortcuts** — ⌘K, `/`, `G` then `D`/`L`/`C`/…
-- **Command palette** — full navigation + search
-- **Motion** — page transitions, poster lift, reduced-motion safe
-- **Progressive images** — shimmer → fade-in
-- **Settings** — shortcuts reference, local display prefs, privacy notes
-- **Tests** — Vitest unit tests for stats, decision score, formatters
-- **Docs** — security, deployment, standards, roadmap, CONTRIBUTING
+```
+ErasmusTV/
+├── app/
+│   ├── build.gradle.kts
+│   ├── proguard-rules.pro
+│   └── src/
+│       ├── main/
+│       │   ├── AndroidManifest.xml
+│       │   ├── java/com/erasmustv/app/
+│       │   │   ├── ErasmusTvApplication.kt
+│       │   │   ├── MainActivity.kt
+│       │   │   ├── core/
+│       │   │   │   ├── config/AppConfig.kt
+│       │   │   │   ├── network/NetworkClient.kt
+│       │   │   │   └── theme/
+│       │   │   │       ├── Color.kt
+│       │   │   │       ├── Theme.kt
+│       │   │   │       └── Type.kt
+│       │   │   ├── data/
+│       │   │   │   ├── local/
+│       │   │   │   │   ├── PlaybackProgressStore.kt
+│       │   │   │   │   ├── ProfileManager.kt
+│       │   │   │   │   └── SessionManager.kt
+│       │   │   │   ├── model/
+│       │   │   │   │   ├── AuthModels.kt
+│       │   │   │   │   ├── MediaModels.kt
+│       │   │   │   │   ├── ProfileModels.kt
+│       │   │   │   │   └── StreamModels.kt
+│       │   │   │   ├── remote/
+│       │   │   │   │   ├── ErasmusStreamApiService.kt
+│       │   │   │   │   ├── SupabaseApiService.kt
+│       │   │   │   │   └── TmdbApiService.kt
+│       │   │   │   └── repository/
+│       │   │   │       ├── AuthRepository.kt
+│       │   │   │       ├── MediaRepository.kt
+│       │   │   │       ├── ProfileRepository.kt
+│       │   │   │       ├── StreamRepository.kt
+│       │   │   │       └── WatchlistRepository.kt
+│       │   │   └── ui/
+│       │   │       ├── components/
+│       │   │       │   ├── ContinueWatchingRow.kt
+│       │   │       │   ├── HeroBillboard.kt
+│       │   │       │   ├── MediaPosterCard.kt
+│       │   │       │   ├── MediaSectionRow.kt
+│       │   │       │   ├── TvFocusableCard.kt
+│       │   │       │   └── TvNavigationDrawer.kt
+│       │   │       ├── navigation/
+│       │   │       │   ├── AppNavigation.kt
+│       │   │       │   └── NavRoutes.kt
+│       │   │       └── screens/
+│       │   │           ├── auth/
+│       │   │           ├── details/
+│       │   │           ├── home/
+│       │   │           ├── movies/
+│       │   │           ├── player/
+│       │   │           ├── profiles/
+│       │   │           ├── search/
+│       │   │           ├── tv/
+│       │   │           └── watchlist/
+│       │   └── res/
+│       │       ├── drawable/
+│       │       ├── font/bostone.ttf
+│       │       ├── mipmap-*/
+│       │       └── values/
+│       └── test/
+│           └── java/com/erasmustv/app/ErasmusTvUnitTest.kt
+├── database/
+│   └── migrations/ (001–007 SQL migrations)
+├── docs/ (subsystem documentation)
+├── gradle/
+│   ├── libs.versions.toml
+│   └── wrapper/
+├── build.gradle.kts
+├── settings.gradle.kts
+├── gradle.properties
+├── gradlew
+└── ANDROID_TV_MIGRATION_PLAN.md
+```
 
 ---
 
-## Quick start
+## Build & Run
 
 ### Prerequisites
+- JDK 17 (`JAVA_HOME` pointing to OpenJDK 17)
+- Android SDK with platform `android-35` and `build-tools;35.0.0` (configured in `local.properties`)
 
-- Node.js 20+
-- npm 10+
-- A [Supabase](https://supabase.com) project
-
-### 1. Install
+### Commands
 
 ```bash
-git clone <repo-url> frame
-cd frame
-npm install
-```
+# Compile Kotlin code
+JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew compileDebugKotlin
 
-### 2. Environment
+# Run unit tests
+JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew testDebugUnitTest
 
-```bash
-cp .env.example .env.local
-```
+# Assemble Debug APK
+JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew assembleDebug
 
-Fill in values from **Supabase → Project Settings → API**:
-
-| Variable | Description |
-| --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role (server-only, optional for Phase 1) |
-| `NEXT_PUBLIC_APP_URL` | e.g. `http://localhost:3000` |
-| `NEXT_PUBLIC_APP_NAME` | `Frame` |
-
-See [docs/environment.md](./docs/environment.md) for full details.
-
-### 3. Database
-
-In the Supabase SQL editor, run in order:
-
-```text
-database/migrations/001_foundation.sql
-database/migrations/002_search_history.sql
-database/migrations/003_personal_library.sql
-database/migrations/004_performance_indexes.sql
-```
-
-### 3b. TMDB (catalog)
-
-1. Create an API key at [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api)
-2. Set in `.env.local`:
-
-```env
-TMDB_API_KEY=your_v3_key
-# or
-TMDB_READ_ACCESS_TOKEN=your_v4_token
-```
-
-See [docs/catalog.md](./docs/catalog.md) for architecture details.
-
-### 4. Auth providers
-
-In Supabase **Authentication → Providers**:
-
-1. Enable **Email**
-2. Enable **Google** (set Client ID / Secret; redirect URL: `https://<project>.supabase.co/auth/v1/callback`)
-3. Enable **GitHub** similarly
-
-Add your site URL and redirect URLs under **Authentication → URL Configuration**:
-
-- Site URL: `http://localhost:3000` (dev) / production URL
-- Redirect: `http://localhost:3000/auth/callback`
-
-### 5. Develop
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-### 6. Quality checks
-
-```bash
-npm run typecheck
-npm run lint
-npm run format:check
-npm run build
+# Install on Android TV device or emulator (via adb)
+adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ---
 
-## Scripts
+## TV Remote Navigation Controls
 
-| Script | Purpose |
-| --- | --- |
-| `npm run dev` | Next.js dev server (Turbopack) |
-| `npm run build` | Production build |
-| `npm run start` | Start production server |
-| `npm run lint` | ESLint |
-| `npm run lint:fix` | ESLint with auto-fix |
-| `npm run format` | Prettier write |
-| `npm run format:check` | Prettier check |
-| `npm run typecheck` | TypeScript `--noEmit` |
-| `npm test` | Vitest unit tests |
-| `npm run validate` | typecheck + lint + tests |
-
----
-
-## Project structure
-
-```text
-src/
-  app/                 # App Router routes (marketing, auth, app)
-  animations/          # Shared Framer Motion variants
-  components/
-    ui/                # Design system primitives
-    layout/            # Shell, nav, header, logo
-    feedback/          # Empty, error, loaders
-  constants/           # Routes, navigation, app metadata
-  features/            # Feature modules (auth, profile, settings, command)
-  hooks/               # Client hooks
-  lib/
-    supabase/          # Browser / server / middleware clients
-    services/          # Server data access
-    validations/       # Zod schemas
-    utils/             # cn, formatters
-    env.ts             # Zod env validation
-  providers/           # Theme, Query, UI state
-  types/               # Database + shared types
-  proxy.ts             # Session refresh + route guards (Next.js Proxy)
-database/
-  migrations/          # SQL foundation schema
-docs/                  # Architecture & environment docs
-```
-
----
-
-## Architecture notes
-
-### State separation
-
-| Kind | Where |
-| --- | --- |
-| UI chrome (sidebar, command palette) | `UIProvider` |
-| Theme | `next-themes` |
-| Auth session | Supabase cookies + middleware |
-| Server/async data | TanStack Query (scaffold) + Server Components |
-| Preferences | Postgres `user_settings` / `user_preferences` |
-
-### Extension points (later phases)
-
-Do **not** partially implement these yet. Tables and modules should be added cleanly when needed:
-
-- Media catalog (`media_titles`, genres, people, credits)
-- Watch history / status
-- Lists, collections, watchlists
-- Reviews & ratings
-- Recommendations & analytics
-
-The command palette already has a dedicated group reserved for entertainment search.
-
-### Accessibility
-
-- Semantic HTML and landmarks
-- Focus-visible rings
-- Skip link
-- Reduced-motion CSS media query
-- WCAG AA–oriented contrast tokens
-
----
-
-## Deployment (Vercel)
-
-1. Import the repo into Vercel
-2. Set the same environment variables as `.env.example`
-3. Point Supabase auth redirect URLs at your production domain
-4. Deploy — `npm run build` is the default build command
-
----
-
-## License
-
-Private / unlicensed unless otherwise specified.
+| Key | Context | Action |
+|---|---|---|
+| **D-pad Center / OK** | General UI | Select / open highlighted item |
+| **D-pad Center / OK** | Video Player | Toggle Play / Pause |
+| **D-pad Left / Right** | Video Player | Seek -10s / +10s with scrub indicator |
+| **D-pad Up / Down** | Video Player | Show / hide On-Screen HUD and Server switcher |
+| **Back Button** | Video Player | Save current progress and exit smoothly to details |
+| **Back Button** | General UI | Navigate back / dismiss modal |

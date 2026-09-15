@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- True pitch black stage -->
+    <color name="black">#FF000000</color>
+    <color name="surface_dark">#FF0D0D0D</color>
+    <color name="surface_elevated">#FF141414</color>
+    <color name="surface_card">#FF0A0A0A</color>
+
+    <!-- Electric blue accent tokens -->
+    <color name="electric_blue">#FF1D90F5</color>
+    <color name="electric_hot">#FF38BDF8</color>
+    <color name="electric_deep">#FF0969DA</color>
+    <color name="electric_subtle">#331D90F5</color>
+
+    <!-- Text & lines -->
+    <color name="white">#FFFAFAFA</color>
+    <color name="text_muted">#FF94A3B8</color>
+    <color name="border_hairline">#FF262626</color>
+    <color name="border_focused">#FF1D90F5</color>
+</resources>

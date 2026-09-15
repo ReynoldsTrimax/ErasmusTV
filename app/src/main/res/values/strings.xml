@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">Erasmus</string>
+    <string name="app_tagline">Watch movies and TV in one place</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_movies">Movies</string>
+    <string name="nav_tv">TV Shows</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_watchlist">Watchlist</string>
+    <string name="nav_profiles">Profiles</string>
+    <string name="nav_settings">Settings</string>
+
+    <string name="watch_now">Watch Now</string>
+    <string name="resume">Resume</string>
+    <string name="add_to_watchlist">Add to Watchlist</string>
+    <string name="in_watchlist">In Watchlist</string>
+    <string name="episodes">Episodes</string>
+    <string name="seasons">Seasons</string>
+    <string name="cast">Top Cast</string>
+    <string name="similar_titles">More Like This</string>
+    <string name="where_to_watch">Where to Watch</string>
+    <string name="continue_watching">Continue Watching</string>
+    <string name="trending_today">Trending Today</string>
+    <string name="popular_movies">Popular Movies</string>
+    <string name="popular_tv">Popular TV Shows</string>
+    <string name="top_rated">Top Rated</string>
+    <string name="who_is_watching">Who\'s Watching?</string>
+    <string name="manage_profiles">Manage Profiles</string>
+    <string name="add_profile">Add Profile</string>
+</resources>

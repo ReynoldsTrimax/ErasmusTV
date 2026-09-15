@@ -1,78 +1,40 @@
-# Frame — Agent notes
+# ErasmusTV — Agent Notes
 
 ## Product
 
-Frame is a premium personal entertainment tracking app.
+ErasmusTV is the native Android TV application for the Erasmus streaming platform.
 
-**Phase 1** — foundation  
-**Phase 2** — catalog/discovery  
-**Phase 3** — personal library  
-**Phase 4** — intelligence  
-**Phase 5** — polish / PWA / shortcuts / tests / docs
+It consumes the existing Erasmus/Argus backend infrastructure (Supabase Auth/PostgreSQL database, TMDB/OMDb catalog services, Shegu/Cinejoy stream extraction, and Wyzie subtitles).
 
-Do **not** implement AI assistants, social features, or public sharing until explicitly requested.
+The legacy web application has been completely replaced with native Kotlin + Jetpack Compose for TV.
 
 ## Stack
 
-Next.js App Router, React 19, TypeScript strict, Tailwind v4, Radix/shadcn-style UI, Framer Motion, Supabase Auth + Postgres, Zod, RHF, TanStack Query, Vercel.
+- Kotlin 2.1.0, Coroutines
+- Jetpack Compose for TV (`androidx.tv:tv-material`, `androidx.tv:tv-foundation`)
+- AndroidX Media3 (ExoPlayer 1.5.1 + HLS module)
+- Retrofit 2 + OkHttp 4 + Kotlinx Serialization
+- Coil Compose for TV image loading & memory/disk caching
+- Jetpack DataStore Preferences & SharedPreferences
+- Target SDK: 35 (Android 15), Min SDK: 26 (Android 8.0)
 
 ## Conventions
 
-- Server Components by default; Client Components only for interactivity
-- Feature code lives in `src/features/*`; shared UI in `src/components/*`
-- Mutations via Server Actions with Zod validation
-- Data access via `src/lib/services` and `src/lib/supabase`
-- Route constants in `src/constants/routes.ts`
-- Design tokens in `src/app/globals.css` (CSS variables)
-- Auth session proxy: `src/proxy.ts`
+- Architecture: Clean Architecture (UI -> ViewModel -> Repository -> Remote / Local Data Sources)
+- TV Interaction: 100% remote D-pad operable (no touch, no mouse pointer dependencies)
+- Design Language: Erasmus OLED black (`#000000`), elevated dark surfaces (`#0D0D0D`), Electric Blue accent (`#1D90F5`), signature Bostone wordmark
+- Playback: AndroidX Media3 with custom HTTP headers (`Referer: https://cinejoy.to/`), multi-server fallback cluster, and profile-isolated resume tracking
+- Database & Backend: Source of truth is PostgreSQL under `database/migrations/` (001 → 007) and Supabase GoTrue Auth / PostgREST APIs
 
 ## Commands
 
 ```bash
-npm run dev
-npm run typecheck
-npm run lint
-npm test
-npm run build
-npm run validate
+# Compile Kotlin code
+JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew compileDebugKotlin
+
+# Run unit tests
+JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew testDebugUnitTest
+
+# Assemble Debug APK
+JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew assembleDebug
 ```
-
-## Media catalog
-
-- Domain types: `src/types/media.ts`
-- Provider interface: `src/lib/media/providers/types.ts`
-- TMDB adapter: `src/lib/media/providers/tmdb/`
-- Facade: `src/lib/media/catalog.ts`
-- UI must not import TMDB raw types
-
-## Personal library
-
-- Types: `src/types/library.ts`
-- Services: `src/lib/library/*`
-- Actions: `src/features/library/actions/library-actions.ts`
-- Detail UI: `PersonalMediaPanel` on movie/TV pages
-- Docs: `docs/library.md`
-
-## Intelligence
-
-- Types: `src/types/intelligence.ts`
-- Services: `src/lib/intelligence/*`
-- UI: `src/features/intelligence/components/*`
-- Docs: `docs/intelligence.md`
-
-## Recommendations
-
-Separate subsystem from the intelligence layer. Deterministic, no AI, no new tables.
-
-- Types: `src/types/recommendations.ts`
-- Engine: `src/lib/recommendations/*` (pure layers + `tmdb-catalog.ts` adapter)
-- Entry point: `getRecommendationsForCurrentUser()` in `src/lib/recommendations/service.ts`
-- UI: `src/features/recommendations/components/*`, route `/recommendations`
-- Docs: `docs/recommendations.md`
-
-`src/lib/intelligence/recommendations.ts` and `decision-score.ts` are a different,
-still-live feature (dashboard rail + detail-page score). Do not merge them.
-
-## Database
-
-Apply migrations in order under `database/migrations/` (001 → 002 → 003).
