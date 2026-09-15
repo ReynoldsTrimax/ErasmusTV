@@ -62,20 +62,23 @@ import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.getAvatarGradient
 import com.erasmustv.app.data.model.WatchProfile
 import com.erasmustv.app.ui.navigation.NavRoutes
+import androidx.compose.ui.res.painterResource
+import com.erasmustv.app.R
 
 data class NavRailDestination(
     val route: String,
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector? = null,
+    val drawableRes: Int? = null
 )
 
 val NAV_RAIL_ITEMS = listOf(
-    NavRailDestination(NavRoutes.HOME, "Home", TvNavIcons.Home),
-    NavRailDestination(NavRoutes.SEARCH, "Search", TvNavIcons.Search),
-    NavRailDestination(NavRoutes.TV, "TV Shows", TvNavIcons.Tv),
-    NavRailDestination(NavRoutes.MOVIES, "Movies", TvNavIcons.Movies),
-    NavRailDestination(NavRoutes.ANIME, "Anime", TvNavIcons.Anime),
-    NavRailDestination(NavRoutes.STUDIOS, "Studios", TvNavIcons.Categories)
+    NavRailDestination(NavRoutes.HOME, "Home", icon = TvNavIcons.Home),
+    NavRailDestination(NavRoutes.SEARCH, "Search", icon = TvNavIcons.Search),
+    NavRailDestination(NavRoutes.TV, "TV Shows", drawableRes = R.drawable.ic_nav_tv),
+    NavRailDestination(NavRoutes.MOVIES, "Movies", icon = TvNavIcons.Movies),
+    NavRailDestination(NavRoutes.ANIME, "Anime", drawableRes = R.drawable.ic_nav_anime),
+    NavRailDestination(NavRoutes.STUDIOS, "Studios", drawableRes = R.drawable.ic_nav_studios)
 )
 
 /**
@@ -366,12 +369,21 @@ private fun MinimalNavItem(
             Spacer(modifier = Modifier.width(if (isSelected) 8.dp else 10.dp))
 
             // Monochrome Icon
-            Icon(
-                imageVector = destination.icon,
-                contentDescription = destination.label,
-                tint = contentColor,
-                modifier = Modifier.size(17.dp)
-            )
+            if (destination.drawableRes != null) {
+                Icon(
+                    painter = painterResource(id = destination.drawableRes),
+                    contentDescription = destination.label,
+                    tint = contentColor,
+                    modifier = Modifier.size(17.dp)
+                )
+            } else if (destination.icon != null) {
+                Icon(
+                    imageVector = destination.icon,
+                    contentDescription = destination.label,
+                    tint = contentColor,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
 
             // Label text: revealed via graphicsLayer — zero layout cost.
             // scaleX and alpha both animate from 0→1 using the shared labelReveal float.

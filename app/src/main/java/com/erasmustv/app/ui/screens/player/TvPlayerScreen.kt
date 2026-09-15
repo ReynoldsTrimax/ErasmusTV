@@ -50,10 +50,12 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem as Media3Item
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
+import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.text.CueGroup
 import androidx.media3.common.util.UnstableApi
+import com.erasmustv.app.data.model.SubtitleTrack
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
@@ -148,6 +150,8 @@ fun TvPlayerScreen(
     val referenceSubtitleCues by viewModel.referenceSubtitleCues.collectAsState()
 
     var exoPlayerCueText by remember { mutableStateOf<String?>(null) }
+    var isSubtitleExplicitlyOff by remember { mutableStateOf(false) }
+    var selectedSubtitleTrackId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(activeSubtitleCues, referenceSubtitleCues) {
         subtitleSyncEngine.setActiveCues(activeSubtitleCues, referenceSubtitleCues)
@@ -156,10 +160,12 @@ fun TvPlayerScreen(
     // Active Cue at current position with auto-sync offset applied (or native ExoPlayer cues as dual-engine fallback)
     val customCueText = remember(currentPositionMs, currentOffsetMs, activeSubtitleCues) {
         val pos = currentPositionMs
-        activeSubtitleCues.firstOrNull { it.isActiveAt(pos, currentOffsetMs) }?.text
+        val cues = activeSubtitleCues.filter { it.isActiveAt(pos, currentOffsetMs) }
+        if (cues.isEmpty()) null
+        else cues.map { it.text.trim() }.filter { it.isNotBlank() }.distinct().joinToString("\n")
     }
 
-    val isSubtitleOff = subtitleTracks.find { it.isSelected }?.isOff == true
+    val isSubtitleOff = isSubtitleExplicitlyOff || (subtitleTracks.isNotEmpty() && subtitleTracks.firstOrNull { it.isSelected }?.isOff == true)
 
     val activeCueText = remember(isSubtitleOff, customCueText, exoPlayerCueText) {
         if (isSubtitleOff) null
@@ -220,123 +226,209 @@ fun TvPlayerScreen(
     }
 
 
-    // Parse real Media3 tracks
-    fun updateTracksFromPlayer(tracks: Tracks) {
-        audioTracks.clear()
-        subtitleTracks.clear()
-        qualityTracks.clear()
+    var lastMedia3Tracks by remember { mutableStateOf<Tracks?>(null) }
 
-        var textDisabled = true
-        var videoHasOverride = false
+    // Parse and synchronize real Media3 tracks and cluster captions
+    fun syncTracks(
+        tracks: Tracks? = lastMedia3Tracks,
+        captions: List<SubtitleTrack>? = (viewModel.streamState.value as? PlayerStreamState.Ready)?.captions
+    ) {
+        if (tracks != null) {
+            audioTracks.clear()
+            qualityTracks.clear()
 
-        for (group in tracks.groups) {
-            when (group.type) {
-                C.TRACK_TYPE_AUDIO -> {
-                    for (i in 0 until group.length) {
-                        val format = group.getTrackFormat(i)
-                        val lang = format.language ?: ""
-                        val displayLang = if (lang.isNotBlank()) {
-                            Locale(lang).displayLanguage.takeIf { it.isNotBlank() } ?: lang
-                        } else "Audio ${audioTracks.size + 1}"
-                        val label = format.label ?: displayLang
-                        val isSelected = group.isTrackSelected(i)
+            var videoHasOverride = false
 
-                        audioTracks.add(
-                            TvAudioTrack(
-                                id = "audio_${group.mediaTrackGroup.id}_$i",
-                                mediaTrackGroup = group.mediaTrackGroup,
-                                trackIndex = i,
-                                label = label,
-                                language = lang,
-                                isSelected = isSelected
+            for (group in tracks.groups) {
+                when (group.type) {
+                    C.TRACK_TYPE_AUDIO -> {
+                        for (i in 0 until group.length) {
+                            val format = group.getTrackFormat(i)
+                            val lang = format.language ?: ""
+                            val displayLang = if (lang.isNotBlank()) {
+                                Locale(lang).displayLanguage.takeIf { it.isNotBlank() } ?: lang
+                            } else "Audio ${audioTracks.size + 1}"
+                            val label = format.label ?: displayLang
+                            val isSelected = group.isTrackSelected(i)
+
+                            audioTracks.add(
+                                TvAudioTrack(
+                                    id = "audio_${group.mediaTrackGroup.id}_$i",
+                                    mediaTrackGroup = group.mediaTrackGroup,
+                                    trackIndex = i,
+                                    label = label,
+                                    language = lang,
+                                    isSelected = isSelected
+                                )
                             )
-                        )
-                    }
-                }
-
-                C.TRACK_TYPE_TEXT -> {
-                    for (i in 0 until group.length) {
-                        val format = group.getTrackFormat(i)
-                        val lang = format.language ?: ""
-                        val displayLang = if (lang.isNotBlank()) {
-                            Locale(lang).displayLanguage.takeIf { it.isNotBlank() } ?: lang
-                        } else "Subtitle ${subtitleTracks.size + 1}"
-                        val label = format.label ?: displayLang
-                        val isSelected = group.isTrackSelected(i)
-                        if (isSelected) textDisabled = false
-
-                        subtitleTracks.add(
-                            TvSubtitleTrack(
-                                id = "sub_${group.mediaTrackGroup.id}_$i",
-                                mediaTrackGroup = group.mediaTrackGroup,
-                                trackIndex = i,
-                                label = label,
-                                language = lang,
-                                isSelected = isSelected,
-                                isOff = false
-                            )
-                        )
-                    }
-                }
-
-                C.TRACK_TYPE_VIDEO -> {
-                    for (i in 0 until group.length) {
-                        val format = group.getTrackFormat(i)
-                        val h = format.height
-                        val w = format.width
-                        val bitrate = format.bitrate
-                        val isSelected = group.isTrackSelected(i)
-                        if (isSelected) videoHasOverride = true
-
-                        val label = when {
-                            h >= 2160 -> "4K Ultra HD"
-                            h >= 1080 -> "1080p Full HD"
-                            h >= 720 -> "720p HD"
-                            h >= 480 -> "480p SD"
-                            h > 0 -> "${h}p"
-                            else -> "Standard Quality"
                         }
+                    }
 
-                        qualityTracks.add(
-                            TvQualityTrack(
-                                id = "video_${group.mediaTrackGroup.id}_$i",
-                                mediaTrackGroup = group.mediaTrackGroup,
-                                trackIndex = i,
-                                label = label,
-                                width = w,
-                                height = h,
-                                bitrate = bitrate,
-                                isAuto = false,
-                                isSelected = isSelected
+                    C.TRACK_TYPE_VIDEO -> {
+                        for (i in 0 until group.length) {
+                            val format = group.getTrackFormat(i)
+                            val h = format.height
+                            val w = format.width
+                            val bitrate = format.bitrate
+                            val isSelected = group.isTrackSelected(i)
+                            if (isSelected) videoHasOverride = true
+
+                            val label = when {
+                                h >= 2160 -> "4K Ultra HD"
+                                h >= 1080 -> "1080p Full HD"
+                                h >= 720 -> "720p HD"
+                                h >= 480 -> "480p SD"
+                                h > 0 -> "${h}p"
+                                else -> "Standard Quality"
+                            }
+
+                            qualityTracks.add(
+                                TvQualityTrack(
+                                    id = "video_${group.mediaTrackGroup.id}_$i",
+                                    mediaTrackGroup = group.mediaTrackGroup,
+                                    trackIndex = i,
+                                    label = label,
+                                    width = w,
+                                    height = h,
+                                    bitrate = bitrate,
+                                    isAuto = false,
+                                    isSelected = isSelected
+                                )
                             )
-                        )
+                        }
+                    }
+                }
+            }
+
+            // Explicit "Auto" option for video quality
+            qualityTracks.add(
+                0,
+                TvQualityTrack(
+                    id = "video_auto",
+                    label = "Auto (Adaptive)",
+                    isAuto = true,
+                    isSelected = !videoHasOverride
+                )
+            )
+        }
+
+        // Build comprehensive Subtitle Tracks list
+        subtitleTracks.clear()
+
+        // 1. Explicit "Off" option for subtitles
+        subtitleTracks.add(
+            TvSubtitleTrack(
+                id = "sub_off",
+                label = "Off",
+                language = "",
+                isSelected = isSubtitleExplicitlyOff,
+                isOff = true
+            )
+        )
+
+        val seenKeys = mutableSetOf<String>()
+
+        // 2. Add external/cluster resolved captions (Wyzie, Cinejoy, OpenSubtitles)
+        if (!captions.isNullOrEmpty()) {
+            for (cap in captions) {
+                if (cap.url.isBlank()) continue
+                val key = "${cap.label.lowercase().trim()}_${cap.language.lowercase().trim()}"
+                seenKeys.add(key)
+
+                var matchedGroup: TrackGroup? = null
+                var matchedIndex = -1
+                if (tracks != null) {
+                    for (group in tracks.groups) {
+                        if (group.type == C.TRACK_TYPE_TEXT) {
+                            for (i in 0 until group.length) {
+                                val fmt = group.getTrackFormat(i)
+                                if (fmt.label?.equals(cap.label, ignoreCase = true) == true ||
+                                    (fmt.language?.isNotBlank() == true && fmt.language.equals(cap.language, ignoreCase = true))
+                                ) {
+                                    matchedGroup = group.mediaTrackGroup
+                                    matchedIndex = i
+                                    break
+                                }
+                            }
+                        }
+                        if (matchedGroup != null) break
+                    }
+                }
+
+                val isThisSelected = !isSubtitleExplicitlyOff && (
+                    selectedSubtitleTrackId == cap.url ||
+                    (selectedSubtitleTrackId == null && (cap.language.startsWith("en", ignoreCase = true) || cap.label.contains("English", ignoreCase = true)))
+                )
+
+                if (isThisSelected && selectedSubtitleTrackId == null) {
+                    selectedSubtitleTrackId = cap.url
+                }
+
+                subtitleTracks.add(
+                    TvSubtitleTrack(
+                        id = cap.url,
+                        mediaTrackGroup = matchedGroup,
+                        trackIndex = matchedIndex,
+                        label = cap.label,
+                        language = cap.language,
+                        isSelected = isThisSelected,
+                        isOff = false
+                    )
+                )
+            }
+        }
+
+        // 3. Add any embedded Media3 text tracks not already in the list
+        if (tracks != null) {
+            for (group in tracks.groups) {
+                if (group.type == C.TRACK_TYPE_TEXT) {
+                    for (i in 0 until group.length) {
+                        val format = group.getTrackFormat(i)
+                        val lang = format.language ?: ""
+                        val displayLang = if (lang.isNotBlank()) {
+                            Locale(lang).displayLanguage.takeIf { it.isNotBlank() } ?: lang
+                        } else "Subtitle ${subtitleTracks.size}"
+                        val label = format.label ?: displayLang
+                        val key = "${label.lowercase().trim()}_${lang.lowercase().trim()}"
+
+                        if (seenKeys.add(key)) {
+                            val trackId = "sub_${group.mediaTrackGroup.id}_$i"
+                            val isThisSelected = !isSubtitleExplicitlyOff && (
+                                selectedSubtitleTrackId == trackId ||
+                                (selectedSubtitleTrackId == null && captions.isNullOrEmpty() && (lang.startsWith("en", ignoreCase = true) || label.contains("English", ignoreCase = true)))
+                            )
+                            if (isThisSelected && selectedSubtitleTrackId == null) {
+                                selectedSubtitleTrackId = trackId
+                            }
+                            subtitleTracks.add(
+                                TvSubtitleTrack(
+                                    id = trackId,
+                                    mediaTrackGroup = group.mediaTrackGroup,
+                                    trackIndex = i,
+                                    label = label,
+                                    language = lang,
+                                    isSelected = isThisSelected,
+                                    isOff = false
+                                )
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Explicit "Off" option for subtitles
-        subtitleTracks.add(
-            0,
-            TvSubtitleTrack(
-                id = "sub_off",
-                label = "Off",
-                language = "",
-                isSelected = textDisabled,
-                isOff = true
-            )
-        )
-
-        // Explicit "Auto" option for video quality
-        qualityTracks.add(
-            0,
-            TvQualityTrack(
-                id = "video_auto",
-                label = "Auto (Adaptive)",
-                isAuto = true,
-                isSelected = !videoHasOverride
-            )
-        )
+        // 4. Default to English / first track if subtitles are not explicitly off
+        if (!isSubtitleExplicitlyOff && subtitleTracks.size > 1 && subtitleTracks.none { it.isSelected && !it.isOff }) {
+            val defaultTrack = subtitleTracks.find { !it.isOff && (it.language.startsWith("en", ignoreCase = true) || it.label.contains("English", ignoreCase = true)) }
+                ?: subtitleTracks.firstOrNull { !it.isOff }
+            if (defaultTrack != null) {
+                val idx = subtitleTracks.indexOf(defaultTrack)
+                if (idx >= 0) {
+                    subtitleTracks[idx] = defaultTrack.copy(isSelected = true)
+                    selectedSubtitleTrackId = defaultTrack.id
+                }
+            }
+        }
     }
 
     // Attach ExoPlayer Listener
@@ -353,8 +445,17 @@ fun TvPlayerScreen(
                 }
             }
 
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int
+            ) {
+                currentPositionMs = newPosition.positionMs
+            }
+
             override fun onTracksChanged(tracks: Tracks) {
-                updateTracksFromPlayer(tracks)
+                lastMedia3Tracks = tracks
+                syncTracks(tracks = tracks)
             }
 
             override fun onCues(cueGroup: CueGroup) {
@@ -442,6 +543,7 @@ fun TvPlayerScreen(
 
             exoPlayer.setMediaItem(mediaItem)
             exoPlayer.prepare()
+            syncTracks(captions = ready.captions)
             if (ready.startPositionMs > 0) {
                 exoPlayer.seekTo(ready.startPositionMs)
             }
@@ -954,6 +1056,8 @@ fun TvPlayerScreen(
             },
             onSelectSubtitleTrack = { track ->
                 if (track.isOff) {
+                    isSubtitleExplicitlyOff = true
+                    selectedSubtitleTrackId = "sub_off"
                     viewModel.loadSubtitleTrack(null)
                     exoPlayerCueText = null
                     exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
@@ -961,8 +1065,11 @@ fun TvPlayerScreen(
                         .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                         .build()
                 } else {
+                    isSubtitleExplicitlyOff = false
+                    selectedSubtitleTrackId = track.id
                     val readyState = viewModel.streamState.value as? PlayerStreamState.Ready
-                    val matchedTrack = readyState?.captions?.find { it.label.equals(track.label, ignoreCase = true) }
+                    val matchedTrack = readyState?.captions?.find { it.url == track.id }
+                        ?: readyState?.captions?.find { it.label.equals(track.label, ignoreCase = true) }
                         ?: readyState?.captions?.find {
                             it.language.isNotBlank() && (it.language.equals(track.language, ignoreCase = true) ||
                                     (it.language.startsWith("en", ignoreCase = true) && track.language.startsWith("en", ignoreCase = true)))
@@ -981,6 +1088,10 @@ fun TvPlayerScreen(
                             .setOverrideForType(TrackSelectionOverride(track.mediaTrackGroup, track.trackIndex))
                             .build()
                     }
+                }
+                for (i in 0 until subtitleTracks.size) {
+                    val t = subtitleTracks[i]
+                    subtitleTracks[i] = t.copy(isSelected = t.id == track.id)
                 }
             },
             onSelectSubtitleFont = { font ->

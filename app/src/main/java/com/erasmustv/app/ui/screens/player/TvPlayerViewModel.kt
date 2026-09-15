@@ -163,9 +163,14 @@ class TvPlayerViewModel(
                     .header("Accept", "*/*")
                     .build()
                 val resp = subtitleClient.newCall(req).execute()
+                if (!resp.isSuccessful) {
+                    android.util.Log.w("TvPlayerViewModel", "Subtitle fetch failed with HTTP ${resp.code} for ${track.url}")
+                    return@launch
+                }
                 val body = resp.body?.string() ?: ""
                 if (body.isNotBlank()) {
                     val parsed = com.erasmustv.app.data.subtitle.SubtitleParser.parse(body)
+                    android.util.Log.d("TvPlayerViewModel", "Successfully parsed ${parsed.size} cues for ${track.label} (${track.language}) from ${track.url}")
                     subtitleTextCache[track.url] = parsed
                     _activeSubtitleCues.value = parsed
                 }
