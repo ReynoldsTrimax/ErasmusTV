@@ -50,6 +50,7 @@ fun TvPlayerTopBar(
     mediaType: String,
     season: Int?,
     episode: Int?,
+    episodeTitle: String? = null,
     currentServerName: String,
     onExit: () -> Unit,
     onRestart: () -> Unit,
@@ -93,18 +94,28 @@ fun TvPlayerTopBar(
                 Text(
                     text = title,
                     style = ErasmusTvTypography.SectionTitle.copy(
-                        fontSize = 19.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold
                     ),
                     color = TextPrimary
                 )
-                if (mediaType.equals("tv", ignoreCase = true) && season != null && episode != null) {
+                if (mediaType.equals("tv", ignoreCase = true)) {
                     Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Season $season · Episode $episode",
-                        style = ErasmusTvTypography.Badge.copy(fontSize = 12.sp),
-                        color = TextSecondary
-                    )
+                    val episodeLabel = when {
+                        !episodeTitle.isNullOrBlank() -> episodeTitle
+                        episode != null -> "Episode $episode"
+                        else -> null
+                    }
+                    if (episodeLabel != null) {
+                        Text(
+                            text = episodeLabel,
+                            style = ErasmusTvTypography.Badge.copy(
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            ),
+                            color = TextSecondary
+                        )
+                    }
                 }
             }
         }
@@ -165,9 +176,16 @@ fun TvPlayerBottomControls(
     audioFocusRequester: FocusRequester,
     subtitleFocusRequester: FocusRequester,
     qualityFocusRequester: FocusRequester,
+    mediaType: String = "movie",
+    season: Int? = null,
+    episode: Int? = null,
+    onOpenEpisodes: () -> Unit = {},
+    episodesFocusRequester: FocusRequester = remember { FocusRequester() },
     onButtonFocused: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val isTv = mediaType.equals("tv", ignoreCase = true) && season != null && episode != null
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -175,7 +193,7 @@ fun TvPlayerBottomControls(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Left Controls: Play/Pause (timeline scrubbing is primary seek)
+        // Left Controls: Play/Pause
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -186,35 +204,58 @@ fun TvPlayerBottomControls(
                 onClick = onTogglePlayPause,
                 focusRequester = playPauseFocusRequester,
                 onFocused = { onButtonFocused("playPause") },
-                onDpadRight = { audioFocusRequester.requestFocus() },
+                onDpadRight = {
+                    if (isTv) episodesFocusRequester.requestFocus() else audioFocusRequester.requestFocus()
+                },
                 onDpadUp = { timelineFocusRequester.requestFocus() },
                 modifier = Modifier.focusProperties {
                     up = timelineFocusRequester
                     down = FocusRequester.Cancel
                     left = FocusRequester.Cancel
-                    right = audioFocusRequester
+                    right = if (isTv) episodesFocusRequester else audioFocusRequester
                 }
             )
         }
 
-        // Right Controls: Audio, Subtitles, Quality
+        // Right Controls: Episodes (TV only), Audio, Subtitles, Quality
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (isTv) {
+                TvPlayerButton(
+                    icon = TvPlayerIcons.Episodes,
+                    label = "Episodes (S$season · E$episode)",
+                    onClick = onOpenEpisodes,
+                    focusRequester = episodesFocusRequester,
+                    onFocused = { onButtonFocused("episodes") },
+                    onDpadLeft = { playPauseFocusRequester.requestFocus() },
+                    onDpadRight = { audioFocusRequester.requestFocus() },
+                    onDpadUp = { timelineFocusRequester.requestFocus() },
+                    modifier = Modifier.focusProperties {
+                        up = timelineFocusRequester
+                        down = FocusRequester.Cancel
+                        left = playPauseFocusRequester
+                        right = audioFocusRequester
+                    }
+                )
+            }
+
             TvPlayerButton(
                 icon = TvPlayerIcons.Audio,
                 label = currentAudioLabel,
                 onClick = onOpenAudio,
                 focusRequester = audioFocusRequester,
                 onFocused = { onButtonFocused("audio") },
-                onDpadLeft = { playPauseFocusRequester.requestFocus() },
+                onDpadLeft = {
+                    if (isTv) episodesFocusRequester.requestFocus() else playPauseFocusRequester.requestFocus()
+                },
                 onDpadRight = { subtitleFocusRequester.requestFocus() },
                 onDpadUp = { timelineFocusRequester.requestFocus() },
                 modifier = Modifier.focusProperties {
                     up = timelineFocusRequester
                     down = FocusRequester.Cancel
-                    left = playPauseFocusRequester
+                    left = if (isTv) episodesFocusRequester else playPauseFocusRequester
                     right = subtitleFocusRequester
                 }
             )
@@ -277,17 +318,22 @@ fun TvPlayerButton(
         }
     }
 
+    // High visual fidelity magnification on TV focus without boxy borders or background morphism
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.05f else 1.0f,
-        animationSpec = tween(durationMillis = 100),
+        targetValue = if (isFocused) 1.20f else 1.0f,
+        animationSpec = tween(
+            durationMillis = 120,
+            easing = androidx.compose.animation.core.FastOutSlowInEasing
+        ),
         label = "buttonScale"
     )
 
-    val shape = RoundedCornerShape(8.dp)
-
     Box(
         modifier = modifier
-            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onKeyEvent { keyEvent ->
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
@@ -332,16 +378,8 @@ fun TvPlayerButton(
                 onClick = onClick
             )
             .focusable(interactionSource = interactionSource)
-            .background(
-                if (isFocused) SurfaceElevated else Color(0x1AFFFFFF),
-                shape
-            )
-            .border(
-                width = if (isFocused) 1.5.dp else 1.dp,
-                color = if (isFocused) BorderFocused else Color(0x22FFFFFF),
-                shape = shape
-            )
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .background(Color.Transparent)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -351,20 +389,20 @@ fun TvPlayerButton(
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                tint = if (isFocused) FocusWhite else TextSecondary,
-                modifier = Modifier.size(20.dp)
+                tint = if (isFocused) FocusWhite else Color(0xB8FFFFFF),
+                modifier = Modifier.size(22.dp)
             )
 
-            val shouldShowLabel = label.contains(":") || label == "Restart" ||
-                label == "Audio" || label == "Subtitles" || label == "Quality"
+            val shouldShowLabel = label.contains(":") || label.contains("(") || label == "Restart" ||
+                label == "Audio" || label == "Subtitles" || label == "Quality" || label.startsWith("Episodes")
             if (shouldShowLabel) {
                 Text(
                     text = label,
                     style = ErasmusTvTypography.ButtonText.copy(
                         fontSize = 13.sp,
-                        fontWeight = if (isFocused) FontWeight.SemiBold else FontWeight.Normal
+                        fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Medium
                     ),
-                    color = if (isFocused) FocusWhite else TextSecondary
+                    color = if (isFocused) FocusWhite else Color(0xB8FFFFFF)
                 )
             }
         }

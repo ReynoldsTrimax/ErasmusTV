@@ -46,6 +46,15 @@ import com.erasmustv.app.ui.components.TvFocusableCard
 
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import com.erasmustv.app.ui.components.ProfileAvatarView
+
 @Composable
 fun ProfilePickerScreen(
     viewModel: ProfileViewModel,
@@ -53,14 +62,41 @@ fun ProfilePickerScreen(
     onSignOut: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val userEmail by viewModel.userEmail.collectAsState()
     val isGuest by viewModel.isGuest.collectAsState()
     val firstProfileRequester = remember { FocusRequester() }
 
-    // If active profile already exists, remote BACK cleanly returns to the app
+    var isManageMode by remember { mutableStateOf(false) }
+    var editingProfile by remember { mutableStateOf<WatchProfile?>(null) }
+
+    // Remote BACK handler:
+    // 1. If currently in manage mode, BACK exits manage mode
+    // 2. If active profile already exists and not managing, BACK returns to the app
     val canGoBack = (uiState as? ProfileUiState.Success)?.activeProfile != null
-    androidx.activity.compose.BackHandler(enabled = canGoBack) {
-        onProfileSelected()
+    BackHandler(enabled = isManageMode || canGoBack) {
+        if (isManageMode) {
+            isManageMode = false
+        } else {
+            onProfileSelected()
+        }
+    }
+
+    // If a profile was selected for editing, show the EditProfileScreen
+    if (editingProfile != null) {
+        EditProfileScreen(
+            profile = editingProfile!!,
+            onSave = { updated ->
+                viewModel.updateProfile(updated)
+            },
+            onDelete = {
+                viewModel.deleteProfile(editingProfile!!.id)
+                editingProfile = null
+                isManageMode = false
+            },
+            onBack = {
+                editingProfile = null
+            }
+        )
+        return
     }
 
     Box(
@@ -113,7 +149,7 @@ fun ProfilePickerScreen(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "Who\'s Watching?",
+                        text = if (isManageMode) "Manage Profiles" else "Who's Watching?",
                         style = ErasmusTvTypography.BillboardTitle.copy(fontSize = 28.sp),
                         color = TextPrimary
                     )
@@ -128,15 +164,20 @@ fun ProfilePickerScreen(
                             ProfileCard(
                                 profile = profile,
                                 isSelected = profile.id == state.activeProfile?.id,
+                                isManageMode = isManageMode,
                                 modifier = if (index == 0) Modifier.focusRequester(firstProfileRequester) else Modifier,
                                 onClick = {
-                                    viewModel.selectProfile(profile, onProfileSelected)
+                                    if (isManageMode) {
+                                        editingProfile = profile
+                                    } else {
+                                        viewModel.selectProfile(profile, onProfileSelected)
+                                    }
                                 }
                             )
                         }
 
-                        // Add Profile button if under 5 profiles and not guest
-                        if (state.profiles.size < 5 && !isGuest) {
+                        // Add Profile button if under 5 profiles, not guest, and not in manage mode
+                        if (state.profiles.size < 5 && !isGuest && !isManageMode) {
                             AddProfileCard(
                                 onClick = {
                                     val nextNum = state.profiles.size + 1
@@ -148,11 +189,12 @@ fun ProfilePickerScreen(
 
                     Spacer(modifier = Modifier.height(44.dp))
 
-                    // Remote focusable Sign Out / Exit Guest button
+                    // Remote focusable "Manage Profiles" / "Done" button
                     TvFocusableCard(
-                        onClick = { viewModel.signOut(onSignOut) },
+                        onClick = { isManageMode = !isManageMode },
                         shape = RectangleShape,
-                        focusedScale = 1.04f,
+                        focusedScale = 1.0f,
+                        focusedBorderWidth = 1.5.dp,
                         focusedBorderColor = FocusWhite
                     ) { isFocused ->
                         Row(
@@ -168,22 +210,18 @@ fun ProfilePickerScreen(
                                     color = if (isFocused) FocusWhite else BorderHairline,
                                     shape = RectangleShape
                                 )
-                                .padding(horizontal = 22.dp, vertical = 10.dp)
+                                .padding(horizontal = 24.dp, vertical = 10.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                contentDescription = "Sign Out",
-                                tint = if (isFocused) FocusWhite else TextMuted,
-                                modifier = Modifier.size(18.dp)
+                                imageVector = if (isManageMode) Icons.Default.Check else Icons.Default.Edit,
+                                contentDescription = if (isManageMode) "Done" else "Manage Profiles",
+                                tint = if (isFocused) FocusWhite else TextSecondary,
+                                modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = when {
-                                    isGuest -> "Exit Guest Mode"
-                                    !userEmail.isNullOrBlank() -> "Sign Out ($userEmail)"
-                                    else -> "Sign Out"
-                                },
+                                text = if (isManageMode) "Done" else "Manage Profiles",
                                 style = ErasmusTvTypography.Body.copy(fontSize = 14.sp),
-                                color = if (isFocused) FocusWhite else TextMuted
+                                color = if (isFocused) FocusWhite else TextPrimary
                             )
                         }
                     }
@@ -198,6 +236,7 @@ fun ProfilePickerScreen(
 private fun ProfileCard(
     profile: WatchProfile,
     isSelected: Boolean,
+    isManageMode: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
@@ -208,16 +247,14 @@ private fun ProfileCard(
         TvFocusableCard(
             onClick = onClick,
             shape = RectangleShape,
-            focusedScale = 1.05f,
+            focusedScale = 1.0f,
+            focusedBorderWidth = 1.5.dp,
             focusedBorderColor = FocusWhite,
-            unfocusedBorderColor = BorderHairline,
             modifier = modifier
         ) { isFocused ->
-            val gradient = getAvatarGradient(profile.avatarKey)
             Box(
                 modifier = Modifier
                     .size(110.dp)
-                    .background(Brush.linearGradient(gradient), RectangleShape)
                     .border(
                         width = 1.dp,
                         color = if (isFocused) FocusWhite else BorderHairline,
@@ -225,12 +262,37 @@ private fun ProfileCard(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = profile.name,
-                    tint = TextPrimary,
-                    modifier = Modifier.size(48.dp)
+                ProfileAvatarView(
+                    avatarKey = profile.avatarKey,
+                    profileName = profile.name,
+                    modifier = Modifier.fillMaxSize(),
+                    shape = RectangleShape,
+                    iconSize = 48.dp
                 )
+
+                if (isManageMode) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.45f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(Color.Black.copy(alpha = 0.75f), CircleShape)
+                                .border(1.dp, FocusWhite, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit Profile",
+                                tint = FocusWhite,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -253,9 +315,9 @@ private fun AddProfileCard(
         TvFocusableCard(
             onClick = onClick,
             shape = RectangleShape,
-            focusedScale = 1.05f,
-            focusedBorderColor = FocusWhite,
-            unfocusedBorderColor = BorderHairline
+            focusedScale = 1.0f,
+            focusedBorderWidth = 1.5.dp,
+            focusedBorderColor = FocusWhite
         ) { isFocused ->
             Box(
                 modifier = Modifier

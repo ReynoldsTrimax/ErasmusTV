@@ -419,4 +419,80 @@ object TvPlayerIcons {
             lineTo(19.5f, 7f)
         }.build()
     }
+
+    val Episodes: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "TvPlayerEpisodes",
+            defaultWidth = 24.dp,
+            defaultHeight = 24.dp,
+            viewportWidth = 24f,
+            viewportHeight = 24f
+        ).path(
+            stroke = SolidColor(Color.White),
+            strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            // Back stacked window (offset top-right)
+            moveTo(8.5f, 4f)
+            horizontalLineTo(19.5f)
+            curveTo(20.3f, 4f, 21f, 4.7f, 21f, 5.5f)
+            verticalLineTo(15f)
+
+            // Front window
+            moveTo(4.5f, 7.5f)
+            curveTo(3.7f, 7.5f, 3f, 8.2f, 3f, 9f)
+            verticalLineTo(18.5f)
+            curveTo(3f, 19.3f, 3.7f, 20f, 4.5f, 20f)
+            horizontalLineTo(15.5f)
+            curveTo(16.3f, 20f, 17f, 19.3f, 17f, 18.5f)
+            verticalLineTo(9f)
+            curveTo(17f, 8.2f, 16.3f, 7.5f, 15.5f, 7.5f)
+            close()
+        }.build()
+    }
+
+    val Soundwave: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "TvPlayerSoundwave",
+            defaultWidth = 16.dp,
+            defaultHeight = 16.dp,
+            viewportWidth = 16f,
+            viewportHeight = 16f
+        ).path(
+            stroke = SolidColor(Color.White),
+            strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round
+        ) {
+            moveTo(2.5f, 6.5f)
+            lineTo(2.5f, 9.5f)
+            moveTo(5.5f, 4f)
+            lineTo(5.5f, 12f)
+            moveTo(8.5f, 2f)
+            lineTo(8.5f, 14f)
+            moveTo(11.5f, 4.5f)
+            lineTo(11.5f, 11.5f)
+            moveTo(14.5f, 7f)
+            lineTo(14.5f, 9f)
+        }.build()
+    }
+
+    val ArrowForward: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "TvPlayerArrowForward",
+            defaultWidth = 20.dp,
+            defaultHeight = 20.dp,
+            viewportWidth = 20f,
+            viewportHeight = 20f
+        ).path(
+            stroke = SolidColor(Color.White),
+            strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round,
+            strokeLineJoin = StrokeJoin.Round
+        ) {
+            moveTo(7.5f, 4.5f)
+            lineTo(13.5f, 10f)
+            lineTo(7.5f, 15.5f)
+        }.build()
+    }
 }

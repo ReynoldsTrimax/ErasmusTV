@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+
 package com.erasmustv.app.ui.screens.player
 
 import android.view.KeyEvent
@@ -6,7 +8,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
@@ -83,7 +85,7 @@ fun TvPlayerSubmenu(
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
-        visible = activeMenu != PlayerActiveMenu.None,
+        visible = activeMenu != PlayerActiveMenu.None && activeMenu != PlayerActiveMenu.Episodes,
         enter = fadeIn() + slideInHorizontally { it / 2 },
         exit = fadeOut() + slideOutHorizontally { it / 2 },
         modifier = modifier
@@ -96,14 +98,16 @@ fun TvPlayerSubmenu(
                 .clickable(onClick = onClose),
             contentAlignment = Alignment.CenterEnd
         ) {
-            // Elegant right panel drawer
+            // Elegant right panel drawer with trapped focus
             Box(
                 modifier = Modifier
                     .width(440.dp)
                     .fillMaxHeight()
                     .background(SurfaceDark)
-                    .border(BorderStroke(1.dp, BorderSubtle))
                     .clickable(enabled = false) {}
+                    .focusProperties {
+                        onExit = { FocusRequester.Cancel }
+                    }
                     .padding(28.dp)
             ) {
                 when (activeMenu) {
@@ -117,7 +121,7 @@ fun TvPlayerSubmenu(
                             onClose = onClose
                         ) { itemFocusRequesters ->
                             LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 itemsIndexed(audioTracks) { index, track ->
@@ -125,6 +129,8 @@ fun TvPlayerSubmenu(
                                         title = track.label,
                                         subtitle = if (track.language.isNotBlank()) track.language.uppercase() else null,
                                         isSelected = track.isSelected,
+                                        isFirstItem = (index == 0),
+                                        isLastItem = (index == audioTracks.size - 1),
                                         focusRequester = itemFocusRequesters.getOrNull(index),
                                         onClick = {
                                             onSelectAudioTrack(track)
@@ -147,7 +153,7 @@ fun TvPlayerSubmenu(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = "Subtitles",
                                         style = ErasmusTvTypography.SectionTitle.copy(
@@ -164,27 +170,14 @@ fun TvPlayerSubmenu(
                                     )
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .background(SurfaceElevated, RoundedCornerShape(6.dp))
-                                        .clickable(onClick = onClose),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = TvPlayerIcons.Close,
-                                        contentDescription = "Close Menu",
-                                        tint = TextSecondary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
+                                SubmenuCloseButton(onClose = onClose)
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
 
-                            // Tab Switcher (Tracks vs Appearance)
+                            // Tab Switcher (Tracks vs Appearance - de-boxified)
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 SubmenuTabButton(
@@ -214,7 +207,7 @@ fun TvPlayerSubmenu(
                                     trackFocusRequesters.getOrNull(selectedIndex)?.requestFocus()
                                 }
                                 LazyColumn(
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
                                     modifier = Modifier.fillMaxSize()
                                 ) {
                                     itemsIndexed(subtitleTracks) { index, track ->
@@ -222,6 +215,8 @@ fun TvPlayerSubmenu(
                                             title = track.label,
                                             subtitle = if (!track.isOff && track.language.isNotBlank()) track.language.uppercase() else null,
                                             isSelected = track.isSelected,
+                                            isFirstItem = (index == 0),
+                                            isLastItem = (index == subtitleTracks.size - 1),
                                             focusRequester = trackFocusRequesters.getOrNull(index),
                                             onClick = {
                                                 onSelectSubtitleTrack(track)
@@ -268,12 +263,14 @@ fun TvPlayerSubmenu(
                                             color = TextMuted
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
-                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            SubtitleFont.entries.forEach { font ->
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            SubtitleFont.entries.forEachIndexed { fontIndex, font ->
                                                 SubmenuRowItem(
                                                     title = font.displayName,
                                                     subtitle = if (font == SubtitleFont.BOSTONE) "Signature Erasmus Typography" else null,
                                                     isSelected = currentSubtitleFont == font,
+                                                    isFirstItem = false,
+                                                    isLastItem = false,
                                                     focusRequester = null,
                                                     onClick = { onSelectSubtitleFont(font) },
                                                     onBackOrLeft = onClose
@@ -290,60 +287,53 @@ fun TvPlayerSubmenu(
                                             color = TextMuted
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(SurfaceElevated, RoundedCornerShape(8.dp))
-                                                .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
-                                                .padding(14.dp)
-                                        ) {
-                                            Column {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) {
-                                                    Text(
-                                                        text = "Auto-Sync Engine",
-                                                        style = ErasmusTvTypography.ButtonText.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold),
-                                                        color = TextPrimary
-                                                    )
-                                                    Text(
-                                                        text = "Active",
-                                                        style = ErasmusTvTypography.Badge.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
-                                                        color = Color(0xFF4CAF50)
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.height(4.dp))
+                                        Column {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
                                                 Text(
-                                                    text = autoSyncStatus,
-                                                    style = ErasmusTvTypography.Body,
-                                                    color = TextSecondary
+                                                    text = "Auto-Sync Engine",
+                                                    style = ErasmusTvTypography.ButtonText.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                                                    color = TextPrimary
                                                 )
-                                                Spacer(modifier = Modifier.height(12.dp))
-                                                Row(
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) {
-                                                    SubmenuOptionChip(
-                                                        title = "-0.5s",
-                                                        isSelected = false,
-                                                        onClick = { onNudgeSubtitleSync(-500L) },
-                                                        modifier = Modifier.weight(1f)
-                                                    )
-                                                    SubmenuOptionChip(
-                                                        title = "Reset",
-                                                        isSelected = false,
-                                                        onClick = { onNudgeSubtitleSync(0L) },
-                                                        modifier = Modifier.weight(1f)
-                                                    )
-                                                    SubmenuOptionChip(
-                                                        title = "+0.5s",
-                                                        isSelected = false,
-                                                        onClick = { onNudgeSubtitleSync(500L) },
-                                                        modifier = Modifier.weight(1f)
-                                                    )
-                                                }
+                                                Text(
+                                                    text = "Active",
+                                                    style = ErasmusTvTypography.Badge.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                                                    color = Color(0xFF4CAF50)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = autoSyncStatus,
+                                                style = ErasmusTvTypography.Body,
+                                                color = TextSecondary
+                                            )
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                SubmenuOptionChip(
+                                                    title = "-0.5s",
+                                                    isSelected = false,
+                                                    onClick = { onNudgeSubtitleSync(-500L) },
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                SubmenuOptionChip(
+                                                    title = "Reset",
+                                                    isSelected = false,
+                                                    onClick = { onNudgeSubtitleSync(0L) },
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                SubmenuOptionChip(
+                                                    title = "+0.5s",
+                                                    isSelected = false,
+                                                    isLastItem = true,
+                                                    onClick = { onNudgeSubtitleSync(500L) },
+                                                    modifier = Modifier.weight(1f)
+                                                )
                                             }
                                         }
                                         Spacer(modifier = Modifier.height(24.dp))
@@ -363,7 +353,7 @@ fun TvPlayerSubmenu(
                             onClose = onClose
                         ) { itemFocusRequesters ->
                             LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 itemsIndexed(qualityTracks) { index, track ->
@@ -371,6 +361,8 @@ fun TvPlayerSubmenu(
                                         title = track.label,
                                         subtitle = if (track.bitrate > 0) "${track.bitrate / 1000} kbps" else null,
                                         isSelected = track.isSelected,
+                                        isFirstItem = (index == 0),
+                                        isLastItem = (index == qualityTracks.size - 1),
                                         focusRequester = itemFocusRequesters.getOrNull(index),
                                         onClick = {
                                             onSelectQualityTrack(track)
@@ -393,7 +385,7 @@ fun TvPlayerSubmenu(
                             onClose = onClose
                         ) { itemFocusRequesters ->
                             LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 itemsIndexed(servers) { index, server ->
@@ -402,6 +394,8 @@ fun TvPlayerSubmenu(
                                         title = "${server.flag}  ${server.name}",
                                         subtitle = "${server.badge} · ${server.description}",
                                         isSelected = isSelected,
+                                        isFirstItem = (index == 0),
+                                        isLastItem = (index == servers.size - 1),
                                         focusRequester = itemFocusRequesters.getOrNull(index),
                                         onClick = {
                                             onSelectServer(server.id)
@@ -414,6 +408,7 @@ fun TvPlayerSubmenu(
                         }
                     }
 
+                    PlayerActiveMenu.Episodes,
                     PlayerActiveMenu.None -> {}
                 }
             }
@@ -448,7 +443,7 @@ private fun SubmenuContent(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     style = ErasmusTvTypography.SectionTitle.copy(
@@ -465,25 +460,76 @@ private fun SubmenuContent(
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .background(SurfaceElevated, RoundedCornerShape(6.dp))
-                    .clickable(onClick = onClose),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = TvPlayerIcons.Close,
-                    contentDescription = "Close Menu",
-                    tint = TextSecondary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
+            SubmenuCloseButton(onClose = onClose)
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         content(focusRequesters)
+    }
+}
+
+@Composable
+private fun SubmenuCloseButton(
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    Box(
+        modifier = modifier
+            .size(36.dp)
+            .then(
+                if (isFocused) {
+                    Modifier
+                        .border(1.5.dp, Color.White, RoundedCornerShape(4.dp))
+                        .background(Color(0xFF1B1B1E), RoundedCornerShape(4.dp))
+                } else {
+                    Modifier.background(Color.Transparent)
+                }
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClose
+            )
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    when (keyEvent.nativeKeyEvent.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_CENTER,
+                        KeyEvent.KEYCODE_ENTER,
+                        KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            onClose()
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            // Lock focus inside drawer
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            // Lock focus inside drawer
+                            true
+                        }
+                        KeyEvent.KEYCODE_BACK,
+                        KeyEvent.KEYCODE_ESCAPE,
+                        KeyEvent.KEYCODE_DPAD_LEFT -> {
+                            onClose()
+                            true
+                        }
+                        else -> false
+                    }
+                } else false
+            }
+            .focusable(interactionSource = interactionSource),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = TvPlayerIcons.Close,
+            contentDescription = "Close Menu",
+            tint = if (isFocused) FocusWhite else TextSecondary,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
 
@@ -492,6 +538,8 @@ private fun SubmenuRowItem(
     title: String,
     subtitle: String?,
     isSelected: Boolean,
+    isFirstItem: Boolean = false,
+    isLastItem: Boolean = false,
     focusRequester: FocusRequester?,
     onClick: () -> Unit,
     onBackOrLeft: () -> Unit
@@ -503,21 +551,17 @@ private fun SubmenuRowItem(
         Modifier.focusRequester(focusRequester)
     } else Modifier
 
-    val shape = RoundedCornerShape(6.dp)
-
     Box(
         modifier = reqModifier
             .fillMaxWidth()
-            .border(
-                BorderStroke(
-                    width = if (isFocused) 1.5.dp else 1.dp,
-                    color = if (isFocused) BorderFocused else if (isSelected) BorderFocused.copy(alpha = 0.4f) else BorderSubtle
-                ),
-                shape = shape
-            )
-            .background(
-                if (isFocused) SurfaceElevated else if (isSelected) SurfaceElevated.copy(alpha = 0.5f) else Color(0x1AFFFFFF),
-                shape = shape
+            .then(
+                if (isFocused) {
+                    Modifier
+                        .border(1.5.dp, Color.White, RoundedCornerShape(4.dp))
+                        .background(Color(0xFF1B1B1E), RoundedCornerShape(4.dp))
+                } else {
+                    Modifier.background(Color.Transparent)
+                }
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -531,6 +575,22 @@ private fun SubmenuRowItem(
                         KeyEvent.KEYCODE_ENTER,
                         KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                             onClick()
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            if (isFirstItem) {
+                                // Lock focus inside: consume UP on first item
+                                true
+                            } else false
+                        }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            if (isLastItem) {
+                                // Lock focus inside: consume DOWN on last item
+                                true
+                            } else false
+                        }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            // Lock focus inside: consume RIGHT so focus doesn't leave drawer
                             true
                         }
                         KeyEvent.KEYCODE_DPAD_LEFT,
@@ -544,7 +604,7 @@ private fun SubmenuRowItem(
                 } else false
             }
             .focusable(interactionSource = interactionSource)
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(horizontal = 12.dp, vertical = 12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -555,17 +615,20 @@ private fun SubmenuRowItem(
                 Text(
                     text = title,
                     style = ErasmusTvTypography.ButtonText.copy(
-                        fontSize = 14.sp,
-                        fontWeight = if (isFocused || isSelected) FontWeight.Bold else FontWeight.Medium
+                        fontSize = 14.5.sp,
+                        fontWeight = if (isFocused || isSelected) FontWeight.Bold else FontWeight.Normal
                     ),
-                    color = if (isFocused || isSelected) FocusWhite else TextPrimary
+                    color = if (isFocused || isSelected) FocusWhite else TextSecondary
                 )
                 if (!subtitle.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = subtitle,
-                        style = ErasmusTvTypography.Badge.copy(fontSize = 11.sp),
-                        color = if (isFocused) TextSecondary else TextMuted
+                        style = ErasmusTvTypography.Badge.copy(
+                            fontSize = 11.sp,
+                            fontWeight = if (isFocused || isSelected) FontWeight.SemiBold else FontWeight.Normal
+                        ),
+                        color = if (isFocused || isSelected) FocusWhite.copy(alpha = 0.8f) else TextMuted
                     )
                 }
             }
@@ -575,7 +638,7 @@ private fun SubmenuRowItem(
                     imageVector = TvPlayerIcons.Check,
                     contentDescription = "Selected",
                     tint = FocusWhite,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -587,24 +650,22 @@ private fun SubmenuTabButton(
     title: String,
     isSelected: Boolean,
     onClick: () -> Unit,
+    onDpadDown: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val shape = RoundedCornerShape(8.dp)
 
     Box(
         modifier = modifier
-            .border(
-                BorderStroke(
-                    width = if (isFocused) 1.5.dp else 1.dp,
-                    color = if (isFocused) BorderFocused else if (isSelected) FocusWhite.copy(alpha = 0.5f) else BorderSubtle
-                ),
-                shape = shape
-            )
-            .background(
-                if (isFocused) SurfaceElevated else if (isSelected) SurfaceElevated.copy(alpha = 0.6f) else Color.Transparent,
-                shape = shape
+            .then(
+                if (isFocused) {
+                    Modifier
+                        .border(1.5.dp, Color.White, RoundedCornerShape(4.dp))
+                        .background(Color(0xFF1B1B1E), RoundedCornerShape(4.dp))
+                } else {
+                    Modifier.background(Color.Transparent)
+                }
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -620,21 +681,31 @@ private fun SubmenuTabButton(
                             onClick()
                             true
                         }
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            // Lock focus inside: consume UP
+                            true
+                        }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            if (onDpadDown != null) {
+                                onDpadDown()
+                                true
+                            } else false
+                        }
                         else -> false
                     }
                 } else false
             }
             .focusable(interactionSource = interactionSource)
-            .padding(vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = title,
             style = ErasmusTvTypography.ButtonText.copy(
-                fontSize = 13.sp,
+                fontSize = 13.5.sp,
                 fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Medium
             ),
-            color = if (isSelected || isFocused) FocusWhite else TextSecondary
+            color = if (isSelected || isFocused) FocusWhite else TextMuted
         )
     }
 }
@@ -643,25 +714,23 @@ private fun SubmenuTabButton(
 private fun SubmenuOptionChip(
     title: String,
     isSelected: Boolean,
+    isLastItem: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val shape = RoundedCornerShape(6.dp)
 
     Box(
         modifier = modifier
-            .border(
-                BorderStroke(
-                    width = if (isFocused) 1.5.dp else 1.dp,
-                    color = if (isFocused) BorderFocused else if (isSelected) BorderFocused.copy(alpha = 0.6f) else BorderSubtle
-                ),
-                shape = shape
-            )
-            .background(
-                if (isFocused) SurfaceElevated else if (isSelected) Color(0x221D90F5) else SurfaceDark,
-                shape = shape
+            .then(
+                if (isFocused) {
+                    Modifier
+                        .border(1.5.dp, Color.White, RoundedCornerShape(4.dp))
+                        .background(Color(0xFF1B1B1E), RoundedCornerShape(4.dp))
+                } else {
+                    Modifier.background(Color.Transparent)
+                }
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -677,21 +746,27 @@ private fun SubmenuOptionChip(
                             onClick()
                             true
                         }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            if (isLastItem) true else false
+                        }
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                            if (isLastItem) true else false
+                        }
                         else -> false
                     }
                 } else false
             }
             .focusable(interactionSource = interactionSource)
-            .padding(vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = title,
             style = ErasmusTvTypography.ButtonText.copy(
-                fontSize = 12.sp,
+                fontSize = 12.5.sp,
                 fontWeight = if (isSelected || isFocused) FontWeight.Bold else FontWeight.Normal
             ),
-            color = if (isSelected || isFocused) FocusWhite else TextPrimary
+            color = if (isSelected || isFocused) FocusWhite else TextMuted
         )
     }
 }

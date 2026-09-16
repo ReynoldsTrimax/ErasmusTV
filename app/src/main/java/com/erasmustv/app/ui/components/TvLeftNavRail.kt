@@ -516,28 +516,13 @@ private fun MinimalProfileItem(
             // Just for that period of time while expanded: replace MySpace logo with profile avatar badge
             val showProfile = isRailFocused && profile != null
             if (showProfile) {
-                val gradient = getAvatarGradient(profile!!.avatarKey)
-                Box(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .background(Brush.linearGradient(gradient), RoundedCornerShape(3.dp))
-                        .border(
-                            width = 1.dp,
-                            color = if (isFocused) Color.White else BorderHairline,
-                            shape = RoundedCornerShape(3.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = profile.name.take(1).uppercase(),
-                        style = ErasmusTvTypography.Badge.copy(
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            lineHeight = 9.sp
-                        ),
-                        color = Color.White
-                    )
-                }
+                ProfileAvatarView(
+                    avatarKey = profile!!.avatarKey,
+                    profileName = profile.name,
+                    modifier = Modifier.size(18.dp),
+                    shape = RoundedCornerShape(3.dp),
+                    iconSize = 12.dp
+                )
             } else {
                 Icon(
                     imageVector = TvNavIcons.MySpace,

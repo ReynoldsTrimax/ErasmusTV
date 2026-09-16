@@ -88,7 +88,6 @@ fun TvPlayerScrubPreview(
                         .width(260.dp)
                         .height(146.dp)
                         .background(SurfaceDark, RectangleShape)
-                        .border(BorderStroke(1.5.dp, BorderFocused), RectangleShape)
                 ) {
                     if (previewBitmap != null) {
                         Image(

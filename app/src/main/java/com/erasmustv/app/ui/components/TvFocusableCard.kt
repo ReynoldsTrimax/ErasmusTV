@@ -33,7 +33,7 @@ fun TvFocusableCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     shape: Shape = RectangleShape,
-    focusedScale: Float = 1.04f,
+    focusedScale: Float = 1.0f,
     focusedBorderWidth: Dp = 1.5.dp,
     unfocusedBorderWidth: Dp = 0.dp,
     focusedBorderColor: Color = FocusWhite,
@@ -43,10 +43,6 @@ fun TvFocusableCard(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
-    // Only run the scale animation when a real scale delta exists.
-    // If focusedScale == 1.0f (most cards), skip the animator entirely to save
-    // one animateFloatAsState instance per card — which on a full LazyRow is
-    // 10-20 concurrent animators running for zero visual effect.
     val scale = if (focusedScale != 1.0f) {
         val animatedScale by animateFloatAsState(
             targetValue = if (isFocused) focusedScale else 1.0f,
@@ -58,13 +54,14 @@ fun TvFocusableCard(
         1.0f
     }
 
-    // Border alpha drives focus feedback — keep it fast (80ms) so the
-    // selection indicator appears immediately without feeling sluggish.
     val borderAlpha by animateFloatAsState(
         targetValue = if (isFocused) 1.0f else 0.0f,
         animationSpec = tween(durationMillis = 80, easing = FastOutLinearInEasing),
         label = "tvCardBorderAlpha"
     )
+
+    val hasBorder = (isFocused && focusedBorderWidth > 0.dp && focusedBorderColor != Color.Transparent) ||
+            (!isFocused && unfocusedBorderWidth > 0.dp && unfocusedBorderColor != Color.Transparent)
 
     Box(
         modifier = modifier
@@ -74,15 +71,19 @@ fun TvFocusableCard(
                 this.shape = shape
                 clip = false
             }
-            .border(
-                BorderStroke(
-                    width = if (isFocused) focusedBorderWidth else unfocusedBorderWidth,
-                    color = if (isFocused)
-                        focusedBorderColor.copy(alpha = borderAlpha)
-                    else
-                        unfocusedBorderColor
-                ),
-                shape = shape
+            .then(
+                if (hasBorder) {
+                    Modifier.border(
+                        BorderStroke(
+                            width = if (isFocused) focusedBorderWidth else unfocusedBorderWidth,
+                            color = if (isFocused)
+                                focusedBorderColor.copy(alpha = borderAlpha)
+                            else
+                                unfocusedBorderColor
+                        ),
+                        shape = shape
+                    )
+                } else Modifier
             )
             .clickable(
                 interactionSource = interactionSource,

@@ -215,7 +215,6 @@ fun HeroBillboard(
                         Box(
                             modifier = Modifier
                                 .background(Color(0x3DFFFFFF), RectangleShape)
-                                .border(1.dp, Color(0x2BFFFFFF), RectangleShape)
                                 .padding(horizontal = 7.dp, vertical = 3.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -235,7 +234,6 @@ fun HeroBillboard(
                             Box(
                                 modifier = Modifier
                                     .background(Color(0x3DFFFFFF), RectangleShape)
-                                    .border(1.dp, Color(0x2BFFFFFF), RectangleShape)
                                     .padding(horizontal = 7.dp, vertical = 3.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -255,7 +253,6 @@ fun HeroBillboard(
                             Box(
                                 modifier = Modifier
                                     .background(Color(0x3DFFFFFF), RectangleShape)
-                                    .border(1.dp, Color(0x2BFFFFFF), RectangleShape)
                                     .padding(horizontal = 7.dp, vertical = 3.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -533,7 +530,6 @@ private fun HeroCarouselIndicator(
         modifier = modifier
             .clip(RectangleShape)
             .background(Color(0x2B080810), RectangleShape)
-            .border(1.dp, Color(0x26FFFFFF), RectangleShape)
             .padding(horizontal = 10.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {

@@ -242,10 +242,12 @@ fun CategoriesScreen(
                                 TvFocusableCard(
                                     onClick = { viewModel.backToOverview() },
                                     shape = RectangleShape,
+                                    focusedScale = 1.0f,
+                                    focusedBorderColor = FocusWhite,
+                                    focusedBorderWidth = 1.5.dp,
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .focusRequester(firstItemFocusRequester),
-                                    focusedBorderColor = FocusWhite
+                                        .focusRequester(firstItemFocusRequester)
                                 ) { isFocused ->
                                     Box(
                                         modifier = Modifier

@@ -4,6 +4,7 @@ import com.erasmustv.app.data.local.PlaybackProgressStore
 import com.erasmustv.app.data.model.CinejoyCaption
 import com.erasmustv.app.data.model.ContinueWatchingItem
 import com.erasmustv.app.data.model.DirectStreamResult
+import com.erasmustv.app.data.model.PlaybackProgress
 import com.erasmustv.app.data.model.SubtitleTrack
 import com.erasmustv.app.data.remote.CinejoyStreamResolver
 import com.erasmustv.app.data.remote.SubtitleResolver
@@ -141,6 +142,16 @@ class StreamRepository(
             episode = episode,
             logoPath = logoPath
         )
+    }
+
+    fun getPlaybackProgress(
+        profileId: String,
+        mediaType: String,
+        tmdbId: String,
+        season: Int? = null,
+        episode: Int? = null
+    ): PlaybackProgress? {
+        return progressStore.getProgress(profileId, mediaType, tmdbId, season, episode)
     }
 
     fun getResumePosition(

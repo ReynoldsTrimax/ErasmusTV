@@ -58,6 +58,7 @@ import com.erasmustv.app.core.theme.BorderHairline
 import com.erasmustv.app.core.theme.ElectricBlue
 import com.erasmustv.app.core.theme.ErasmusTvTypography
 import com.erasmustv.app.core.theme.ErrorRed
+import com.erasmustv.app.core.theme.FocusWhite
 import com.erasmustv.app.core.theme.PitchBlack
 import com.erasmustv.app.core.theme.SurfaceDark
 import com.erasmustv.app.core.theme.TextMuted
@@ -403,7 +404,9 @@ fun LoginScreen(
                     } else {
                         TvFocusableCard(
                             onClick = { viewModel.login(onLoginSuccess) },
-                            focusedScale = 1.04f,
+                            focusedScale = 1.0f,
+                            focusedBorderWidth = 1.5.dp,
+                            focusedBorderColor = FocusWhite,
                             shape = RectangleShape,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -438,7 +441,9 @@ fun LoginScreen(
                                 googleLauncher.launch(googleSignInClient.signInIntent)
                             } catch (_: Exception) {}
                         },
-                        focusedScale = 1.04f,
+                        focusedScale = 1.0f,
+                        focusedBorderWidth = 1.5.dp,
+                        focusedBorderColor = FocusWhite,
                         shape = RectangleShape,
                         modifier = Modifier.fillMaxWidth()
                     ) { isFocused ->
@@ -473,7 +478,9 @@ fun LoginScreen(
                     // Continue as Guest Option
                     TvFocusableCard(
                         onClick = { viewModel.continueAsGuest(onLoginSuccess) },
-                        focusedScale = 1.04f,
+                        focusedScale = 1.0f,
+                        focusedBorderWidth = 1.5.dp,
+                        focusedBorderColor = FocusWhite,
                         shape = RectangleShape,
                         modifier = Modifier.fillMaxWidth()
                     ) { isFocused ->
@@ -529,7 +536,6 @@ private fun FeaturePill(text: String) {
     Box(
         modifier = Modifier
             .background(SurfaceDark, RectangleShape)
-            .border(1.dp, BorderHairline, RectangleShape)
             .padding(horizontal = 14.dp, vertical = 6.dp)
     ) {
         Text(

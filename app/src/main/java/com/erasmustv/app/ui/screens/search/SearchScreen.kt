@@ -2,6 +2,7 @@ package com.erasmustv.app.ui.screens.search
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
@@ -207,7 +208,9 @@ fun SearchScreen(
                                 onClick = { viewModel.onQueryChange("") },
                                 shape = RectangleShape,
                                 modifier = Modifier.size(26.dp),
-                                focusedBorderColor = FocusWhite
+                                focusedScale = 1.0f,
+                                focusedBorderColor = FocusWhite,
+                                focusedBorderWidth = 1.5.dp
                             ) { isFocused ->
                                 Box(
                                     modifier = Modifier

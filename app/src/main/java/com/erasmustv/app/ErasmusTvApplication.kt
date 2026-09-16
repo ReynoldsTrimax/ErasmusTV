@@ -35,6 +35,7 @@ class ErasmusTvApplication : Application(), ImageLoaderFactory {
             }
             .crossfade(true)
             .respectCacheHeaders(false)
+            .logger(DebugLogger())
             .okHttpClient { com.erasmustv.app.core.network.NetworkClient.createOkHttpClient() }
             .build()
     }

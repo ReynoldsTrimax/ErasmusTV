@@ -3,9 +3,13 @@ package com.erasmustv.app.ui.screens.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.erasmustv.app.data.local.ProfileManager
+import com.erasmustv.app.data.model.PlaybackProgress
 import com.erasmustv.app.data.model.STREAM_SERVERS
 import com.erasmustv.app.data.model.StreamServer
 import com.erasmustv.app.data.model.SubtitleTrack
+import com.erasmustv.app.data.model.TvEpisode
+import com.erasmustv.app.data.model.TvSeason
+import com.erasmustv.app.data.repository.MediaRepository
 import com.erasmustv.app.data.repository.StreamRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,8 +39,29 @@ class TvPlayerViewModel(
     val logoPath: String? = null,
     private val streamRepository: StreamRepository,
     private val profileManager: ProfileManager,
+    private val mediaRepository: MediaRepository? = null,
     private val okHttpClient: okhttp3.OkHttpClient? = null
 ) : ViewModel() {
+
+    private var cachedProfileId: String = "default-profile"
+
+    private val _currentSeason = MutableStateFlow(season ?: 1)
+    val currentSeason: StateFlow<Int> = _currentSeason.asStateFlow()
+
+    private val _currentEpisode = MutableStateFlow(episode ?: 1)
+    val currentEpisode: StateFlow<Int> = _currentEpisode.asStateFlow()
+
+    private val _currentEpisodeTitle = MutableStateFlow<String?>(null)
+    val currentEpisodeTitle: StateFlow<String?> = _currentEpisodeTitle.asStateFlow()
+
+    private val _showSeasons = MutableStateFlow<List<TvSeason>>(emptyList())
+    val showSeasons: StateFlow<List<TvSeason>> = _showSeasons.asStateFlow()
+
+    private val _currentSeasonEpisodes = MutableStateFlow<List<TvEpisode>>(emptyList())
+    val currentSeasonEpisodes: StateFlow<List<TvEpisode>> = _currentSeasonEpisodes.asStateFlow()
+
+    private val _isLoadingEpisodes = MutableStateFlow(false)
+    val isLoadingEpisodes: StateFlow<Boolean> = _isLoadingEpisodes.asStateFlow()
 
     private val _activeSubtitleCues = MutableStateFlow<List<com.erasmustv.app.data.subtitle.SubtitleCue>>(emptyList())
     val activeSubtitleCues: StateFlow<List<com.erasmustv.app.data.subtitle.SubtitleCue>> = _activeSubtitleCues.asStateFlow()
@@ -68,7 +93,45 @@ class TvPlayerViewModel(
     val availableServers: List<StreamServer> = STREAM_SERVERS
 
     init {
+        viewModelScope.launch {
+            cachedProfileId = profileManager.getActiveProfile()?.id ?: "default-profile"
+        }
         resolveStream("lisbon")
+        if (mediaType.equals("tv", ignoreCase = true)) {
+            loadEpisodesForSeason(_currentSeason.value)
+        }
+    }
+
+    fun loadEpisodesForSeason(seasonNumber: Int) {
+        if (mediaRepository == null) return
+        viewModelScope.launch {
+            _isLoadingEpisodes.value = true
+            if (_showSeasons.value.isEmpty()) {
+                mediaRepository.getTvDetails(tmdbId).onSuccess { details ->
+                    val regularSeasons = details.seasons.filter { it.seasonNumber > 0 }
+                    _showSeasons.value = if (regularSeasons.isNotEmpty()) regularSeasons else details.seasons
+                }
+            }
+            mediaRepository.getTvSeason(tmdbId, seasonNumber).onSuccess { seasonData ->
+                _currentSeasonEpisodes.value = seasonData.episodes
+                if (seasonNumber == _currentSeason.value) {
+                    val ep = seasonData.episodes.find { it.episodeNumber == _currentEpisode.value }
+                    if (ep != null) {
+                        _currentEpisodeTitle.value = ep.name
+                    }
+                }
+            }
+            _isLoadingEpisodes.value = false
+        }
+    }
+
+    fun switchEpisode(seasonNumber: Int, episodeNumber: Int, episodeTitle: String?) {
+        if (_currentSeason.value == seasonNumber && _currentEpisode.value == episodeNumber) return
+        _currentSeason.value = seasonNumber
+        _currentEpisode.value = episodeNumber
+        _currentEpisodeTitle.value = episodeTitle
+        loadEpisodesForSeason(seasonNumber)
+        resolveStream(_currentServerId.value)
     }
 
     fun selectServer(serverId: String) {
@@ -86,8 +149,11 @@ class TvPlayerViewModel(
 
             val profile = profileManager.getActiveProfile()
             val profileId = profile?.id ?: "default-profile"
+            cachedProfileId = profileId
+            val targetSeason = if (mediaType.equals("tv", ignoreCase = true)) _currentSeason.value else null
+            val targetEpisode = if (mediaType.equals("tv", ignoreCase = true)) _currentEpisode.value else null
             val resumeSeconds = streamRepository.getResumePosition(
-                profileId, mediaType, tmdbId, season, episode
+                profileId, mediaType, tmdbId, targetSeason, targetEpisode
             )
             val startPositionMs = resumeSeconds * 1000L
 
@@ -96,8 +162,8 @@ class TvPlayerViewModel(
                 tmdbId = tmdbId,
                 server = serverId,
                 title = title,
-                season = season,
-                episode = episode
+                season = targetSeason,
+                episode = targetEpisode
             ).fold(
                 onSuccess = { result ->
                     val server = result.servers.firstOrNull()
@@ -218,6 +284,17 @@ class TvPlayerViewModel(
         _streamState.value = PlayerStreamState.Error(message)
     }
 
+    fun getEpisodeProgressRatio(season: Int, episode: Int): Float {
+        val progress = streamRepository.getPlaybackProgress(
+            profileId = cachedProfileId,
+            mediaType = "tv",
+            tmdbId = tmdbId,
+            season = season,
+            episode = episode
+        ) ?: return 0f
+        return progress.progressRatio
+    }
+
     fun persistProgress(currentSeconds: Long, durationSeconds: Long?) {
         viewModelScope.launch {
             val profile = profileManager.getActiveProfile() ?: return@launch
@@ -230,8 +307,8 @@ class TvPlayerViewModel(
                 backdropPath = backdropPath,
                 seconds = currentSeconds,
                 duration = durationSeconds,
-                season = season,
-                episode = episode,
+                season = if (mediaType.equals("tv", ignoreCase = true)) _currentSeason.value else null,
+                episode = if (mediaType.equals("tv", ignoreCase = true)) _currentEpisode.value else null,
                 logoPath = logoPath
             )
         }

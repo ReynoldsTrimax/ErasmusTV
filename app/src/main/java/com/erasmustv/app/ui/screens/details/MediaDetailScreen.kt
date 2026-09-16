@@ -758,7 +758,6 @@ private fun DetailHero(
                         Box(
                             modifier = Modifier
                                 .background(Color(0x2E1E1E28), RectangleShape)
-                                .border(1.dp, Color(0x1FFFFFFF), RectangleShape)
                                 .padding(horizontal = 7.dp, vertical = 2.dp)
                         ) {
                             Text(
@@ -911,7 +910,6 @@ private fun DetailMetadataBadge(text: String) {
     Box(
         modifier = Modifier
             .background(Color(0x2E1E1E28), RectangleShape)
-            .border(1.dp, Color(0x26FFFFFF), RectangleShape)
             .padding(horizontal = 6.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -990,7 +988,6 @@ private fun RatingScoreCard(
         modifier = Modifier
             .width(82.dp)
             .background(Color(0x3D14141E), RectangleShape)
-            .border(1.dp, Color(0x1FFFFFFF), RectangleShape)
             .padding(horizontal = 7.dp, vertical = 6.dp)
     ) {
         Column {
@@ -1076,7 +1073,9 @@ private fun TvEpisodesSection(
                 TvFocusableCard(
                     onClick = { onSeasonSelect(season.seasonNumber) },
                     shape = RectangleShape,
+                    focusedScale = 1.0f,
                     focusedBorderColor = Color.White,
+                    focusedBorderWidth = 1.5.dp,
                     modifier = (if (index == 0 && firstItemFocusRequester != null) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
                         .onKeyEvent { keyEvent ->
                             if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionLeft && index == 0) {
@@ -1287,7 +1286,6 @@ private fun CastMemberItem(member: CastMember) {
                 .size(72.dp)
                 .clip(RectangleShape)
                 .background(SurfaceDark)
-                .border(1.dp, Color(0x26FFFFFF), RectangleShape)
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(

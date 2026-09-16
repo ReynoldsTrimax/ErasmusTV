@@ -73,6 +73,22 @@ class ProfileViewModel(
         }
     }
 
+    fun updateProfile(profile: WatchProfile, onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            profileRepository.updateProfile(profile)
+            loadProfiles()
+            onComplete?.invoke()
+        }
+    }
+
+    fun deleteProfile(profileId: String, onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            profileRepository.deleteProfile(profileId)
+            loadProfiles()
+            onComplete?.invoke()
+        }
+    }
+
     fun signOut(onSignedOut: () -> Unit) {
         viewModelScope.launch {
             profileRepository.clearActiveProfile()

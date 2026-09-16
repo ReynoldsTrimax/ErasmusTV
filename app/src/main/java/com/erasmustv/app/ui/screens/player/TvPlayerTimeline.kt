@@ -220,16 +220,8 @@ fun TvPlayerTimeline(
                 } else false
             }
             .focusable(interactionSource = interactionSource)
-            .background(
-                if (isFocused || isScrubbing) Color(0x18FFFFFF) else Color.Transparent,
-                RoundedCornerShape(8.dp)
-            )
-            .border(
-                width = if (isFocused || isScrubbing) 1.dp else 0.dp,
-                color = if (isFocused || isScrubbing) Color(0x33FFFFFF) else Color.Transparent,
-                shape = RoundedCornerShape(8.dp)
-            )
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .background(Color.Transparent)
+            .padding(horizontal = 4.dp, vertical = 6.dp)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Timecode & Status Row
@@ -349,11 +341,6 @@ fun TvPlayerTimeline(
                             .offset(x = thumbOffset)
                             .size(thumbSize)
                             .background(FocusWhite, CircleShape)
-                            .border(
-                                width = if (isScrubbing) 2.dp else 1.dp,
-                                color = if (isScrubbing) BorderFocused else Color(0x33000000),
-                                shape = CircleShape
-                            )
                     )
                 }
             }

@@ -413,6 +413,7 @@ fun AppNavigation(
                     backdropPath = backdropPath,
                     streamRepository = container.streamRepository,
                     profileManager = container.profileManager,
+                    mediaRepository = container.mediaRepository,
                     okHttpClient = container.okHttpClient
                 )
             }
