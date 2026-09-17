@@ -24,33 +24,42 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.erasmustv.app.core.theme.FocusWhite
+
+import com.erasmustv.app.core.theme.TvMotion
+import com.erasmustv.app.core.theme.rememberReducedMotion
 
 @Composable
 fun TvFocusableCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     shape: Shape = RectangleShape,
-    focusedScale: Float = 1.04f,
+    focusedScale: Float = TvMotion.FocusScaleCard,
     focusedBorderWidth: Dp = 1.5.dp,
     unfocusedBorderWidth: Dp = 0.dp,
     focusedBorderColor: Color = FocusWhite,
     unfocusedBorderColor: Color = Color.Transparent,
+    contentDescription: String? = null,
+    role: Role? = Role.Button,
     content: @Composable BoxScope.(isFocused: Boolean) -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    val isReducedMotion = rememberReducedMotion()
 
-    // Only run the scale animation when a real scale delta exists.
-    // If focusedScale == 1.0f (most cards), skip the animator entirely to save
-    // one animateFloatAsState instance per card — which on a full LazyRow is
-    // 10-20 concurrent animators running for zero visual effect.
-    val scale = if (focusedScale != 1.0f) {
+    val scale = if (focusedScale != 1.0f && !isReducedMotion) {
         val animatedScale by animateFloatAsState(
             targetValue = if (isFocused) focusedScale else 1.0f,
-            animationSpec = tween(durationMillis = 100, easing = FastOutLinearInEasing),
+            animationSpec = tween(
+                durationMillis = TvMotion.DURATION_FAST,
+                easing = TvMotion.EasingSilk
+            ),
             label = "tvCardScale"
         )
         animatedScale
@@ -58,31 +67,57 @@ fun TvFocusableCard(
         1.0f
     }
 
-    // Border alpha drives focus feedback — keep it fast (80ms) so the
-    // selection indicator appears immediately without feeling sluggish.
+    val shadowElevation by animateFloatAsState(
+        targetValue = if (isFocused && !isReducedMotion) 10f else 0f,
+        animationSpec = tween(
+            durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_FAST,
+            easing = TvMotion.EasingSilk
+        ),
+        label = "tvCardShadow"
+    )
+
     val borderAlpha by animateFloatAsState(
         targetValue = if (isFocused) 1.0f else 0.0f,
-        animationSpec = tween(durationMillis = 80, easing = FastOutLinearInEasing),
+        animationSpec = tween(
+            durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_FAST,
+            easing = TvMotion.EasingSilk
+        ),
         label = "tvCardBorderAlpha"
     )
 
+    val hasBorder = (isFocused && focusedBorderWidth > 0.dp && focusedBorderColor != Color.Transparent) ||
+            (!isFocused && unfocusedBorderWidth > 0.dp && unfocusedBorderColor != Color.Transparent)
+
     Box(
         modifier = modifier
+            .semantics(mergeDescendants = true) {
+                if (contentDescription != null) {
+                    this.contentDescription = contentDescription
+                }
+                if (role != null) {
+                    this.role = role
+                }
+            }
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
                 this.shape = shape
+                this.shadowElevation = shadowElevation
                 clip = false
             }
-            .border(
-                BorderStroke(
-                    width = if (isFocused) focusedBorderWidth else unfocusedBorderWidth,
-                    color = if (isFocused)
-                        focusedBorderColor.copy(alpha = borderAlpha)
-                    else
-                        unfocusedBorderColor
-                ),
-                shape = shape
+            .then(
+                if (hasBorder) {
+                    Modifier.border(
+                        BorderStroke(
+                            width = if (isFocused) focusedBorderWidth else unfocusedBorderWidth,
+                            color = if (isFocused)
+                                focusedBorderColor.copy(alpha = borderAlpha)
+                            else
+                                unfocusedBorderColor
+                        ),
+                        shape = shape
+                    )
+                } else Modifier
             )
             .clickable(
                 interactionSource = interactionSource,

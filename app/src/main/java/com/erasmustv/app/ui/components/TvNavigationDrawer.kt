@@ -94,7 +94,7 @@ fun TvTopBar(
                 val isSelected = currentRoute == item.route
                 TvFocusableCard(
                     onClick = { onNavigate(item.route) },
-                    focusedScale = 1.05f,
+                    focusedScale = 1.0f,
                     shape = RectangleShape
                 ) { isFocused ->
                     Row(
@@ -137,7 +137,7 @@ fun TvTopBar(
             // Profile Switcher Button
             TvFocusableCard(
                 onClick = onProfileClick,
-                focusedScale = 1.08f,
+                focusedScale = 1.0f,
                 shape = RectangleShape
             ) { isFocused ->
                 Row(
@@ -150,21 +150,13 @@ fun TvTopBar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val gradient = getAvatarGradient(activeProfile?.avatarKey ?: "slate")
-                    Box(
-                        modifier = Modifier
-                            .size(24.dp)
-                            .background(Brush.linearGradient(gradient), RectangleShape)
-                            .border(1.dp, BorderHairline, RectangleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Profile",
-                            tint = TextPrimary,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
+                    ProfileAvatarView(
+                        avatarKey = activeProfile?.avatarKey ?: "slate",
+                        profileName = activeProfile?.name ?: "Profile",
+                        modifier = Modifier.size(24.dp),
+                        shape = RectangleShape,
+                        iconSize = 14.dp
+                    )
                     Text(
                         text = activeProfile?.name ?: "Profile",
                         style = ErasmusTvTypography.Badge,

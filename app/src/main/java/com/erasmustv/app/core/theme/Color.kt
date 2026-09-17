@@ -2,35 +2,38 @@ package com.erasmustv.app.core.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Erasmus Pure OLED Black Canvas & Elevated Charcoal Surfaces
-val PitchBlack = Color(0xFF000000)
-val SurfaceDark = Color(0xFF0D0D0D)
-val SurfaceElevated = Color(0xFF141414)
-val SurfaceCard = Color(0xFF121212)
-val SurfaceCardBorder = Color(0xFF242424)
-val SurfaceStudioCard = Color(0xFF141414)
+// Layered Dark Surfaces System (Recommendation #11)
+val PitchBlack = Color(0xFF050505)       // Canvas background
+val SurfaceDark = Color(0xFF070708)      // Navigation & base overlay
+val SurfaceCard = Color(0xFF111112)      // Content card surface
+val SurfaceElevated = Color(0xFF181819)  // Focused / elevated card surface
+val SurfaceSecondary = Color(0xFF202021) // Secondary surface & buttons
+val SurfaceCardBorder = Color(0x1AFFFFFF) // Subtle card border
+val SurfaceStudioCard = Color(0xFF111114) // Studio tile base
 
 // Crisp White Focus Tokens & Hairline Borders
 val FocusWhite = Color(0xFFFFFFFF)
-val BorderHairline = Color(0xFF1F1F1F)
-val BorderSubtle = Color(0xFF2E2E2E)
+val BorderHairline = Color(0x1FFFFFFF)
+val BorderSubtle = Color(0x2EFFFFFF)
 val BorderFocused = Color(0xFFFFFFFF)
 val SurfacePill = Color(0xFF1C1C1E)
+val SurfaceFrosted = Color(0x2E1E1E28)
+val SurfaceFrostedBorder = Color(0x26FFFFFF)
 
 // Subtle Brand & Status Tokens
 val BrandAccent = Color(0xFFFFFFFF)
 val ElectricBlue = Color(0xFF1D90F5)
 val ElectricBlueSubtle = Color(0x1F1D90F5)
-val RatingGold = Color(0xFFFBBF24)
+val RatingGold = Color(0xFFFBBF24)       // Signature amber/gold accent (Recommendation #22)
 val MatchGreen = Color(0xFF46D369)
 val Top10Red = Color(0xFFE50914)
 val ErrorRed = Color(0xFFEF4444)
 
-// Typography Tokens - Editorial Hierarchy
-val TextPrimary = Color(0xFFFFFFFF)
-val TextSecondary = Color(0xFFA1A1AA)
-val TextMuted = Color(0xFF71717A)
-val BadgeBorder = Color(0xFF27272A)
+// Typography Tokens - Editorial Contrast Hierarchy (Recommendation #10 & #11)
+val TextPrimary = Color(0xFFF5F5F5)      // Crisp warm white
+val TextSecondary = Color(0xFFA0A0A5)    // Muted silver for metadata & subtitles
+val TextMuted = Color(0xFF68686D)        // Subtle tertiary text
+val BadgeBorder = Color(0x33FFFFFF)
 
 // Studio Palette References (neutral studio slates)
 val StudioDisneyBlue = Color(0xFF0063E5)

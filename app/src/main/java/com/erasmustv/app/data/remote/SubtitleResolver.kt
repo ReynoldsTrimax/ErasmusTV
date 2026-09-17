@@ -224,7 +224,22 @@ class SubtitleResolver(
             }
         }
 
-        val allRaw = wyzieDeferred.await() + stremioDeferred.await()
+        var allRaw = wyzieDeferred.await() + stremioDeferred.await()
+
+        // Fallback for multi-cour anime where external subtitles are cataloged under Season 2 (e.g., Solo Leveling S1E13..25 -> S2E1..13)
+        if (allRaw.isEmpty() && mediaType.equals("tv", ignoreCase = true) && season == 1 && episode != null && episode > 12) {
+            val fbSeason = 2
+            val fbEpisode = episode - 12
+            val wyzieFb = async { fetchWyzie(tmdbId, mediaType, fbSeason, fbEpisode) }
+            val stremioFb = async {
+                if (!resolvedImdb.isNullOrBlank()) {
+                    fetchStremio(resolvedImdb, mediaType, fbSeason, fbEpisode)
+                } else {
+                    emptyList()
+                }
+            }
+            allRaw = wyzieFb.await() + stremioFb.await()
+        }
 
         // Deduplicate and rank tracks cleanly
         val seenUrls = mutableSetOf<String>()

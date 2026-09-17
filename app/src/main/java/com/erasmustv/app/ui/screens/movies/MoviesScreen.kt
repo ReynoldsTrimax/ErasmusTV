@@ -42,9 +42,16 @@ import com.erasmustv.app.data.model.MediaItem
 import com.erasmustv.app.ui.components.HeroBillboard
 import com.erasmustv.app.ui.components.MediaSectionRow
 import com.erasmustv.app.ui.components.RankedSectionRow
+import com.erasmustv.app.ui.components.TvFeedSkeleton
 import com.erasmustv.app.ui.components.TvFocusableCard
 import com.erasmustv.app.ui.components.TvLeftNavRail
 import com.erasmustv.app.ui.navigation.NavRoutes
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import com.erasmustv.app.core.theme.TvMotion
+import com.erasmustv.app.core.theme.rememberReducedMotion
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -56,18 +63,38 @@ fun MoviesScreen(
     onProfileClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isReducedMotion = rememberReducedMotion()
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(PitchBlack)
     ) {
-        when (val state = uiState) {
-            is MoviesUiState.Loading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FocusWhite)
+        AnimatedContent(
+            targetState = uiState,
+            transitionSpec = {
+                if (isReducedMotion) {
+                    androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None
+                } else {
+                    fadeIn(
+                        animationSpec = tween(
+                            durationMillis = TvMotion.DURATION_ENTER,
+                            easing = TvMotion.EasingSilk
+                        )
+                    ) togetherWith fadeOut(
+                        animationSpec = tween(
+                            durationMillis = TvMotion.DURATION_FAST,
+                            easing = TvMotion.EasingSilk
+                        )
+                    )
                 }
-            }
+            },
+            label = "moviesScreenFeedTransition"
+        ) { state ->
+            when (state) {
+                is MoviesUiState.Loading -> {
+                    TvFeedSkeleton()
+                }
             is MoviesUiState.Error -> {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -82,7 +109,8 @@ fun MoviesScreen(
                 }
             }
             is MoviesUiState.Success -> {
-                val data = state.data
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val data = state.data
                 val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
                 val heroFocusRequester = remember { FocusRequester() }
                 val rankedFocusRequester = remember { FocusRequester() }
@@ -106,12 +134,17 @@ fun MoviesScreen(
 
                 val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
-                var selectedHeroItem by remember(data.heroMovie?.id) { mutableStateOf(data.heroMovie) }
+                val initialHero = data.heroMovie
+                    ?: data.popular.firstOrNull()
+                    ?: data.topRated.firstOrNull()
+                    ?: data.nowPlaying.firstOrNull()
+                var selectedHeroItem by remember(initialHero?.id) { mutableStateOf(initialHero) }
 
                 // Request initial focus once; never steal focus on recomposition or return
                 var hasRequestedInitialFocus by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
                     if (!hasRequestedInitialFocus) {
+                        kotlinx.coroutines.delay(60)
                         try {
                             heroFocusRequester.requestFocus()
                             hasRequestedInitialFocus = true
@@ -194,7 +227,7 @@ fun MoviesScreen(
                                 }
                             ) {
                                 HeroBillboard(
-                                    item = selectedHeroItem ?: data.heroMovie,
+                                    item = selectedHeroItem ?: initialHero,
                                     onPlayClick = onPlayClick,
                                     onDetailsClick = onMediaClick,
                                     heroFocusRequester = heroFocusRequester,
@@ -379,4 +412,6 @@ fun MoviesScreen(
             }
         }
     }
+}
+}
 }

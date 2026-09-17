@@ -73,7 +73,7 @@ fun AppNavigation(
     startDestination: String = NavRoutes.PROFILES
 ) {
     val safeNavigate: (String) -> Unit = remember(navController) {
-        { route ->
+        { route: String ->
             try {
                 val currentRoute = navController.currentBackStackEntry?.destination?.route
                 if (currentRoute != route) {
@@ -88,10 +88,47 @@ fun AppNavigation(
             } catch (_: Exception) {}
         }
     }
+    val isReducedMotion = com.erasmustv.app.core.theme.rememberReducedMotion()
 
     NavHost(
         navController = navController,
-        startDestination = startDestination
+        startDestination = startDestination,
+        enterTransition = {
+            if (isReducedMotion) androidx.compose.animation.EnterTransition.None
+            else androidx.compose.animation.fadeIn(
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_ENTER,
+                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+                )
+            )
+        },
+        exitTransition = {
+            if (isReducedMotion) androidx.compose.animation.ExitTransition.None
+            else androidx.compose.animation.fadeOut(
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_FAST,
+                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+                )
+            )
+        },
+        popEnterTransition = {
+            if (isReducedMotion) androidx.compose.animation.EnterTransition.None
+            else androidx.compose.animation.fadeIn(
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_ENTER,
+                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+                )
+            )
+        },
+        popExitTransition = {
+            if (isReducedMotion) androidx.compose.animation.ExitTransition.None
+            else androidx.compose.animation.fadeOut(
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_FAST,
+                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+                )
+            )
+        }
     ) {
         // Login
         composable(NavRoutes.LOGIN) {
@@ -413,6 +450,7 @@ fun AppNavigation(
                     backdropPath = backdropPath,
                     streamRepository = container.streamRepository,
                     profileManager = container.profileManager,
+                    mediaRepository = container.mediaRepository,
                     okHttpClient = container.okHttpClient
                 )
             }

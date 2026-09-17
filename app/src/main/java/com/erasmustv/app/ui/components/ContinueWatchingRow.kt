@@ -22,7 +22,9 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,10 +43,14 @@ import com.erasmustv.app.core.config.AppConfig
 import com.erasmustv.app.core.theme.ErasmusTvTypography
 import com.erasmustv.app.core.theme.FocusWhite
 import com.erasmustv.app.core.theme.PitchBlack
+import com.erasmustv.app.core.theme.RatingGold
 import com.erasmustv.app.core.theme.SurfaceCard
 import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
+import com.erasmustv.app.core.theme.TextSecondary
+import androidx.compose.ui.text.font.FontWeight
 import com.erasmustv.app.data.model.ContinueWatchingItem
+import androidx.compose.ui.semantics.Role
 
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -131,7 +137,7 @@ fun ContinueWatchingRow(
                     ContinueWatchingCard(
                         item = item,
                         onClick = { onItemClick(item) },
-                        cardWidth = 138,
+                        cardWidth = 200,
                         cardModifier = cardModifier
                     )
                 }
@@ -146,59 +152,134 @@ private fun ContinueWatchingCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     cardModifier: Modifier = Modifier,
-    cardWidth: Int = 138
+    cardWidth: Int = 200
 ) {
     val context = LocalContext.current
-    val imageRequest = remember(item.posterPath, item.backdropPath) {
+    val imagePath = item.backdropPath ?: item.posterPath
+    val imageRequest = remember(imagePath) {
         ImageRequest.Builder(context)
-            .data(AppConfig.posterUrl(item.posterPath ?: item.backdropPath))
+            .data(
+                if (item.backdropPath != null) AppConfig.backdropUrl(item.backdropPath)
+                else AppConfig.posterUrl(item.posterPath)
+            )
             .crossfade(false)
             .build()
     }
+
+    val a11yDescription = remember(item) {
+        buildString {
+            append("Resume ")
+            append(item.title)
+            if (item.mediaType == "tv" && item.season != null && item.episode != null) {
+                append(", Season ${item.season} Episode ${item.episode}")
+            }
+            append(", ${item.resumeLabel}")
+        }
+    }
+
+    val isReducedMotion = com.erasmustv.app.core.theme.rememberReducedMotion()
+    val animatedProgress by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = item.progressRatio,
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = if (isReducedMotion) 0 else 600,
+            easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+        ),
+        label = "cwProgressFill"
+    )
 
     Column(modifier = modifier.width(cardWidth.dp)) {
         TvFocusableCard(
             onClick = onClick,
             modifier = cardModifier
                 .fillMaxWidth()
-                .aspectRatio(2f / 3f),
+                .aspectRatio(16f / 9f),
             shape = RectangleShape,
-            focusedScale = 1.0f,
+            focusedScale = com.erasmustv.app.core.theme.TvMotion.FocusScaleCard,
             focusedBorderColor = FocusWhite,
-            focusedBorderWidth = 1.5.dp
+            focusedBorderWidth = 1.5.dp,
+            contentDescription = a11yDescription,
+            role = Role.Button
         ) { isFocused ->
+            val playIconAlpha by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (isFocused) 1.0f else 0.0f,
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = if (isReducedMotion) 0 else com.erasmustv.app.core.theme.TvMotion.DURATION_FAST,
+                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+                ),
+                label = "cwPlayAlpha"
+            )
+            val playIconScale by androidx.compose.animation.core.animateFloatAsState(
+                targetValue = if (isFocused) 1.0f else 0.82f,
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = if (isReducedMotion) 0 else com.erasmustv.app.core.theme.TvMotion.DURATION_FAST,
+                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+                ),
+                label = "cwPlayScale"
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(RectangleShape)
-                    .background(SurfaceCard)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            listOf(
+                                if (isFocused) Color(0xFF1E1E28) else Color(0xFF141418),
+                                if (isFocused) Color(0xFF14141A) else Color(0xFF0C0C0F)
+                            )
+                        )
+                    )
                     .border(
                         width = 1.dp,
                         color = if (isFocused) FocusWhite else com.erasmustv.app.core.theme.SurfaceCardBorder,
                         shape = RectangleShape
                     )
             ) {
-                // Vertical Poster art
+                // Landscape Backdrop Art
                 AsyncImage(
                     model = imageRequest,
-                    contentDescription = item.title,
+                    contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Progress Bar line at bottom
+                // Frosted Play Icon on Focus with smooth scale and alpha
+                if (playIconAlpha > 0.01f) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(36.dp)
+                            .graphicsLayer {
+                                scaleX = playIconScale
+                                scaleY = playIconScale
+                                alpha = playIconAlpha
+                            }
+                            .background(PitchBlack.copy(alpha = 0.76f), RectangleShape)
+                            .border(1.dp, Color(0x66FFFFFF), RectangleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = FocusWhite,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+
+                // Ultra-thin 2.5dp Animated Progress Bar at Bottom of Card (Recommendation #9)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(2.5.dp)
                         .align(Alignment.BottomCenter)
-                        .background(PitchBlack.copy(alpha = 0.8f))
+                        .background(PitchBlack.copy(alpha = 0.85f))
                 ) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(fraction = item.progressRatio)
+                            .fillMaxWidth(fraction = animatedProgress)
                             .height(2.5.dp)
-                            .background(FocusWhite)
+                            .background(RatingGold)
                     )
                 }
             }
@@ -216,23 +297,26 @@ private fun ContinueWatchingCard(
 
         Spacer(modifier = Modifier.height(2.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        // Unified Resume & Progress Metadata (Recommendation #9: e.g. "S1:E4 · 32 min remaining" or "68% watched · 42 min remaining")
+        val progressSubtitle = remember(item) {
+            val remaining = if (item.resumeLabel.isNotBlank()) item.resumeLabel else "Resume"
             if (item.mediaType == "tv" && item.season != null && item.episode != null) {
-                Text(
-                    text = "S${item.season} · E${item.episode}",
-                    style = ErasmusTvTypography.Badge.copy(fontSize = 9.5.sp),
-                    color = TextMuted
-                )
+                "S${item.season}:E${item.episode} · $remaining"
+            } else {
+                val pct = (item.progressRatio * 100).toInt().coerceIn(1, 99)
+                "$pct% watched · $remaining"
             }
-            Text(
-                text = item.resumeLabel,
-                style = ErasmusTvTypography.Badge.copy(fontSize = 9.5.sp),
-                color = TextMuted
-            )
         }
+
+        Text(
+            text = progressSubtitle,
+            style = ErasmusTvTypography.Badge.copy(
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Medium
+            ),
+            color = TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

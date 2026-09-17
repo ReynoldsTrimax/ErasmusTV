@@ -10,7 +10,8 @@ enum class PlayerActiveMenu {
     Audio,
     Subtitles,
     Quality,
-    Servers
+    Servers,
+    Episodes
 }
 
 @OptIn(UnstableApi::class)

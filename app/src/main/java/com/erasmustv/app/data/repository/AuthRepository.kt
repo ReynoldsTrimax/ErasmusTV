@@ -145,7 +145,9 @@ class AuthRepository(
 
     suspend fun logout() {
         try {
-            supabaseApi.logout()
+            if (!sessionManager.isGuest()) {
+                supabaseApi.logout()
+            }
         } catch (_: Exception) {
             // Best effort logout on server
         } finally {

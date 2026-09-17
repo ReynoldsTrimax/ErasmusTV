@@ -20,11 +20,14 @@ The legacy web application has been completely replaced with native Kotlin + Jet
 
 ## Conventions
 
-- Architecture: Clean Architecture (UI -> ViewModel -> Repository -> Remote / Local Data Sources)
+- Conventions: Clean Architecture (UI -> ViewModel -> Repository -> Remote / Local Data Sources)
 - TV Interaction: 100% remote D-pad operable (no touch, no mouse pointer dependencies)
-- Design Language: Erasmus OLED black (`#000000`), elevated dark surfaces (`#0D0D0D`), Electric Blue accent (`#1D90F5`), signature Bostone wordmark
+- Design Language: Erasmus OLED black (`#000000`), elevated dark surfaces (`#0D0D0D`), classic white focus border (`#FFFFFF`, 1.5.dp, 0% scale magnification), signature Bostone wordmark
+- Skeleton Loading: Custom animated shimmer skeletons (`TvFeedSkeleton`, `TvGridSkeleton`, `TvDetailSkeleton`, `TvSearchSkeleton`) instead of blank screens or spinning wheels
+- Accessibility & Semantics: `.semantics(mergeDescendants = true)` on all cards with `Role.Button`/`Role.Tab`, structured content descriptions, nullified decorative images
 - Playback: AndroidX Media3 with custom HTTP headers (`Referer: https://cinejoy.to/`), multi-server fallback cluster, and profile-isolated resume tracking
 - Database & Backend: Source of truth is PostgreSQL under `database/migrations/` (001 → 007) and Supabase GoTrue Auth / PostgREST APIs
+- Detailed Design System: See `docs/tv-design-system.md`
 
 ## Commands
 
@@ -37,4 +40,7 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew testDebugUnitTest
 
 # Assemble Debug APK
 JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew assembleDebug
+
+# Safe Static Configuration & Compiler Checks
+JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew checkKotlinGradlePluginConfigurationErrors compileDebugUnitTestKotlin compileDebugKotlin
 ```

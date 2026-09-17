@@ -40,8 +40,9 @@ fun MediaSectionRow(
     onItemClick: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
     onViewAllClick: (() -> Unit)? = null,
-    cardWidth: Int = 138,
+    cardWidth: Int = 140,
     firstItemFocusRequester: androidx.compose.ui.focus.FocusRequester? = null,
+    showNewBadge: Boolean = false,
     onNavigateLeftToRail: (() -> Unit)? = null,
     onNavigateDown: (() -> Unit)? = null,
     onNavigateUp: (() -> Unit)? = null
@@ -129,7 +130,8 @@ fun MediaSectionRow(
                         item = item,
                         onClick = { onItemClick(item) },
                         cardWidth = cardWidth,
-                        cardModifier = cardModifier
+                        cardModifier = cardModifier,
+                        badge = if (showNewBadge) "NEW" else null
                     )
                 }
             }

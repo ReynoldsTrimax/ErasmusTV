@@ -30,6 +30,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -77,6 +81,7 @@ import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
 import com.erasmustv.app.data.model.MediaItem
 import com.erasmustv.app.ui.components.MediaPosterCard
+import com.erasmustv.app.ui.components.TvFeedSkeleton
 import com.erasmustv.app.ui.components.TvFocusableCard
 import com.erasmustv.app.ui.components.TvLeftNavRail
 import com.erasmustv.app.ui.components.TvNavIcons
@@ -119,9 +124,7 @@ fun CategoriesScreen(
     ) {
         when (val state = uiState) {
             is CategoriesUiState.Loading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FocusWhite)
-                }
+                TvFeedSkeleton(contentShift = contentShift)
             }
             is CategoriesUiState.Overview -> {
                 CompositionLocalProvider(
@@ -242,10 +245,12 @@ fun CategoriesScreen(
                                 TvFocusableCard(
                                     onClick = { viewModel.backToOverview() },
                                     shape = RectangleShape,
+                                    focusedScale = 1.0f,
+                                    focusedBorderColor = FocusWhite,
+                                    focusedBorderWidth = 1.5.dp,
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .focusRequester(firstItemFocusRequester),
-                                    focusedBorderColor = FocusWhite
+                                        .focusRequester(firstItemFocusRequester)
                                 ) { isFocused ->
                                     Box(
                                         modifier = Modifier
@@ -391,42 +396,14 @@ fun CategoriesScreen(
 
 @Composable
 private fun CategorySectionHeader(title: String) {
-    Row(
+    Text(
+        text = title,
+        style = ErasmusTvTypography.SectionTitle,
+        color = TextPrimary,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = title,
-            style = ErasmusTvTypography.SectionTitle.copy(
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold
-            ),
-            color = TextPrimary
-        )
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = "View All",
-                style = ErasmusTvTypography.Badge.copy(
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                ),
-                color = TextSecondary
-            )
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = TextSecondary,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-    }
+            .padding(bottom = 12.dp)
+    )
 }
 
 @Composable
@@ -445,7 +422,7 @@ private fun BrowseTile(
             .width(185.dp)
             .height(86.dp),
         shape = RectangleShape,
-        focusedScale = 1.0f,
+        focusedScale = 1.025f,
         focusedBorderColor = FocusWhite,
         focusedBorderWidth = 1.5.dp
     ) { isFocused ->
@@ -456,7 +433,7 @@ private fun BrowseTile(
                 .background(darkGradient)
                 .border(
                     width = 1.dp,
-                    color = if (isFocused) FocusWhite else BorderSubtle,
+                    color = if (isFocused) Color.Transparent else BorderSubtle,
                     shape = RectangleShape
                 )
                 .padding(horizontal = 18.dp, vertical = 14.dp),
@@ -487,7 +464,7 @@ private fun StudioTile(
             .width(185.dp)
             .height(86.dp),
         shape = RectangleShape,
-        focusedScale = 1.0f,
+        focusedScale = 1.025f,
         focusedBorderColor = FocusWhite,
         focusedBorderWidth = 1.5.dp
     ) { isFocused ->
@@ -496,11 +473,11 @@ private fun StudioTile(
                 .fillMaxSize()
                 .clip(RectangleShape)
                 .background(
-                    if (isFocused) Color(0xFF1E1E22) else SurfaceElevated
+                    if (isFocused) Color(0xFF1E1E24) else SurfaceElevated
                 )
                 .border(
                     width = 1.dp,
-                    color = if (isFocused) FocusWhite else BorderSubtle,
+                    color = if (isFocused) Color.Transparent else BorderSubtle,
                     shape = RectangleShape
                 ),
             contentAlignment = Alignment.Center
@@ -512,33 +489,56 @@ private fun StudioTile(
 
 @Composable
 private fun StudioTileContent(studio: StudioInfo, isFocused: Boolean) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
-        Text(
-            text = studio.name.uppercase(),
-            style = ErasmusTvTypography.HeroTitleLarge.copy(
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 2.sp,
-                color = if (isFocused) FocusWhite else TextPrimary
-            ),
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(modifier = Modifier.height(3.dp))
-        Text(
-            text = "ORIGINALS",
-            style = ErasmusTvTypography.Badge.copy(
-                fontSize = 8.5.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.5.sp,
-                color = if (isFocused) FocusWhite.copy(alpha = 0.85f) else TextMuted
-            )
-        )
+        if (studio.logoDrawableRes != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(38.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = studio.logoDrawableRes),
+                    contentDescription = studio.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .sizeIn(maxWidth = 135.dp, maxHeight = 34.dp)
+                )
+            }
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = studio.name.uppercase(),
+                    style = ErasmusTvTypography.HeroTitleLarge.copy(
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 2.sp,
+                        color = if (isFocused) FocusWhite else TextPrimary
+                    ),
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = "ORIGINALS",
+                    style = ErasmusTvTypography.Badge.copy(
+                        fontSize = 8.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.5.sp,
+                        color = if (isFocused) FocusWhite.copy(alpha = 0.85f) else TextMuted
+                    )
+                )
+            }
+        }
     }
 }
 
@@ -557,7 +557,7 @@ private fun LanguageTile(
             .width(185.dp)
             .height(86.dp),
         shape = RectangleShape,
-        focusedScale = 1.0f,
+        focusedScale = 1.025f,
         focusedBorderColor = FocusWhite,
         focusedBorderWidth = 1.5.dp
     ) { isFocused ->
@@ -568,7 +568,7 @@ private fun LanguageTile(
                 .background(darkGradient)
                 .border(
                     width = 1.dp,
-                    color = if (isFocused) FocusWhite else BorderSubtle,
+                    color = if (isFocused) Color.Transparent else BorderSubtle,
                     shape = RectangleShape
                 )
                 .padding(horizontal = 16.dp, vertical = 12.dp)

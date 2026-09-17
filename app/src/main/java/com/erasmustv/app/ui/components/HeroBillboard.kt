@@ -4,6 +4,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -53,6 +54,10 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,23 +65,29 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.erasmustv.app.core.config.AppConfig
+import com.erasmustv.app.core.theme.BorderHairline
 import com.erasmustv.app.core.theme.ErasmusTvTypography
 import com.erasmustv.app.core.theme.FocusWhite
 import com.erasmustv.app.core.theme.PitchBlack
 import com.erasmustv.app.core.theme.RatingGold
+import com.erasmustv.app.core.theme.SurfaceElevated
 import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
 import com.erasmustv.app.data.model.MediaItem
 import kotlinx.coroutines.delay
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.erasmustv.app.core.theme.TvMotion
+import com.erasmustv.app.core.theme.rememberReducedMotion
+
 // Smooth multi-stop cinematic gradients dissolving seamlessly into PitchBlack
 private val HeroHorizontalGradient = Brush.horizontalGradient(
     colors = listOf(
-        PitchBlack.copy(alpha = 0.92f),
-        PitchBlack.copy(alpha = 0.80f),
-        PitchBlack.copy(alpha = 0.50f),
-        PitchBlack.copy(alpha = 0.15f),
+        PitchBlack.copy(alpha = 0.94f),
+        PitchBlack.copy(alpha = 0.82f),
+        PitchBlack.copy(alpha = 0.52f),
+        PitchBlack.copy(alpha = 0.18f),
         Color.Transparent
     ),
     startX = 0f,
@@ -112,12 +123,80 @@ fun HeroBillboard(
     featuredItems: List<MediaItem> = emptyList(),
     onFeaturedSelect: ((MediaItem) -> Unit)? = null,
     onNavigateLeft: (() -> Unit)? = null,
-    onNavigateDown: (() -> Unit)? = null
+    onNavigateDown: (() -> Unit)? = null,
+    isAutoAdvanceEnabled: Boolean = true
 ) {
-    if (item == null) return
+    val isReducedMotion = rememberReducedMotion()
+    val displayItem = item ?: featuredItems.firstOrNull()
+
+    if (displayItem == null) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(335.dp)
+                .background(HeroVerticalGradient),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(0.58f)
+                    .padding(start = 64.dp, top = 54.dp, bottom = 12.dp)
+            ) {
+                // FEATURED SPOTLIGHT Clean Inline Label
+                Text(
+                    text = "FEATURED SPOTLIGHT",
+                    style = ErasmusTvTypography.Badge.copy(
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.8.sp
+                    ),
+                    color = Color.White
+                )
+
+                Spacer(modifier = Modifier.height(9.dp))
+
+                Text(
+                    text = "Explore Erasmus Catalog",
+                    style = ErasmusTvTypography.HeroTitleLarge.copy(
+                        fontSize = 28.sp,
+                        lineHeight = 34.sp,
+                        fontWeight = FontWeight.Black
+                    ),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "Stream trending films, series, and anime with multi-source playback and subtitle synchronization.",
+                    style = ErasmusTvTypography.Body.copy(
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    ),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    color = TextPrimary.copy(alpha = 0.88f)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                HeroRectangleButton(
+                    text = "Browse Catalog",
+                    icon = Icons.Default.PlayArrow,
+                    isPrimary = true,
+                    onClick = {},
+                    onNavigateLeft = onNavigateLeft,
+                    onNavigateDown = onNavigateDown,
+                    modifier = heroFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
+                )
+            }
+        }
+        return
+    }
 
     val context = LocalContext.current
-    val backdropKey = item.backdropPath ?: item.posterPath
+    val backdropKey = displayItem.backdropPath ?: displayItem.posterPath
     val imageRequest = remember(backdropKey) {
         ImageRequest.Builder(context)
             .data(AppConfig.backdropUrl(backdropKey))
@@ -132,11 +211,11 @@ fun HeroBillboard(
     var isSecondaryFocused by remember { mutableStateOf(false) }
     val isAnyFocused = isPrimaryFocused || isSecondaryFocused
 
-    // Auto-advance carousel every 8 seconds when user is idle
-    LaunchedEffect(item.id, isAnyFocused, featuredList) {
-        if (featuredList.size > 1 && onFeaturedSelect != null && !isAnyFocused) {
+    // Auto-advance carousel every 8 seconds when user is idle and hero is visible
+    LaunchedEffect(displayItem.id, isAnyFocused, featuredList, isAutoAdvanceEnabled) {
+        if (isAutoAdvanceEnabled && featuredList.size > 1 && onFeaturedSelect != null && !isAnyFocused) {
             delay(8000L)
-            val currentIndex = featuredList.indexOfFirst { it.id == item.id }
+            val currentIndex = featuredList.indexOfFirst { it.id == displayItem.id }
             val nextIndex = if (currentIndex in 0 until featuredList.size - 1) {
                 currentIndex + 1
             } else {
@@ -151,15 +230,45 @@ fun HeroBillboard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(460.dp)
+            .height(335.dp) // Reduced height by ~15% for cinematic density (Recommendation #3)
     ) {
-        // Full-bleed Backdrop Image extending to screen edges
-        AsyncImage(
-            model = imageRequest,
-            contentDescription = item.title,
-            contentScale = ContentScale.Crop,
+        // Full-bleed Backdrop Image extending to screen edges with restrained cinematic crossfade
+        Crossfade(
+            targetState = backdropKey,
+            animationSpec = tween(
+                durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_CAROUSEL,
+                easing = TvMotion.EasingSilk
+            ),
+            label = "hero_backdrop_crossfade",
             modifier = Modifier.fillMaxSize()
-        )
+        ) { key ->
+            val bgRequest = remember(key) {
+                ImageRequest.Builder(context)
+                    .data(AppConfig.backdropUrl(key))
+                    .memoryCacheKey(key)
+                    .diskCacheKey(key)
+                    .crossfade(300)
+                    .build()
+            }
+            var isImageLoaded by remember(key) { mutableStateOf(false) }
+            val imageScale by animateFloatAsState(
+                targetValue = if (isImageLoaded && !isReducedMotion) 1.0f else 1.025f,
+                animationSpec = tween(durationMillis = 600, easing = TvMotion.EasingSilk),
+                label = "heroBackdropDrift"
+            )
+            AsyncImage(
+                model = bgRequest,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                onSuccess = { isImageLoaded = true },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = imageScale
+                        scaleY = imageScale
+                    }
+            )
+        }
 
         // Horizontal vignette from left
         Box(
@@ -175,122 +284,123 @@ fun HeroBillboard(
                 .background(HeroVerticalGradient)
         )
 
-        // Content Area positioned with generous cinematic headroom for artwork
+        // Content Area positioned with comfortable cinematic headroom (Recommendation #3 & #18)
         Column(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .fillMaxWidth(0.58f)
-                .padding(start = 82.dp, top = 110.dp, bottom = 16.dp)
+                .padding(start = 64.dp, top = 54.dp, bottom = 10.dp)
         ) {
             Crossfade(
-                targetState = item,
-                animationSpec = tween(220),
+                targetState = displayItem,
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
                 label = "hero_content_crossfade"
             ) { currentItem ->
-                Column {
-                    // Top Badges Row (Reference Image 2: [FEATURED] [MOVIE] [2026] [★ 6.4])
+                var contentVisible by remember(currentItem.id) { mutableStateOf(false) }
+                LaunchedEffect(currentItem.id) {
+                    contentVisible = true
+                }
+                val translateY by animateDpAsState(
+                    targetValue = if (contentVisible) 0.dp else 8.dp,
+                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+                    label = "hero_content_slide"
+                )
+                val contentAlpha by animateFloatAsState(
+                    targetValue = if (contentVisible) 1f else 0.4f,
+                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+                    label = "hero_content_alpha"
+                )
+
+                Column(
+                    modifier = Modifier.graphicsLayer {
+                        translationY = translateY.toPx()
+                        alpha = contentAlpha
+                    }
+                ) {
+                    // Inline Clean Metadata Row without heavy box containers (Recommendation #21 & #30)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
-                        // FEATURED Badge
-                        Box(
-                            modifier = Modifier
-                                .background(Color.White, RectangleShape)
-                                .padding(horizontal = 7.dp, vertical = 3.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "FEATURED",
-                                style = ErasmusTvTypography.Badge.copy(
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 0.6.sp
-                                ),
-                                color = PitchBlack
-                            )
-                        }
+                        Text(
+                            text = "FEATURED",
+                            style = ErasmusTvTypography.Badge.copy(
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 0.8.sp
+                            ),
+                            color = Color.White
+                        )
 
-                        // MOVIE / SERIES Badge
-                        Box(
-                            modifier = Modifier
-                                .background(Color(0x3DFFFFFF), RectangleShape)
-                                .border(1.dp, Color(0x2BFFFFFF), RectangleShape)
-                                .padding(horizontal = 7.dp, vertical = 3.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (currentItem.isTv) "SERIES" else "MOVIE",
-                                style = ErasmusTvTypography.Badge.copy(
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.4.sp
-                                ),
-                                color = Color.White
-                            )
-                        }
+                        Text(
+                            text = "·",
+                            style = ErasmusTvTypography.Badge.copy(fontSize = 11.5.sp),
+                            color = TextSecondary.copy(alpha = 0.6f)
+                        )
 
-                        // Year Badge
+                        Text(
+                            text = if (currentItem.isTv) "SERIES" else "MOVIE",
+                            style = ErasmusTvTypography.Badge.copy(
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 0.4.sp
+                            ),
+                            color = TextSecondary
+                        )
+
                         currentItem.year?.let { yr ->
-                            Box(
-                                modifier = Modifier
-                                    .background(Color(0x3DFFFFFF), RectangleShape)
-                                    .border(1.dp, Color(0x2BFFFFFF), RectangleShape)
-                                    .padding(horizontal = 7.dp, vertical = 3.dp),
-                                contentAlignment = Alignment.Center
+                            Text(
+                                text = "·",
+                                style = ErasmusTvTypography.Badge.copy(fontSize = 11.5.sp),
+                                color = TextSecondary.copy(alpha = 0.6f)
+                            )
+                            Text(
+                                text = yr,
+                                style = ErasmusTvTypography.Badge.copy(
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Normal
+                                ),
+                                color = TextSecondary
+                            )
+                        }
+
+                        if (currentItem.voteAverage != null && currentItem.voteAverage > 0) {
+                            Text(
+                                text = "·",
+                                style = ErasmusTvTypography.Badge.copy(fontSize = 11.5.sp),
+                                color = TextSecondary.copy(alpha = 0.6f)
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
                                 Text(
-                                    text = yr,
+                                    text = "★",
+                                    style = ErasmusTvTypography.Badge.copy(fontSize = 11.5.sp),
+                                    color = RatingGold
+                                )
+                                Text(
+                                    text = currentItem.ratingFormatted ?: "",
                                     style = ErasmusTvTypography.Badge.copy(
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Medium
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold
                                     ),
                                     color = Color.White
                                 )
                             }
                         }
-
-                        // Rating Badge
-                        if (currentItem.voteAverage != null && currentItem.voteAverage > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .background(Color(0x3DFFFFFF), RectangleShape)
-                                    .border(1.dp, Color(0x2BFFFFFF), RectangleShape)
-                                    .padding(horizontal = 7.dp, vertical = 3.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                ) {
-                                    Text(
-                                        text = "★",
-                                        style = ErasmusTvTypography.Badge.copy(fontSize = 10.sp),
-                                        color = RatingGold
-                                    )
-                                    Text(
-                                        text = currentItem.ratingFormatted ?: "",
-                                        style = ErasmusTvTypography.Badge.copy(
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                        color = Color.White
-                                    )
-                                }
-                            }
-                        }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(9.dp))
 
-                    // Title / Logo treatment (enlarged height ~70-100dp for bold impact)
+                    // Title / Logo treatment (normalized height 44-68dp for balanced vertical density)
                     var isLogoError by remember(currentItem.logoPath) { mutableStateOf(false) }
 
                     if (!currentItem.logoPath.isNullOrBlank() && !isLogoError) {
                         Box(
                             modifier = Modifier
-                                .heightIn(min = 60.dp, max = 100.dp)
-                                .fillMaxWidth(0.95f),
+                                .heightIn(min = 44.dp, max = 68.dp)
+                                .fillMaxWidth(0.92f),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             AsyncImage(
@@ -303,7 +413,7 @@ fun HeroBillboard(
                                 contentScale = ContentScale.Fit,
                                 alignment = Alignment.CenterStart,
                                 modifier = Modifier
-                                    .heightIn(min = 60.dp, max = 100.dp)
+                                    .heightIn(min = 44.dp, max = 68.dp)
                                     .fillMaxWidth(),
                                 onError = { isLogoError = true }
                             )
@@ -312,8 +422,8 @@ fun HeroBillboard(
                         Text(
                             text = currentItem.title,
                             style = ErasmusTvTypography.HeroTitleLarge.copy(
-                                fontSize = 34.sp,
-                                lineHeight = 40.sp,
+                                fontSize = 28.sp,
+                                lineHeight = 34.sp,
                                 fontWeight = FontWeight.Black
                             ),
                             maxLines = 2,
@@ -321,13 +431,13 @@ fun HeroBillboard(
                         )
                     }
 
-                    // Italic Tagline (Reference Image 2: "Where goes the neighborhood.")
+                    // Italic Tagline
                     if (!currentItem.tagline.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(5.dp))
                         Text(
                             text = currentItem.tagline,
                             style = ErasmusTvTypography.Body.copy(
-                                fontSize = 14.sp,
+                                fontSize = 13.sp,
                                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                                 color = TextSecondary.copy(alpha = 0.95f)
                             ),
@@ -336,37 +446,43 @@ fun HeroBillboard(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                    // Concise synopsis with generous line spacing
-                    if (currentItem.overview != null) {
+                    // Concise synopsis capped to two lines & ~110 characters (Recommendation #5)
+                    val overviewText = remember(currentItem.overview) {
+                        val raw = currentItem.overview ?: ""
+                        if (raw.length > 115) {
+                            raw.take(112).trimEnd() + "..."
+                        } else raw
+                    }
+                    if (overviewText.isNotBlank()) {
                         Text(
-                            text = currentItem.overview,
+                            text = overviewText,
                             style = ErasmusTvTypography.Body.copy(
-                                fontSize = 13.sp,
-                                lineHeight = 19.sp
+                                fontSize = 12.5.sp,
+                                lineHeight = 17.sp
                             ),
-                            maxLines = 3,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
-                            color = TextPrimary.copy(alpha = 0.88f)
+                            color = TextSecondary.copy(alpha = 0.92f)
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Action Buttons & Carousel Slider Row
+            // Action Buttons Row (Decoupled from carousel indicator, Recommendation #6)
             Row(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Watch Now (Solid White Rectangular Button)
+                // Watch Now (Crisp Solid White TV Button, 48dp height)
                 HeroRectangleButton(
                     text = "Watch Now",
                     icon = Icons.Default.PlayArrow,
                     isPrimary = true,
-                    onClick = { onPlayClick(item) },
+                    onClick = { onPlayClick(displayItem) },
                     onFocusChanged = { isPrimaryFocused = it },
                     onNavigateLeft = onNavigateLeft,
                     onNavigateRight = { detailsFocusRequester.requestFocus() },
@@ -374,43 +490,38 @@ fun HeroBillboard(
                     modifier = heroFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
                 )
 
-                // Details (Frosted Dark Rectangular Button)
+                // Details (Visually quieter translucent dark button, Recommendation #6)
                 HeroRectangleButton(
                     text = "Details",
                     icon = Icons.Default.Info,
                     isPrimary = false,
-                    onClick = { onDetailsClick(item) },
+                    onClick = { onDetailsClick(displayItem) },
                     modifier = Modifier.focusRequester(detailsFocusRequester),
                     onFocusChanged = { isSecondaryFocused = it },
                     onNavigateLeft = { heroFocusRequester?.requestFocus() },
                     onNavigateRight = null,
                     onNavigateDown = onNavigateDown
                 )
-
-                // Inline Carousel Indicator (< [====] · · · · >)
-                if (featuredList.size > 1 && onFeaturedSelect != null) {
-                    val currentIndex = featuredList.indexOfFirst { it.id == item.id }.coerceAtLeast(0)
-                    HeroCarouselIndicator(
-                        items = featuredList,
-                        currentIndex = currentIndex,
-                        onPrev = {
-                            val prev = if (currentIndex > 0) currentIndex - 1 else featuredList.size - 1
-                            onFeaturedSelect(featuredList[prev])
-                        },
-                        onNext = {
-                            val next = if (currentIndex < featuredList.size - 1) currentIndex + 1 else 0
-                            onFeaturedSelect(featuredList[next])
-                        }
-                    )
-                }
             }
+        }
+
+        // Dedicated Subtler Carousel Indicator aligned at bottom-right (Recommendation #7)
+        if (featuredList.size > 1 && onFeaturedSelect != null) {
+            val currentIndex = featuredList.indexOfFirst { it.id == displayItem.id }.coerceAtLeast(0)
+            HeroCarouselIndicator(
+                items = featuredList,
+                currentIndex = currentIndex,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 56.dp, bottom = 18.dp)
+            )
         }
     }
 }
 
 /**
- * Rectangular action button matching modern OLED design language.
- * Solid white background for primary button, frosted dark for secondary.
+ * Rectangular action button matching TV viewing ergonomics (Recommendation #6).
+ * Solid white background for primary button, visually quieter frosted dark for secondary.
  */
 @Composable
 private fun HeroRectangleButton(
@@ -426,15 +537,50 @@ private fun HeroRectangleButton(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    val isReducedMotion = rememberReducedMotion()
 
     LaunchedEffect(isFocused) {
         onFocusChanged?.invoke(isFocused)
     }
 
-    val backgroundColor = when {
-        isPrimary -> if (isFocused) Color.White else Color(0xEBFFFFFF)
-        else -> if (isFocused) Color(0x66FFFFFF) else Color(0x26FFFFFF)
+    val buttonScale by animateFloatAsState(
+        targetValue = if (isFocused && !isReducedMotion) TvMotion.FocusScaleButton else 1.0f,
+        animationSpec = tween(
+            durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_FAST,
+            easing = TvMotion.EasingSilk
+        ),
+        label = "heroButtonScale"
+    )
+
+    val buttonElevation by animateFloatAsState(
+        targetValue = if (isFocused && !isReducedMotion) 10f else 0f,
+        animationSpec = tween(
+            durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_FAST,
+            easing = TvMotion.EasingSilk
+        ),
+        label = "heroButtonElevation"
+    )
+
+    val targetBgColor = when {
+        isPrimary -> if (isFocused) Color.White else Color(0xEEFFFFFF)
+        else -> if (isFocused) Color(0x38FFFFFF) else Color(0x221E1E24)
     }
+    val backgroundColor by animateColorAsState(
+        targetValue = targetBgColor,
+        animationSpec = tween(durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_FAST),
+        label = "heroButtonBg"
+    )
+
+    val targetBorderColor = when {
+        isFocused -> Color.White
+        isPrimary -> Color.Transparent
+        else -> Color(0x22FFFFFF)
+    }
+    val borderColor by animateColorAsState(
+        targetValue = targetBorderColor,
+        animationSpec = tween(durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_FAST),
+        label = "heroButtonBorder"
+    )
 
     val contentColor = when {
         isPrimary -> PitchBlack
@@ -443,6 +589,16 @@ private fun HeroRectangleButton(
 
     Box(
         modifier = modifier
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = text
+            }
+            .height(48.dp) // Crisp TV button height (Recommendation #6)
+            .graphicsLayer {
+                scaleX = buttonScale
+                scaleY = buttonScale
+                this.shadowElevation = buttonElevation
+            }
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     when (keyEvent.key) {
@@ -483,8 +639,8 @@ private fun HeroRectangleButton(
             .clip(RectangleShape)
             .background(backgroundColor, RectangleShape)
             .border(
-                width = if (isFocused) 2.dp else 1.dp,
-                color = if (isFocused) Color.White else Color(0x33FFFFFF),
+                width = if (isFocused) 2.dp else if (!isPrimary) 0.dp else 1.dp,
+                color = borderColor,
                 shape = RectangleShape
             )
             .clickable(
@@ -493,24 +649,24 @@ private fun HeroRectangleButton(
                 onClick = onClick
             )
             .focusable(interactionSource = interactionSource)
-            .padding(horizontal = 18.dp, vertical = 9.dp),
+            .padding(horizontal = 20.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(7.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = text,
+                contentDescription = null,
                 tint = contentColor,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(17.dp)
             )
             Text(
                 text = text,
                 style = ErasmusTvTypography.ButtonText.copy(
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = if (isPrimary) FontWeight.ExtraBold else FontWeight.SemiBold
                 ),
                 color = contentColor
             )
@@ -519,58 +675,52 @@ private fun HeroRectangleButton(
 }
 
 /**
- * Rectangular carousel indicator (< [====] · · · · >).
+ * Subtler floating carousel indicator with wider active bar (Recommendation #7).
  */
 @Composable
 private fun HeroCarouselIndicator(
     items: List<MediaItem>,
     currentIndex: Int,
-    onPrev: () -> Unit,
-    onNext: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isReducedMotion = rememberReducedMotion()
+
     Box(
         modifier = modifier
-            .clip(RectangleShape)
-            .background(Color(0x2B080810), RectangleShape)
-            .border(1.dp, Color(0x26FFFFFF), RectangleShape)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .semantics {
+                contentDescription = "Featured title ${currentIndex + 1} of ${items.size}"
+            }
+            .padding(horizontal = 8.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Left Arrow
-            Text(
-                text = "‹",
-                style = ErasmusTvTypography.Badge.copy(
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                ),
-                color = Color(0x80FFFFFF)
-            )
-
-            // Indicators
             items.forEachIndexed { index, _ ->
                 val isActive = index == currentIndex
+                val barWidth by animateDpAsState(
+                    targetValue = if (isActive) 26.dp else 6.dp, // Wider active indicator (Recommendation #7)
+                    animationSpec = tween(
+                        durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_MEDIUM,
+                        easing = TvMotion.EasingSilk
+                    ),
+                    label = "carouselBarWidth"
+                )
+                val barColor by animateColorAsState(
+                    targetValue = if (isActive) Color.White.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.28f),
+                    animationSpec = tween(
+                        durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_MEDIUM
+                    ),
+                    label = "carouselBarColor"
+                )
                 Box(
                     modifier = Modifier
-                        .height(3.dp)
-                        .width(if (isActive) 16.dp else 4.dp)
-                        .background(if (isActive) Color.White else Color(0x40FFFFFF), RectangleShape)
+                        .height(2.5.dp)
+                        .width(barWidth)
+                        .background(barColor, RoundedCornerShape(1.dp))
                 )
             }
-
-            // Right Arrow
-            Text(
-                text = "›",
-                style = ErasmusTvTypography.Badge.copy(
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                ),
-                color = Color(0x80FFFFFF)
-            )
         }
     }
 }

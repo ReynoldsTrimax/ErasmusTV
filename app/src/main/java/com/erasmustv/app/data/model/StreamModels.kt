@@ -124,7 +124,13 @@ data class PlaybackProgress(
     val posterPath: String? = null,
     val backdropPath: String? = null,
     val logoPath: String? = null
-)
+) {
+    val progressRatio: Float get() {
+        val d = duration ?: return 0f
+        if (d <= 0) return 0f
+        return (seconds.toFloat() / d.toFloat()).coerceIn(0f, 1f)
+    }
+}
 
 @Serializable
 data class ContinueWatchingItem(

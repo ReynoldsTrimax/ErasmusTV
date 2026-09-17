@@ -53,7 +53,26 @@ class ProfileManager(private val context: Context) {
 
     suspend fun clearActiveProfile() {
         context.profileDataStore.edit { prefs ->
-            prefs.clear()
+            prefs.remove(Keys.ACTIVE_PROFILE_ID)
+            prefs.remove(Keys.ACTIVE_PROFILE_JSON)
+        }
+    }
+
+    suspend fun getProfilesForUser(userId: String): List<WatchProfile> {
+        val key = stringPreferencesKey("profiles_$userId")
+        val raw = context.profileDataStore.data.first()[key] ?: return emptyList()
+        return try {
+            json.decodeFromString<List<WatchProfile>>(raw)
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun saveProfilesForUser(userId: String, profiles: List<WatchProfile>) {
+        val key = stringPreferencesKey("profiles_$userId")
+        context.profileDataStore.edit { prefs ->
+            prefs[key] = json.encodeToString(profiles)
         }
     }
 }
+

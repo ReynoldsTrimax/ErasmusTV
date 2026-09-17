@@ -1,5 +1,7 @@
 package com.erasmustv.app.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -36,6 +38,10 @@ import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
 import com.erasmustv.app.data.model.MediaItem
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -190,7 +196,9 @@ private fun RankedItemCard(
                 item = item,
                 onClick = onClick,
                 cardWidth = 138,
-                cardModifier = cardModifier
+                cardModifier = cardModifier,
+                rank = rank,
+                badge = "TOP 10"
             )
         }
     }
@@ -204,27 +212,42 @@ fun ViewAllAction(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    Box(
         modifier = modifier
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = "View all titles in section"
+            }
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
             .focusable(interactionSource = interactionSource)
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .background(if (isFocused) Color(0x2EFFFFFF) else Color.Transparent, androidx.compose.ui.graphics.RectangleShape)
+            .border(
+                width = 1.dp,
+                color = if (isFocused) FocusWhite else Color.Transparent,
+                shape = androidx.compose.ui.graphics.RectangleShape
+            )
+            .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
-        Text(
-            text = "View All",
-            style = ErasmusTvTypography.SectionAction,
-            color = if (isFocused) FocusWhite else TextMuted
-        )
-        Text(
-            text = "›",
-            style = ErasmusTvTypography.SectionAction.copy(fontSize = 16.sp),
-            color = if (isFocused) FocusWhite else TextMuted
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "View All",
+                style = ErasmusTvTypography.SectionAction.copy(
+                    fontWeight = if (isFocused) FontWeight.Bold else FontWeight.Medium
+                ),
+                color = if (isFocused) FocusWhite else TextMuted
+            )
+            Text(
+                text = "›",
+                style = ErasmusTvTypography.SectionAction.copy(fontSize = 16.sp),
+                color = if (isFocused) FocusWhite else TextMuted
+            )
+        }
     }
 }

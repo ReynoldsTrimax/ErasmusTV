@@ -39,12 +39,18 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -58,10 +64,12 @@ import com.erasmustv.app.core.theme.BorderHairline
 import com.erasmustv.app.core.theme.ElectricBlue
 import com.erasmustv.app.core.theme.ErasmusTvTypography
 import com.erasmustv.app.core.theme.ErrorRed
+import com.erasmustv.app.core.theme.FocusWhite
 import com.erasmustv.app.core.theme.PitchBlack
 import com.erasmustv.app.core.theme.SurfaceDark
 import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
+import com.erasmustv.app.core.theme.TextSecondary
 import com.erasmustv.app.ui.components.TvFocusableCard
 
 @Composable
@@ -121,9 +129,19 @@ fun LoginScreen(
         }
     }
 
+    // Request initial focus on Email (or Sign In if email already populated) without stealing on recomposition
+    var hasRequestedInitialFocus by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        // Initial focus on Sign In for TV navigation
-        signInRequester.requestFocus()
+        if (!hasRequestedInitialFocus) {
+            try {
+                if (email.isEmpty()) {
+                    emailRequester.requestFocus()
+                } else {
+                    signInRequester.requestFocus()
+                }
+                hasRequestedInitialFocus = true
+            } catch (_: Exception) {}
+        }
     }
 
     Box(
@@ -243,9 +261,9 @@ fun LoginScreen(
                         Text(
                             text = "EMAIL",
                             style = ErasmusTvTypography.Badge.copy(
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isEmailFocused) ElectricBlue else TextMuted
+                                fontSize = 11.5.sp,
+                                fontWeight = if (isEmailFocused) FontWeight.Bold else FontWeight.SemiBold,
+                                color = if (isEmailFocused) FocusWhite else TextMuted
                             )
                         )
 
@@ -254,41 +272,69 @@ fun LoginScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(42.dp)
-                                .background(PitchBlack, RectangleShape)
+                                .height(44.dp)
+                                .background(if (isEmailFocused) Color(0x14FFFFFF) else PitchBlack, RectangleShape)
                                 .border(
                                     width = if (isEmailFocused) 1.5.dp else 1.dp,
-                                    color = if (isEmailFocused) ElectricBlue else BorderHairline,
+                                    color = if (isEmailFocused) FocusWhite else BorderHairline,
                                     shape = RectangleShape
                                 )
-                                .clickable { emailRequester.requestFocus() }
                                 .padding(horizontal = 14.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
-                            if (email.isEmpty() && !isEmailFocused) {
-                                Text(
-                                    text = "name@example.com",
-                                    style = ErasmusTvTypography.Body.copy(fontSize = 13.sp, color = TextMuted.copy(alpha = 0.5f))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = if (isEmailFocused) FocusWhite else TextMuted.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(16.dp)
                                 )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    if (email.isEmpty() && !isEmailFocused) {
+                                        Text(
+                                            text = "name@example.com",
+                                            style = ErasmusTvTypography.Body.copy(fontSize = 13.sp, color = TextMuted.copy(alpha = 0.5f))
+                                        )
+                                    }
+                                    BasicTextField(
+                                        value = email,
+                                        onValueChange = { viewModel.onEmailChange(it) },
+                                        textStyle = ErasmusTvTypography.Body.copy(fontSize = 13.sp, color = TextPrimary),
+                                        cursorBrush = SolidColor(FocusWhite),
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Email,
+                                            imeAction = ImeAction.Next
+                                        ),
+                                        keyboardActions = KeyboardActions(
+                                            onNext = { passwordRequester.requestFocus() }
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(emailRequester)
+                                            .onFocusChanged { isEmailFocused = it.isFocused }
+                                            .onKeyEvent { keyEvent ->
+                                                if (keyEvent.type == KeyEventType.KeyDown) {
+                                                    when (keyEvent.key) {
+                                                        Key.DirectionDown -> {
+                                                            passwordRequester.requestFocus()
+                                                            true
+                                                        }
+                                                        Key.DirectionUp -> true
+                                                        else -> false
+                                                    }
+                                                } else false
+                                            }
+                                    )
+                                }
                             }
-                            BasicTextField(
-                                value = email,
-                                onValueChange = { viewModel.onEmailChange(it) },
-                                textStyle = ErasmusTvTypography.Body.copy(fontSize = 13.sp, color = TextPrimary),
-                                cursorBrush = SolidColor(ElectricBlue),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Email,
-                                    imeAction = ImeAction.Next
-                                ),
-                                keyboardActions = KeyboardActions(
-                                    onNext = { passwordRequester.requestFocus() }
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(emailRequester)
-                                    .onFocusChanged { isEmailFocused = it.isFocused }
-                            )
                         }
                     }
 
@@ -299,9 +345,9 @@ fun LoginScreen(
                         Text(
                             text = "PASSWORD",
                             style = ErasmusTvTypography.Badge.copy(
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isPasswordFocused) ElectricBlue else TextMuted
+                                fontSize = 11.5.sp,
+                                fontWeight = if (isPasswordFocused) FontWeight.Bold else FontWeight.SemiBold,
+                                color = if (isPasswordFocused) FocusWhite else TextMuted
                             )
                         )
 
@@ -310,44 +356,75 @@ fun LoginScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(42.dp)
-                                .background(PitchBlack, RectangleShape)
+                                .height(44.dp)
+                                .background(if (isPasswordFocused) Color(0x14FFFFFF) else PitchBlack, RectangleShape)
                                 .border(
                                     width = if (isPasswordFocused) 1.5.dp else 1.dp,
-                                    color = if (isPasswordFocused) ElectricBlue else BorderHairline,
+                                    color = if (isPasswordFocused) FocusWhite else BorderHairline,
                                     shape = RectangleShape
                                 )
-                                .clickable { passwordRequester.requestFocus() }
                                 .padding(horizontal = 14.dp),
                             contentAlignment = Alignment.CenterStart
                         ) {
-                            if (password.isEmpty() && !isPasswordFocused) {
-                                Text(
-                                    text = "••••••••••••",
-                                    style = ErasmusTvTypography.Body.copy(fontSize = 13.sp, color = TextMuted.copy(alpha = 0.5f))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = if (isPasswordFocused) FocusWhite else TextMuted.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(16.dp)
                                 )
-                            }
-                            BasicTextField(
-                                value = password,
-                                onValueChange = { viewModel.onPasswordChange(it) },
-                                textStyle = ErasmusTvTypography.Body.copy(fontSize = 13.sp, color = TextPrimary),
-                                cursorBrush = SolidColor(ElectricBlue),
-                                singleLine = true,
-                                visualTransformation = PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Password,
-                                    imeAction = ImeAction.Done
-                                ),
-                                keyboardActions = KeyboardActions(
-                                    onDone = {
-                                        viewModel.login(onLoginSuccess)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Box(
+                                    modifier = Modifier.weight(1f),
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    if (password.isEmpty() && !isPasswordFocused) {
+                                        Text(
+                                            text = "••••••••••••",
+                                            style = ErasmusTvTypography.Body.copy(fontSize = 13.sp, color = TextMuted.copy(alpha = 0.5f))
+                                        )
                                     }
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .focusRequester(passwordRequester)
-                                    .onFocusChanged { isPasswordFocused = it.isFocused }
-                            )
+                                    BasicTextField(
+                                        value = password,
+                                        onValueChange = { viewModel.onPasswordChange(it) },
+                                        textStyle = ErasmusTvTypography.Body.copy(fontSize = 13.sp, color = TextPrimary),
+                                        cursorBrush = SolidColor(FocusWhite),
+                                        singleLine = true,
+                                        visualTransformation = PasswordVisualTransformation(),
+                                        keyboardOptions = KeyboardOptions(
+                                            keyboardType = KeyboardType.Password,
+                                            imeAction = ImeAction.Done
+                                        ),
+                                        keyboardActions = KeyboardActions(
+                                            onDone = {
+                                                viewModel.login(onLoginSuccess)
+                                            }
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(passwordRequester)
+                                            .onFocusChanged { isPasswordFocused = it.isFocused }
+                                            .onKeyEvent { keyEvent ->
+                                                if (keyEvent.type == KeyEventType.KeyDown) {
+                                                    when (keyEvent.key) {
+                                                        Key.DirectionUp -> {
+                                                            emailRequester.requestFocus()
+                                                            true
+                                                        }
+                                                        Key.DirectionDown -> {
+                                                            signInRequester.requestFocus()
+                                                            true
+                                                        }
+                                                        else -> false
+                                                    }
+                                                } else false
+                                            }
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -403,11 +480,24 @@ fun LoginScreen(
                     } else {
                         TvFocusableCard(
                             onClick = { viewModel.login(onLoginSuccess) },
-                            focusedScale = 1.04f,
+                            focusedScale = 1.025f,
+                            focusedBorderWidth = 1.5.dp,
+                            focusedBorderColor = FocusWhite,
                             shape = RectangleShape,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(signInRequester)
+                                .onKeyEvent { keyEvent ->
+                                    if (keyEvent.type == KeyEventType.KeyDown) {
+                                        when (keyEvent.key) {
+                                            Key.DirectionUp -> {
+                                                passwordRequester.requestFocus()
+                                                true
+                                            }
+                                            else -> false
+                                        }
+                                    } else false
+                                }
                         ) { isFocused ->
                             Box(
                                 modifier = Modifier
@@ -438,7 +528,9 @@ fun LoginScreen(
                                 googleLauncher.launch(googleSignInClient.signInIntent)
                             } catch (_: Exception) {}
                         },
-                        focusedScale = 1.04f,
+                        focusedScale = 1.025f,
+                        focusedBorderWidth = 1.5.dp,
+                        focusedBorderColor = FocusWhite,
                         shape = RectangleShape,
                         modifier = Modifier.fillMaxWidth()
                     ) { isFocused ->
@@ -451,7 +543,7 @@ fun LoginScreen(
                                 )
                                 .border(
                                     width = 1.dp,
-                                    color = if (isFocused) Color.White else BorderHairline,
+                                    color = if (isFocused) Color.Transparent else BorderHairline,
                                     shape = RectangleShape
                                 )
                                 .padding(vertical = 9.dp),
@@ -473,7 +565,9 @@ fun LoginScreen(
                     // Continue as Guest Option
                     TvFocusableCard(
                         onClick = { viewModel.continueAsGuest(onLoginSuccess) },
-                        focusedScale = 1.04f,
+                        focusedScale = 1.025f,
+                        focusedBorderWidth = 1.5.dp,
+                        focusedBorderColor = FocusWhite,
                         shape = RectangleShape,
                         modifier = Modifier.fillMaxWidth()
                     ) { isFocused ->
@@ -486,7 +580,7 @@ fun LoginScreen(
                                 )
                                 .border(
                                     width = 1.dp,
-                                    color = if (isFocused) Color.White else BorderHairline,
+                                    color = if (isFocused) Color.Transparent else BorderHairline,
                                     shape = RectangleShape
                                 )
                                 .padding(vertical = 9.dp),
@@ -535,8 +629,8 @@ private fun FeaturePill(text: String) {
         Text(
             text = text,
             style = ErasmusTvTypography.Badge.copy(
-                fontSize = 11.sp,
-                color = TextMuted,
+                fontSize = 11.5.sp,
+                color = TextSecondary,
                 fontWeight = FontWeight.Medium
             )
         )

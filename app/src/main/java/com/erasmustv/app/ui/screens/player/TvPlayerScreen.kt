@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -94,6 +95,12 @@ fun TvPlayerScreen(
     val coroutineScope = rememberCoroutineScope()
     val streamState by viewModel.streamState.collectAsState()
     val currentServerId by viewModel.currentServerId.collectAsState()
+    val currentSeason by viewModel.currentSeason.collectAsState()
+    val currentEpisode by viewModel.currentEpisode.collectAsState()
+    val currentEpisodeTitle by viewModel.currentEpisodeTitle.collectAsState()
+    val showSeasons by viewModel.showSeasons.collectAsState()
+    val currentSeasonEpisodes by viewModel.currentSeasonEpisodes.collectAsState()
+    val isLoadingEpisodes by viewModel.isLoadingEpisodes.collectAsState()
 
     // Player UI States
     var showControls by remember { mutableStateOf(true) }
@@ -118,6 +125,7 @@ fun TvPlayerScreen(
     val audioTracks = remember { mutableStateListOf<TvAudioTrack>() }
     val subtitleTracks = remember { mutableStateListOf<TvSubtitleTrack>() }
     val qualityTracks = remember { mutableStateListOf<TvQualityTrack>() }
+    var selectedQualityTrackId by remember { mutableStateOf<String?>(null) }
 
     // Focus Requesters
     val rootFocusRequester = remember { FocusRequester() }
@@ -130,6 +138,7 @@ fun TvPlayerScreen(
 
     // Bottom Controls Focus Requesters
     val playPauseFocusRequester = remember { FocusRequester() }
+    val episodesFocusRequester = remember { FocusRequester() }
     val audioFocusRequester = remember { FocusRequester() }
     val subtitleFocusRequester = remember { FocusRequester() }
     val qualityFocusRequester = remember { FocusRequester() }
@@ -177,19 +186,34 @@ fun TvPlayerScreen(
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
             .setDataSourceFactory {
                 val state = viewModel.streamState.value
-                val referer = if (state is PlayerStreamState.Ready) state.referer else "https://cinejoy.to/"
-                val headers = mapOf(
-                    "Referer" to referer,
-                    "Origin" to "https://cinejoy.to",
-                    "Accept" to "*/*"
-                )
-                DefaultHttpDataSource.Factory()
-                    .setUserAgent(AppConfig.STREAM_USER_AGENT)
+                val rawReferer = if (state is PlayerStreamState.Ready) state.referer else null
+                val referer = rawReferer?.takeIf { it.isNotBlank() }
+                val headers = mutableMapOf<String, String>()
+                headers["Accept"] = "*/*"
+                if (!referer.isNullOrBlank()) {
+                    headers["Referer"] = referer
+                    val origin = when {
+                        referer.contains("cinejoy", ignoreCase = true) -> "https://cinejoy.to"
+                        referer.contains("vidfast", ignoreCase = true) -> "https://vidfast.vc"
+                        else -> referer.trimEnd('/')
+                    }
+                    headers["Origin"] = origin
+                }
+                val streamUrl = (state as? PlayerStreamState.Ready)?.streamUrl.orEmpty()
+                val isDirectCdn = streamUrl.contains("hakunaymatata", ignoreCase = true) || streamUrl.contains(".mp4", ignoreCase = true)
+                val userAgent = if (isDirectCdn) {
+                    "ExoPlayer/1.5.1 (Linux; Android TV)"
+                } else {
+                    AppConfig.STREAM_USER_AGENT
+                }
+                val httpFactory = DefaultHttpDataSource.Factory()
+                    .setUserAgent(userAgent)
                     .setAllowCrossProtocolRedirects(true)
                     .setConnectTimeoutMs(20000)
                     .setReadTimeoutMs(20000)
                     .setDefaultRequestProperties(headers)
-                    .createDataSource()
+                val baseDataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(context, httpFactory)
+                com.erasmustv.app.data.local.TvMediaCacheManager.createCacheDataSourceFactory(context, baseDataSourceFactory).createDataSource()
             }
 
         val audioSink = DefaultAudioSink.Builder(context)
@@ -220,13 +244,90 @@ fun TvPlayerScreen(
             }
         }
 
+        // High-performance TV load control: instant 1.5s start, up to 30 mins lookahead on disk, 30s instant rewind
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 120_000,
+                /* maxBufferMs = */ 1_800_000,
+                /* bufferForPlaybackMs = */ 1_500,
+                /* bufferForPlaybackAfterRebufferMs = */ 3_000
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .setBackBuffer(30_000, true)
+            .build()
+
         ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
             .build()
+            .apply {
+                trackSelectionParameters = trackSelectionParameters.buildUpon()
+                    .setPreferredAudioLanguages("hi", "hin", "en", "eng")
+                    .build()
+            }
     }
 
-
     var lastMedia3Tracks by remember { mutableStateOf<Tracks?>(null) }
+
+    fun formatAudioTrackLabel(code: String?, rawLabel: String?, fallbackIndex: Int): String {
+        val cleanCode = code?.trim()?.lowercase() ?: ""
+        val cleanLabel = rawLabel?.trim() ?: ""
+
+        val isGenericLabel = cleanLabel.isBlank() ||
+            cleanLabel.matches(Regex("(?i)^(audio|track|und|default|stereo|surround|aac|ac3|mp4a|\\d+|audio\\s*\\d+)$"))
+
+        val mappedLanguage = when (cleanCode) {
+            "hi", "hin" -> "Hindi"
+            "ta", "tam" -> "Tamil"
+            "te", "tel" -> "Telugu"
+            "ml", "mal" -> "Malayalam"
+            "kn", "kan" -> "Kannada"
+            "mr", "mar" -> "Marathi"
+            "bn", "ben" -> "Bengali"
+            "pa", "pan" -> "Punjabi"
+            "gu", "guj" -> "Gujarati"
+            "ur", "urd" -> "Urdu"
+            "en", "eng" -> "English"
+            "ja", "jpn" -> "Japanese"
+            "ko", "kor" -> "Korean"
+            "zh", "zho", "chi" -> "Chinese"
+            "es", "spa" -> "Spanish"
+            "fr", "fra", "fre" -> "French"
+            "de", "deu", "ger" -> "German"
+            "it", "ita" -> "Italian"
+            "pt", "por" -> "Portuguese"
+            "ru", "rus" -> "Russian"
+            "ar", "ara" -> "Arabic"
+            "tr", "tur" -> "Turkish"
+            "id", "ind" -> "Indonesian"
+            "th", "tha" -> "Thai"
+            "vi", "vie" -> "Vietnamese"
+            else -> if (cleanCode.isNotBlank()) {
+                try {
+                    val loc = Locale.forLanguageTag(cleanCode)
+                    val display = loc.getDisplayLanguage(Locale.ENGLISH)
+                    if (display.isNotBlank() && !display.equals(cleanCode, ignoreCase = true)) {
+                        display
+                    } else {
+                        Locale(cleanCode).getDisplayLanguage(Locale.ENGLISH).takeIf {
+                            it.isNotBlank() && !it.equals(cleanCode, ignoreCase = true)
+                        } ?: cleanCode.uppercase()
+                    }
+                } catch (_: Throwable) {
+                    cleanCode.uppercase()
+                }
+            } else ""
+        }
+
+        return when {
+            !isGenericLabel && mappedLanguage.isNotBlank() && !cleanLabel.contains(mappedLanguage, ignoreCase = true) -> {
+                "$mappedLanguage ($cleanLabel)"
+            }
+            !isGenericLabel -> cleanLabel
+            mappedLanguage.isNotBlank() -> mappedLanguage
+            else -> "Audio Track ${fallbackIndex + 1}"
+        }
+    }
 
     // Parse and synchronize real Media3 tracks and cluster captions
     fun syncTracks(
@@ -245,10 +346,7 @@ fun TvPlayerScreen(
                         for (i in 0 until group.length) {
                             val format = group.getTrackFormat(i)
                             val lang = format.language ?: ""
-                            val displayLang = if (lang.isNotBlank()) {
-                                Locale(lang).displayLanguage.takeIf { it.isNotBlank() } ?: lang
-                            } else "Audio ${audioTracks.size + 1}"
-                            val label = format.label ?: displayLang
+                            val label = formatAudioTrackLabel(lang, format.label, audioTracks.size)
                             val isSelected = group.isTrackSelected(i)
 
                             audioTracks.add(
@@ -257,7 +355,7 @@ fun TvPlayerScreen(
                                     mediaTrackGroup = group.mediaTrackGroup,
                                     trackIndex = i,
                                     label = label,
-                                    language = lang,
+                                    language = lang.ifBlank { "und" },
                                     isSelected = isSelected
                                 )
                             )
@@ -307,9 +405,16 @@ fun TvPlayerScreen(
                     id = "video_auto",
                     label = "Auto (Adaptive)",
                     isAuto = true,
-                    isSelected = !videoHasOverride
+                    isSelected = false
                 )
             )
+
+            val targetSelectedId = selectedQualityTrackId ?: "video_auto"
+
+            for (i in 0 until qualityTracks.size) {
+                val q = qualityTracks[i]
+                qualityTracks[i] = q.copy(isSelected = q.id == targetSelectedId)
+            }
         }
 
         // Build comprehensive Subtitle Tracks list
@@ -442,6 +547,9 @@ fun TvPlayerScreen(
                 isBuffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY) {
                     durationMs = exoPlayer.duration.coerceAtLeast(0L)
+                } else if (state == Player.STATE_ENDED) {
+                    // Movie/episode finished! Asynchronously clear media cache to reclaim flash storage
+                    com.erasmustv.app.data.local.TvMediaCacheManager.clearCacheAsync(context)
                 }
             }
 
@@ -476,6 +584,8 @@ fun TvPlayerScreen(
             viewModel.persistProgress(seconds, durationSeconds)
             exoPlayer.removeListener(listener)
             exoPlayer.release()
+            // Clear media cache asynchronously on player teardown
+            com.erasmustv.app.data.local.TvMediaCacheManager.clearCacheAsync(context)
         }
     }
 
@@ -564,11 +674,12 @@ fun TvPlayerScreen(
                 coroutineScope.launch {
                     delay(50)
                     when (closingMenu) {
+                        PlayerActiveMenu.Episodes -> episodesFocusRequester.requestFocus()
                         PlayerActiveMenu.Audio -> audioFocusRequester.requestFocus()
                         PlayerActiveMenu.Subtitles -> subtitleFocusRequester.requestFocus()
                         PlayerActiveMenu.Quality -> qualityFocusRequester.requestFocus()
                         PlayerActiveMenu.Servers -> serverFocusRequester.requestFocus()
-                        else -> playPauseFocusRequester.requestFocus()
+                        else -> timelineFocusRequester.requestFocus()
                     }
                 }
             }
@@ -596,9 +707,9 @@ fun TvPlayerScreen(
         }
     }
 
-    // Initial focus on play/pause button
+    // Initial focus on timeline for immediate scrubbing & play/pause
     LaunchedEffect(Unit) {
-        playPauseFocusRequester.requestFocus()
+        timelineFocusRequester.requestFocus()
     }
 
     // Active labels for bottom controls
@@ -624,13 +735,26 @@ fun TvPlayerScreen(
                         when (keyEvent.nativeKeyEvent.keyCode) {
                             KeyEvent.KEYCODE_DPAD_CENTER,
                             KeyEvent.KEYCODE_ENTER,
-                            KeyEvent.KEYCODE_NUMPAD_ENTER,
+                            KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                if (exoPlayer.isPlaying) {
+                                    exoPlayer.pause()
+                                } else {
+                                    exoPlayer.play()
+                                }
+                                showControls = true
+                                coroutineScope.launch {
+                                    delay(50)
+                                    timelineFocusRequester.requestFocus()
+                                }
+                                true
+                            }
+
                             KeyEvent.KEYCODE_DPAD_UP,
                             KeyEvent.KEYCODE_DPAD_DOWN -> {
                                 showControls = true
                                 coroutineScope.launch {
                                     delay(50)
-                                    playPauseFocusRequester.requestFocus()
+                                    timelineFocusRequester.requestFocus()
                                 }
                                 true
                             }
@@ -727,13 +851,26 @@ fun TvPlayerScreen(
                             when (keyEvent.nativeKeyEvent.keyCode) {
                                 KeyEvent.KEYCODE_DPAD_CENTER,
                                 KeyEvent.KEYCODE_ENTER,
-                                KeyEvent.KEYCODE_NUMPAD_ENTER,
+                                KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                    if (exoPlayer.isPlaying) {
+                                        exoPlayer.pause()
+                                    } else {
+                                        exoPlayer.play()
+                                    }
+                                    showControls = true
+                                    coroutineScope.launch {
+                                        delay(50)
+                                        timelineFocusRequester.requestFocus()
+                                    }
+                                    true
+                                }
+
                                 KeyEvent.KEYCODE_DPAD_UP,
                                 KeyEvent.KEYCODE_DPAD_DOWN -> {
                                     showControls = true
                                     coroutineScope.launch {
                                         delay(50)
-                                        playPauseFocusRequester.requestFocus()
+                                        timelineFocusRequester.requestFocus()
                                     }
                                     true
                                 }
@@ -846,18 +983,20 @@ fun TvPlayerScreen(
                         TvFocusableCard(
                             onClick = { viewModel.retry() },
                             shape = RectangleShape,
-                            focusedBorderColor = BorderFocused,
+                            focusedScale = 1.025f,
+                            focusedBorderColor = FocusWhite,
+                            focusedBorderWidth = 1.5.dp,
                             modifier = Modifier.focusRequester(retryFocusRequester)
                         ) { isFocused ->
                             Box(
                                 modifier = Modifier
-                                    .background(if (isFocused) SurfaceDark else PitchBlack, RectangleShape)
+                                    .background(if (isFocused) Color.White else SurfaceDark, RectangleShape)
                                     .padding(horizontal = 24.dp, vertical = 14.dp)
                             ) {
                                 Text(
                                     text = "Try Again",
                                     style = ErasmusTvTypography.ButtonText,
-                                    color = if (isFocused) FocusWhite else TextPrimary
+                                    color = if (isFocused) PitchBlack else TextPrimary
                                 )
                             }
                         }
@@ -865,17 +1004,19 @@ fun TvPlayerScreen(
                         TvFocusableCard(
                             onClick = { activeMenu = PlayerActiveMenu.Servers },
                             shape = RectangleShape,
-                            focusedBorderColor = BorderFocused
+                            focusedScale = 1.025f,
+                            focusedBorderColor = FocusWhite,
+                            focusedBorderWidth = 1.5.dp
                         ) { isFocused ->
                             Box(
                                 modifier = Modifier
-                                    .background(if (isFocused) SurfaceDark else PitchBlack, RectangleShape)
+                                    .background(if (isFocused) Color.White else SurfaceDark, RectangleShape)
                                     .padding(horizontal = 24.dp, vertical = 14.dp)
                             ) {
                                 Text(
                                     text = "Change Server",
                                     style = ErasmusTvTypography.ButtonText,
-                                    color = if (isFocused) FocusWhite else TextPrimary
+                                    color = if (isFocused) PitchBlack else TextPrimary
                                 )
                             }
                         }
@@ -883,17 +1024,19 @@ fun TvPlayerScreen(
                         TvFocusableCard(
                             onClick = onExit,
                             shape = RectangleShape,
-                            focusedBorderColor = BorderFocused
+                            focusedScale = 1.025f,
+                            focusedBorderColor = FocusWhite,
+                            focusedBorderWidth = 1.5.dp
                         ) { isFocused ->
                             Box(
                                 modifier = Modifier
-                                    .background(if (isFocused) SurfaceDark else PitchBlack, RectangleShape)
+                                    .background(if (isFocused) Color.White else SurfaceDark, RectangleShape)
                                     .padding(horizontal = 24.dp, vertical = 14.dp)
                             ) {
                                 Text(
                                     text = "Exit",
                                     style = ErasmusTvTypography.ButtonText,
-                                    color = if (isFocused) FocusWhite else TextPrimary
+                                    color = if (isFocused) PitchBlack else TextPrimary
                                 )
                             }
                         }
@@ -915,6 +1058,9 @@ fun TvPlayerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
+                    .focusProperties {
+                        canFocus = (activeMenu == PlayerActiveMenu.None)
+                    }
                     .background(
                         Brush.verticalGradient(
                             colorStops = arrayOf(
@@ -930,8 +1076,9 @@ fun TvPlayerScreen(
                 TvPlayerTopBar(
                     title = viewModel.title,
                     mediaType = viewModel.mediaType,
-                    season = viewModel.season,
-                    episode = viewModel.episode,
+                    season = currentSeason,
+                    episode = currentEpisode,
+                    episodeTitle = currentEpisodeTitle,
                     currentServerName = currentServerName,
                     onExit = {
                         val seconds = exoPlayer.currentPosition / 1000L
@@ -999,6 +1146,7 @@ fun TvPlayerScreen(
                             else -> backFocusRequester
                         },
                         bottomControlFocusRequester = when (lastFocusedBottomControlButton) {
+                            "episodes" -> episodesFocusRequester
                             "audio" -> audioFocusRequester
                             "subtitles" -> subtitleFocusRequester
                             "quality" -> qualityFocusRequester
@@ -1016,6 +1164,11 @@ fun TvPlayerScreen(
                         currentAudioLabel = currentAudioLabel,
                         currentSubtitleLabel = currentSubtitleLabel,
                         currentQualityLabel = currentQualityLabel,
+                        mediaType = viewModel.mediaType,
+                        season = currentSeason,
+                        episode = currentEpisode,
+                        onOpenEpisodes = { activeMenu = PlayerActiveMenu.Episodes },
+                        episodesFocusRequester = episodesFocusRequester,
                         onTogglePlayPause = {
                             if (exoPlayer.isPlaying) {
                                 exoPlayer.pause()
@@ -1049,8 +1202,13 @@ fun TvPlayerScreen(
             currentSubtitleSize = subtitleSize,
             autoSyncStatus = autoSyncStatus,
             onSelectAudioTrack = { track ->
+                for (idx in audioTracks.indices) {
+                    val item = audioTracks[idx]
+                    audioTracks[idx] = item.copy(isSelected = (item.id == track.id))
+                }
                 exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
                     .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                    .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
                     .setOverrideForType(TrackSelectionOverride(track.mediaTrackGroup, track.trackIndex))
                     .build()
             },
@@ -1108,6 +1266,7 @@ fun TvPlayerScreen(
                 }
             },
             onSelectQualityTrack = { track ->
+                selectedQualityTrackId = track.id
                 if (track.isAuto) {
                     exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
                         .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
@@ -1116,6 +1275,10 @@ fun TvPlayerScreen(
                     exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
                         .setOverrideForType(TrackSelectionOverride(track.mediaTrackGroup, track.trackIndex))
                         .build()
+                }
+                for (i in 0 until qualityTracks.size) {
+                    val q = qualityTracks[i]
+                    qualityTracks[i] = q.copy(isSelected = q.id == track.id)
                 }
             },
             onSelectServer = { serverId ->
@@ -1127,12 +1290,39 @@ fun TvPlayerScreen(
                 coroutineScope.launch {
                     delay(50)
                     when (closingMenu) {
+                        PlayerActiveMenu.Episodes -> episodesFocusRequester.requestFocus()
                         PlayerActiveMenu.Audio -> audioFocusRequester.requestFocus()
                         PlayerActiveMenu.Subtitles -> subtitleFocusRequester.requestFocus()
                         PlayerActiveMenu.Quality -> qualityFocusRequester.requestFocus()
                         PlayerActiveMenu.Servers -> serverFocusRequester.requestFocus()
-                        else -> playPauseFocusRequester.requestFocus()
+                        else -> timelineFocusRequester.requestFocus()
                     }
+                }
+            }
+        )
+
+        // Layer 6: In-Player Episode Switcher Overlay
+        TvPlayerEpisodeSwitcher(
+            visible = activeMenu == PlayerActiveMenu.Episodes,
+            showTitle = viewModel.title,
+            currentSeason = currentSeason ?: 1,
+            currentEpisode = currentEpisode ?: 1,
+            seasons = showSeasons,
+            episodes = currentSeasonEpisodes,
+            isLoading = isLoadingEpisodes,
+            currentPositionMs = currentPositionMs,
+            durationMs = durationMs,
+            getEpisodeProgress = { s, e -> viewModel.getEpisodeProgressRatio(s, e) },
+            onSelectSeason = { s -> viewModel.loadEpisodesForSeason(s) },
+            onSelectEpisode = { s, e, t ->
+                viewModel.switchEpisode(s, e, t)
+                activeMenu = PlayerActiveMenu.None
+            },
+            onClose = {
+                activeMenu = PlayerActiveMenu.None
+                coroutineScope.launch {
+                    delay(50)
+                    episodesFocusRequester.requestFocus()
                 }
             }
         )

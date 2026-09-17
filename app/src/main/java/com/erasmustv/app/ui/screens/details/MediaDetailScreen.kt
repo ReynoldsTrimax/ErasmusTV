@@ -63,6 +63,10 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -85,6 +89,7 @@ import com.erasmustv.app.data.model.MediaRating
 import com.erasmustv.app.data.model.TvEpisode
 import com.erasmustv.app.data.model.TvSeason
 import com.erasmustv.app.ui.components.MediaSectionRow
+import com.erasmustv.app.ui.components.TvDetailSkeleton
 import com.erasmustv.app.ui.components.TvFocusableCard
 import com.erasmustv.app.ui.components.TvLeftNavRail
 import com.erasmustv.app.ui.navigation.NavRoutes
@@ -197,16 +202,7 @@ fun MediaDetailScreen(
     ) {
         when (val state = uiState) {
             is DetailUiState.Loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        color = FocusWhite,
-                        modifier = Modifier.size(40.dp),
-                        strokeWidth = 2.5.dp
-                    )
-                }
+                TvDetailSkeleton(contentShift = contentShift)
             }
             is DetailUiState.Error -> {
                 Column(
@@ -608,6 +604,8 @@ private fun DetailHero(
             TvFocusableCard(
                 onClick = onBackClick,
                 shape = RectangleShape,
+                contentDescription = "Back to previous screen",
+                role = Role.Button,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(start = 82.dp, top = 26.dp)
@@ -645,14 +643,14 @@ private fun DetailHero(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back to Home",
+                        contentDescription = null,
                         tint = if (isFocused) PitchBlack else Color.White,
                         modifier = Modifier.size(14.dp)
                     )
                     Text(
                         text = "Back",
                         style = ErasmusTvTypography.Badge.copy(
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         ),
                         color = if (isFocused) PitchBlack else Color.White
@@ -758,15 +756,15 @@ private fun DetailHero(
                         Box(
                             modifier = Modifier
                                 .background(Color(0x2E1E1E28), RectangleShape)
-                                .border(1.dp, Color(0x1FFFFFFF), RectangleShape)
-                                .padding(horizontal = 7.dp, vertical = 2.dp)
+                                .border(1.dp, Color(0x26FFFFFF), RectangleShape)
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
                                 text = genreName.uppercase(),
                                 style = ErasmusTvTypography.Badge.copy(
-                                    fontSize = 9.sp,
+                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.6.sp
+                                    letterSpacing = 0.5.sp
                                 ),
                                 color = Color.White
                             )
@@ -810,6 +808,8 @@ private fun DetailHero(
                     onClick = onPlayClick,
                     shape = RectangleShape,
                     focusedBorderColor = Color.White,
+                    contentDescription = primaryActionLabel,
+                    role = Role.Button,
                     modifier = (playFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
                         .onKeyEvent { keyEvent ->
                             if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionLeft) {
@@ -835,7 +835,7 @@ private fun DetailHero(
                     ) {
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Play",
+                            contentDescription = null,
                             tint = PitchBlack,
                             modifier = Modifier.size(16.dp)
                         )
@@ -854,7 +854,9 @@ private fun DetailHero(
                 TvFocusableCard(
                     onClick = onToggleWatchlist,
                     shape = RectangleShape,
-                    focusedBorderColor = Color.White
+                    focusedBorderColor = Color.White,
+                    contentDescription = if (inWatchlist) "In List, click to remove from Watchlist" else "Add to Watchlist",
+                    role = Role.Button
                 ) { isFocused ->
                     Row(
                         modifier = Modifier
@@ -873,7 +875,7 @@ private fun DetailHero(
                     ) {
                         Icon(
                             imageVector = if (inWatchlist) Icons.Default.Check else Icons.Default.BookmarkBorder,
-                            contentDescription = "My List",
+                            contentDescription = null,
                             tint = Color.White,
                             modifier = Modifier.size(15.dp)
                         )
@@ -912,14 +914,14 @@ private fun DetailMetadataBadge(text: String) {
         modifier = Modifier
             .background(Color(0x2E1E1E28), RectangleShape)
             .border(1.dp, Color(0x26FFFFFF), RectangleShape)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
+            .padding(horizontal = 8.dp, vertical = 3.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
             style = ErasmusTvTypography.Badge.copy(
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Medium
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.SemiBold
             ),
             color = Color.White
         )
@@ -988,16 +990,16 @@ private fun RatingScoreCard(
 ) {
     Box(
         modifier = Modifier
-            .width(82.dp)
+            .width(112.dp)
             .background(Color(0x3D14141E), RectangleShape)
-            .border(1.dp, Color(0x1FFFFFFF), RectangleShape)
-            .padding(horizontal = 7.dp, vertical = 6.dp)
+            .border(1.dp, Color(0x26FFFFFF), RectangleShape)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
         Column {
             Text(
                 text = label,
                 style = ErasmusTvTypography.Badge.copy(
-                    fontSize = 8.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 0.4.sp
                 ),
@@ -1005,19 +1007,19 @@ private fun RatingScoreCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = score,
                 style = ErasmusTvTypography.Badge.copy(
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.ExtraBold
                 ),
                 color = Color.White
             )
-            Spacer(modifier = Modifier.height(1.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = subText,
-                style = ErasmusTvTypography.Badge.copy(fontSize = 8.sp),
+                style = ErasmusTvTypography.Badge.copy(fontSize = 10.sp),
                 color = TextMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1076,7 +1078,11 @@ private fun TvEpisodesSection(
                 TvFocusableCard(
                     onClick = { onSeasonSelect(season.seasonNumber) },
                     shape = RectangleShape,
+                    focusedScale = 1.0f,
                     focusedBorderColor = Color.White,
+                    focusedBorderWidth = 1.5.dp,
+                    contentDescription = "${season.name}, tab${if (isSelected) ", selected" else ""}",
+                    role = Role.Tab,
                     modifier = (if (index == 0 && firstItemFocusRequester != null) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
                         .onKeyEvent { keyEvent ->
                             if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionLeft && index == 0) {
@@ -1153,9 +1159,19 @@ private fun EpisodeCard(
             .build()
     }
 
+    val a11yDescription = remember(episode) {
+        buildString {
+            append("Episode ${episode.episodeNumber}, ")
+            append(episode.name)
+            episode.runtime?.let { append(", $it minutes") }
+        }
+    }
+
     Column(modifier = Modifier.width(230.dp)) {
         TvFocusableCard(
             onClick = onClick,
+            contentDescription = a11yDescription,
+            role = Role.Button,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
@@ -1168,7 +1184,7 @@ private fun EpisodeCard(
                     } else false
                 },
             shape = RectangleShape,
-            focusedScale = 1.0f,
+            focusedScale = 1.025f,
             focusedBorderColor = Color.White,
             focusedBorderWidth = 1.5.dp
         ) { isFocused ->
@@ -1180,7 +1196,7 @@ private fun EpisodeCard(
             ) {
                 AsyncImage(
                     model = imageRequest,
-                    contentDescription = episode.name,
+                    contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -1218,7 +1234,7 @@ private fun EpisodeCard(
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Play",
+                        contentDescription = null,
                         tint = if (isFocused) PitchBlack else Color.White,
                         modifier = Modifier.size(18.dp)
                     )
@@ -1287,7 +1303,6 @@ private fun CastMemberItem(member: CastMember) {
                 .size(72.dp)
                 .clip(RectangleShape)
                 .background(SurfaceDark)
-                .border(1.dp, Color(0x26FFFFFF), RectangleShape)
         )
         Spacer(modifier = Modifier.height(6.dp))
         Text(
