@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -45,9 +46,17 @@ import com.erasmustv.app.ui.components.ContinueWatchingRow
 import com.erasmustv.app.ui.components.HeroBillboard
 import com.erasmustv.app.ui.components.MediaSectionRow
 import com.erasmustv.app.ui.components.RankedSectionRow
+import com.erasmustv.app.ui.components.TvFeedSkeleton
 import com.erasmustv.app.ui.components.TvFocusableCard
 import com.erasmustv.app.ui.components.TvLeftNavRail
 import com.erasmustv.app.ui.navigation.NavRoutes
+
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import com.erasmustv.app.core.theme.TvMotion
+import com.erasmustv.app.core.theme.rememberReducedMotion
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -61,81 +70,110 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
+    val isReducedMotion = rememberReducedMotion()
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(PitchBlack)
     ) {
-        when (val state = uiState) {
-            is HomeUiState.Loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = FocusWhite)
-                }
-            }
-            is HomeUiState.Error -> {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Spacer(modifier = Modifier.height(120.dp))
-                    Text(
-                        text = state.message,
-                        style = ErasmusTvTypography.Body,
-                        color = TextPrimary
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    TvFocusableCard(onClick = { viewModel.loadHomeFeed() }) {
-                        Text(
-                            text = "Retry",
-                            style = ErasmusTvTypography.ButtonText,
-                            modifier = Modifier.padding(16.dp)
+        AnimatedContent(
+            targetState = uiState,
+            transitionSpec = {
+                if (isReducedMotion) {
+                    androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None
+                } else {
+                    fadeIn(
+                        animationSpec = tween(
+                            durationMillis = TvMotion.DURATION_ENTER,
+                            easing = TvMotion.EasingSilk
                         )
-                    }
-                }
-            }
-            is HomeUiState.Success -> {
-                val data = state.data
-                val heroFocusRequester = remember { FocusRequester() }
-                val continueWatchingFocusRequester = remember { FocusRequester() }
-                val trendingFocusRequester = remember { FocusRequester() }
-                val newMoviesFocusRequester = remember { FocusRequester() }
-                val popularTvFocusRequester = remember { FocusRequester() }
-                val topRatedFocusRequester = remember { FocusRequester() }
-                val railFocusRequester = remember { FocusRequester() }
-
-                val allRowRequesters = remember {
-                    listOf(
-                        heroFocusRequester,
-                        continueWatchingFocusRequester,
-                        trendingFocusRequester,
-                        newMoviesFocusRequester,
-                        popularTvFocusRequester,
-                        topRatedFocusRequester
+                    ) togetherWith fadeOut(
+                        animationSpec = tween(
+                            durationMillis = TvMotion.DURATION_FAST,
+                            easing = TvMotion.EasingSilk
+                        )
                     )
                 }
-
-                var activeContentFocusRequester by remember { mutableStateOf(heroFocusRequester) }
-                var isRailFocused by remember { mutableStateOf(false) }
-
-                val listState = rememberLazyListState()
-
-                // Active Hero item support for carousel selection
-                var selectedHeroItem by remember(data.heroItem?.id) { mutableStateOf(data.heroItem) }
-
-                // Request initial focus exactly once; never steal focus on recomposition or return from details
-                var hasRequestedInitialFocus by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
-                LaunchedEffect(Unit) {
-                    if (!hasRequestedInitialFocus) {
-                        try {
-                            heroFocusRequester.requestFocus()
-                            hasRequestedInitialFocus = true
-                        } catch (_: Exception) {}
+            },
+            label = "homeScreenFeedTransition"
+        ) { state ->
+            when (state) {
+                is HomeUiState.Loading -> {
+                    TvFeedSkeleton()
+                }
+                is HomeUiState.Error -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(modifier = Modifier.height(120.dp))
+                        Text(
+                            text = state.message,
+                            style = ErasmusTvTypography.Body,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        TvFocusableCard(onClick = { viewModel.loadHomeFeed() }) {
+                            Text(
+                                text = "Retry",
+                                style = ErasmusTvTypography.ButtonText,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
                     }
                 }
+                is HomeUiState.Success -> {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        val data = state.data
+                        val heroFocusRequester = remember { FocusRequester() }
+                        val continueWatchingFocusRequester = remember { FocusRequester() }
+                        val railFocusRequester = remember { FocusRequester() }
+
+                        val sectionFocusRequesters = remember(data.sections.size) {
+                            List(data.sections.size) { FocusRequester() }
+                        }
+                        val sectionsStartIndex = if (data.continueWatching.isNotEmpty()) 2 else 1
+
+                        val allRowRequesters = remember(sectionFocusRequesters.size) {
+                            listOf(heroFocusRequester, continueWatchingFocusRequester) + sectionFocusRequesters
+                        }
+
+                        var activeContentFocusRequester by remember { mutableStateOf(heroFocusRequester) }
+                        var isRailFocused by remember { mutableStateOf(false) }
+
+                        val listState = rememberLazyListState()
+
+                        // Active Hero item support for carousel selection with fallback cascading
+                        val initialHero = data.heroItem
+                            ?: data.sections.firstOrNull()?.items?.firstOrNull()
+                            ?: data.trending.firstOrNull()
+                            ?: data.popularMovies.firstOrNull()
+                            ?: data.popularTv.firstOrNull()
+                            ?: data.topRated.firstOrNull()
+                        var selectedHeroItem by remember(initialHero?.id) {
+                            mutableStateOf(initialHero)
+                        }
+
+                        // Request initial focus exactly once; never steal focus on recomposition or return from details
+                        var hasRequestedInitialFocus by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+                        LaunchedEffect(Unit) {
+                            if (!hasRequestedInitialFocus) {
+                                kotlinx.coroutines.delay(60)
+                                try {
+                                    if (initialHero != null) {
+                                        heroFocusRequester.requestFocus()
+                                    } else if (data.continueWatching.isNotEmpty()) {
+                                        continueWatchingFocusRequester.requestFocus()
+                                    } else if (sectionFocusRequesters.isNotEmpty()) {
+                                        sectionFocusRequesters[0].requestFocus()
+                                    } else {
+                                        railFocusRequester.requestFocus()
+                                    }
+                                    hasRequestedInitialFocus = true
+                                } catch (_: Exception) {}
+                            }
+                        }
 
                 val coroutineScope = rememberCoroutineScope()
 
@@ -213,7 +251,7 @@ fun HomeScreen(
                                 }
                             ) {
                                 HeroBillboard(
-                                    item = selectedHeroItem ?: data.heroItem,
+                                    item = selectedHeroItem ?: initialHero,
                                     onPlayClick = onPlayClick,
                                     onDetailsClick = onMediaClick,
                                     heroFocusRequester = heroFocusRequester,
@@ -227,13 +265,14 @@ fun HomeScreen(
                                     onNavigateDown = {
                                         if (data.continueWatching.isNotEmpty()) {
                                             navigateToRow(1, continueWatchingFocusRequester)
-                                        } else {
-                                            navigateToRow(1, trendingFocusRequester)
+                                        } else if (sectionFocusRequesters.isNotEmpty()) {
+                                            navigateToRow(sectionsStartIndex, sectionFocusRequesters[0])
                                         }
-                                    }
+                                    },
+                                    isAutoAdvanceEnabled = listState.firstVisibleItemIndex == 0
                                 )
                             }
-                            Spacer(modifier = Modifier.height(18.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                         }
 
                         // Continue Watching row if active items exist
@@ -256,145 +295,85 @@ fun HomeScreen(
                                             } catch (_: Exception) {}
                                         },
                                         onNavigateDown = {
-                                            navigateToRow(2, trendingFocusRequester)
+                                            if (sectionFocusRequesters.isNotEmpty()) {
+                                                navigateToRow(sectionsStartIndex, sectionFocusRequesters[0])
+                                            }
                                         },
                                         onNavigateUp = {
                                             navigateToRow(0, heroFocusRequester)
                                         }
                                     )
                                 }
-                                Spacer(modifier = Modifier.height(36.dp))
+                                Spacer(modifier = Modifier.height(22.dp))
                             }
                         }
 
-                        val trendingRowIndex = if (data.continueWatching.isNotEmpty()) 2 else 1
-                        val newMoviesRowIndex = trendingRowIndex + 1
-                        val popularTvRowIndex = newMoviesRowIndex + 1
-                        val topRatedRowIndex = popularTvRowIndex + 1
+                        // Dynamic 20+ Curated Catalog Sections
+                        itemsIndexed(
+                            items = data.sections,
+                            key = { _, section -> section.id }
+                        ) { sIndex, section ->
+                            val currentRequester = sectionFocusRequesters.getOrElse(sIndex) { heroFocusRequester }
+                            val targetDownRequester = if (sIndex < sectionFocusRequesters.size - 1) sectionFocusRequesters[sIndex + 1] else null
+                            val targetUpRequester = if (sIndex > 0) {
+                                sectionFocusRequesters[sIndex - 1]
+                            } else if (data.continueWatching.isNotEmpty()) {
+                                continueWatchingFocusRequester
+                            } else {
+                                heroFocusRequester
+                            }
+                            val targetUpIndex = if (sIndex > 0) sectionsStartIndex + sIndex - 1 else if (data.continueWatching.isNotEmpty()) 1 else 0
+                            val targetDownIndex = sectionsStartIndex + sIndex + 1
 
-                        // Ranked Content Rail: "Trending Right Now" with giant graphic numbers 1-10
-                        item {
                             Box(
                                 modifier = Modifier.onFocusChanged {
                                     if (it.hasFocus) {
-                                        activeContentFocusRequester = trendingFocusRequester
+                                        activeContentFocusRequester = currentRequester
                                     }
                                 }
                             ) {
-                                RankedSectionRow(
-                                    title = "Trending Right Now",
-                                    items = data.trending,
-                                    onItemClick = onMediaClick,
-                                    onViewAllClick = { onNavigate(NavRoutes.MOVIES) },
-                                    firstItemFocusRequester = trendingFocusRequester,
-                                    onNavigateLeftToRail = {
-                                        try {
-                                            railFocusRequester.requestFocus()
-                                        } catch (_: Exception) {}
-                                    },
-                                    onNavigateDown = {
-                                        navigateToRow(newMoviesRowIndex, newMoviesFocusRequester)
-                                    },
-                                    onNavigateUp = {
-                                        if (data.continueWatching.isNotEmpty()) {
-                                            navigateToRow(1, continueWatchingFocusRequester)
-                                        } else {
-                                            navigateToRow(0, heroFocusRequester)
+                                if (section.isRanked) {
+                                    RankedSectionRow(
+                                        title = section.title,
+                                        items = section.items,
+                                        onItemClick = onMediaClick,
+                                        onViewAllClick = section.viewAllRoute?.let { route -> { onNavigate(route) } },
+                                        firstItemFocusRequester = currentRequester,
+                                        onNavigateLeftToRail = {
+                                            try {
+                                                railFocusRequester.requestFocus()
+                                            } catch (_: Exception) {}
+                                        },
+                                        onNavigateDown = if (targetDownRequester != null) {
+                                            { navigateToRow(targetDownIndex, targetDownRequester) }
+                                        } else null,
+                                        onNavigateUp = {
+                                            navigateToRow(targetUpIndex, targetUpRequester)
                                         }
-                                    }
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(36.dp))
-                        }
-
-                        // Content Rail: "New Movies"
-                        item {
-                            Box(
-                                modifier = Modifier.onFocusChanged {
-                                    if (it.hasFocus) {
-                                        activeContentFocusRequester = newMoviesFocusRequester
-                                    }
+                                    )
+                                } else {
+                                    MediaSectionRow(
+                                        title = section.title,
+                                        items = section.items,
+                                        onItemClick = onMediaClick,
+                                        onViewAllClick = section.viewAllRoute?.let { route -> { onNavigate(route) } },
+                                        firstItemFocusRequester = currentRequester,
+                                        showNewBadge = section.showNewBadge,
+                                        onNavigateLeftToRail = {
+                                            try {
+                                                railFocusRequester.requestFocus()
+                                            } catch (_: Exception) {}
+                                        },
+                                        onNavigateDown = if (targetDownRequester != null) {
+                                            { navigateToRow(targetDownIndex, targetDownRequester) }
+                                        } else null,
+                                        onNavigateUp = {
+                                            navigateToRow(targetUpIndex, targetUpRequester)
+                                        }
+                                    )
                                 }
-                            ) {
-                                MediaSectionRow(
-                                    title = "New Movies",
-                                    items = data.popularMovies,
-                                    onItemClick = onMediaClick,
-                                    onViewAllClick = { onNavigate(NavRoutes.MOVIES) },
-                                    firstItemFocusRequester = newMoviesFocusRequester,
-                                    onNavigateLeftToRail = {
-                                        try {
-                                            railFocusRequester.requestFocus()
-                                        } catch (_: Exception) {}
-                                    },
-                                    onNavigateDown = {
-                                        navigateToRow(popularTvRowIndex, popularTvFocusRequester)
-                                    },
-                                    onNavigateUp = {
-                                        navigateToRow(trendingRowIndex, trendingFocusRequester)
-                                    }
-                                )
                             }
-                            Spacer(modifier = Modifier.height(36.dp))
-                        }
-
-                        // Content Rail: "Popular TV Shows"
-                        item {
-                            Box(
-                                modifier = Modifier.onFocusChanged {
-                                    if (it.hasFocus) {
-                                        activeContentFocusRequester = popularTvFocusRequester
-                                    }
-                                }
-                            ) {
-                                MediaSectionRow(
-                                    title = "Popular TV Shows",
-                                    items = data.popularTv,
-                                    onItemClick = onMediaClick,
-                                    onViewAllClick = { onNavigate(NavRoutes.TV) },
-                                    firstItemFocusRequester = popularTvFocusRequester,
-                                    onNavigateLeftToRail = {
-                                        try {
-                                            railFocusRequester.requestFocus()
-                                        } catch (_: Exception) {}
-                                    },
-                                    onNavigateDown = {
-                                        navigateToRow(topRatedRowIndex, topRatedFocusRequester)
-                                    },
-                                    onNavigateUp = {
-                                        navigateToRow(newMoviesRowIndex, newMoviesFocusRequester)
-                                    }
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(36.dp))
-                        }
-
-                        // Top Rated Rail
-                        item {
-                            Box(
-                                modifier = Modifier.onFocusChanged {
-                                    if (it.hasFocus) {
-                                        activeContentFocusRequester = topRatedFocusRequester
-                                    }
-                                }
-                            ) {
-                                MediaSectionRow(
-                                    title = "Top Rated",
-                                    items = data.topRated,
-                                    onItemClick = onMediaClick,
-                                    firstItemFocusRequester = topRatedFocusRequester,
-                                    onNavigateLeftToRail = {
-                                        try {
-                                            railFocusRequester.requestFocus()
-                                        } catch (_: Exception) {}
-                                    },
-                                    onNavigateDown = null,
-                                    onNavigateUp = {
-                                        navigateToRow(popularTvRowIndex, popularTvFocusRequester)
-                                    }
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(48.dp))
+                            Spacer(modifier = Modifier.height(24.dp))
                         }
                     }
                 }
@@ -449,3 +428,7 @@ fun HomeScreen(
         }
     }
 }
+}
+}
+
+

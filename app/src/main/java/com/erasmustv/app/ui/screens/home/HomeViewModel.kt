@@ -14,9 +14,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+import com.erasmustv.app.data.model.HomeSection
+import com.erasmustv.app.ui.navigation.NavRoutes
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
 data class HomeData(
     val heroItem: MediaItem? = null,
     val continueWatching: List<ContinueWatchingItem> = emptyList(),
+    val sections: List<HomeSection> = emptyList(),
     val trending: List<MediaItem> = emptyList(),
     val popularMovies: List<MediaItem> = emptyList(),
     val popularTv: List<MediaItem> = emptyList(),
@@ -39,25 +45,65 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    init {
-        loadHomeFeed()
+    companion object {
+        private var memoryCachedData: HomeData? = null
     }
 
-    fun loadHomeFeed() {
+    init {
+        if (memoryCachedData != null) {
+            _uiState.value = HomeUiState.Success(memoryCachedData!!)
+            // Refresh continue watching in background
+            refreshContinueWatchingOnly()
+        } else {
+            loadHomeFeed()
+        }
+    }
+
+    private fun refreshContinueWatchingOnly() {
         viewModelScope.launch {
-            _uiState.value = HomeUiState.Loading
+            try {
+                val activeProfile = profileManager.getActiveProfile()
+                val profileId = activeProfile?.id ?: "default-profile"
+                val rawCw = streamRepository.listContinueWatching(profileId)
+                val current = memoryCachedData ?: return@launch
+                val updated = current.copy(continueWatching = rawCw, activeProfile = activeProfile)
+                memoryCachedData = updated
+                _uiState.value = HomeUiState.Success(updated)
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun loadHomeFeed(forceRefresh: Boolean = false) {
+        if (!forceRefresh && memoryCachedData != null && memoryCachedData!!.sections.size > 10) {
+            _uiState.value = HomeUiState.Success(memoryCachedData!!)
+            return
+        }
+
+        viewModelScope.launch {
+            if (_uiState.value !is HomeUiState.Success) {
+                _uiState.value = HomeUiState.Loading
+            }
             try {
                 val activeProfile = profileManager.getActiveProfile()
                 val profileId = activeProfile?.id ?: "default-profile"
 
                 val rawContinueWatching = streamRepository.listContinueWatching(profileId)
 
+                // STAGE 1: Fast above-the-fold queries for immediate <400ms TV render
                 val trendingDeferred = async { mediaRepository.getTrending().getOrDefault(emptyList()) }
+                val top10MoviesDeferred = async { mediaRepository.getTop10Movies().getOrDefault(emptyList()) }
+                val top10TvDeferred = async { mediaRepository.getTop10Tv().getOrDefault(emptyList()) }
+                val actionMoviesDeferred = async { mediaRepository.getDiscoverMovies(withGenres = "28,12").getOrDefault(emptyList()) }
+                val tvDramasDeferred = async { mediaRepository.getDiscoverTv(withGenres = "18").getOrDefault(emptyList()) }
                 val popularMoviesDeferred = async { mediaRepository.getPopularMovies().getOrDefault(emptyList()) }
                 val popularTvDeferred = async { mediaRepository.getPopularTv().getOrDefault(emptyList()) }
                 val topRatedDeferred = async { mediaRepository.getTopRatedMovies().getOrDefault(emptyList()) }
 
                 val trending = trendingDeferred.await()
+                val top10Movies = top10MoviesDeferred.await()
+                val top10Tv = top10TvDeferred.await()
+                val actionMovies = actionMoviesDeferred.await()
+                val tvDramas = tvDramasDeferred.await()
                 val popularMovies = popularMoviesDeferred.await()
                 val popularTv = popularTvDeferred.await()
                 val topRated = topRatedDeferred.await()
@@ -134,19 +180,189 @@ class HomeViewModel(
                     it.copy(logoPath = logo)
                 }
 
-                _uiState.value = HomeUiState.Success(
-                    HomeData(
-                        heroItem = heroItem,
-                        continueWatching = continueWatching,
-                        trending = trendingWithLogos,
-                        popularMovies = popularMovies,
-                        popularTv = popularTv,
-                        topRated = topRated,
-                        activeProfile = activeProfile
-                    )
+                // Initial Critical Sections (Stage 1)
+                val initialSections = mutableListOf<HomeSection>()
+                if (top10Movies.isNotEmpty()) {
+                    initialSections.add(HomeSection("top_10_movies", "Top 10 Movies Today", top10Movies, isRanked = true, viewAllRoute = NavRoutes.MOVIES))
+                }
+                if (trendingWithLogos.isNotEmpty()) {
+                    initialSections.add(HomeSection("trending_now", "Trending Now", trendingWithLogos, viewAllRoute = NavRoutes.MOVIES))
+                }
+                if (top10Tv.isNotEmpty()) {
+                    initialSections.add(HomeSection("top_10_tv", "Top 10 TV Shows Today", top10Tv, isRanked = true, viewAllRoute = NavRoutes.TV))
+                }
+                if (actionMovies.isNotEmpty()) {
+                    initialSections.add(HomeSection("action_blockbusters", "Action & Adventure Blockbusters", actionMovies, viewAllRoute = NavRoutes.MOVIES))
+                }
+                if (tvDramas.isNotEmpty()) {
+                    initialSections.add(HomeSection("binge_tv_dramas", "Binge-Worthy TV Dramas", tvDramas, viewAllRoute = NavRoutes.TV))
+                }
+                if (popularMovies.isNotEmpty()) {
+                    initialSections.add(HomeSection("new_movies", "New Movies", popularMovies, showNewBadge = true, viewAllRoute = NavRoutes.MOVIES))
+                }
+                if (popularTv.isNotEmpty()) {
+                    initialSections.add(HomeSection("popular_tv", "Popular TV Shows", popularTv, viewAllRoute = NavRoutes.TV))
+                }
+                if (topRated.isNotEmpty()) {
+                    initialSections.add(HomeSection("top_rated", "Top Rated", topRated, viewAllRoute = NavRoutes.MOVIES))
+                }
+
+                val stage1Data = HomeData(
+                    heroItem = heroItem,
+                    continueWatching = continueWatching,
+                    sections = initialSections,
+                    trending = trendingWithLogos,
+                    popularMovies = popularMovies,
+                    popularTv = popularTv,
+                    topRated = topRated,
+                    activeProfile = activeProfile
                 )
+
+                // Emit Stage 1 immediately so user has zero wait time
+                _uiState.value = HomeUiState.Success(stage1Data)
+                memoryCachedData = stage1Data
+
+                // STAGE 2: Asynchronously hydrate extended curated categories
+                withContext(Dispatchers.IO) {
+                    val hitComediesDef = async { mediaRepository.getDiscoverMovies(withGenres = "35").getOrDefault(emptyList()) }
+                    val sciFiDef = async { mediaRepository.getDiscoverMovies(withGenres = "878,14").getOrDefault(emptyList()) }
+                    val animeHitsDef = async { mediaRepository.getTrendingAnime().getOrDefault(emptyList()) }
+                    val kdramasDef = async { mediaRepository.getKdramas().getOrDefault(emptyList()) }
+                    val thrillersDef = async { mediaRepository.getDiscoverMovies(withGenres = "53").getOrDefault(emptyList()) }
+                    val crimeMysteryDef = async { mediaRepository.getDiscoverTv(withGenres = "80,9648").getOrDefault(emptyList()) }
+                    val romanceDef = async { mediaRepository.getDiscoverMovies(withGenres = "10749").getOrDefault(emptyList()) }
+                    val horrorDef = async { mediaRepository.getDiscoverMovies(withGenres = "27").getOrDefault(emptyList()) }
+                    val documentariesDef = async { mediaRepository.getDiscoverMovies(withGenres = "99").getOrDefault(emptyList()) }
+                    val familyDef = async { mediaRepository.getDiscoverMovies(withGenres = "10751").getOrDefault(emptyList()) }
+                    val acclaimedDef = async { mediaRepository.getCriticallyAcclaimedMovies().getOrDefault(emptyList()) }
+                    val nowPlayingDef = async { mediaRepository.getNowPlayingMovies().getOrDefault(emptyList()) }
+                    val topRatedTvDef = async { mediaRepository.getTopRatedTv().getOrDefault(emptyList()) }
+                    val upcomingDef = async { mediaRepository.getUpcomingMovies().getOrDefault(emptyList()) }
+                    val tvActionDef = async { mediaRepository.getDiscoverTv(withGenres = "10759").getOrDefault(emptyList()) }
+                    val tvComediesDef = async { mediaRepository.getDiscoverTv(withGenres = "35").getOrDefault(emptyList()) }
+                    val animeMoviesDef = async { mediaRepository.getAnimeMovies().getOrDefault(emptyList()) }
+
+                    val fullSections = mutableListOf<HomeSection>()
+                    // 1. Top 10 Movies Today
+                    if (top10Movies.isNotEmpty()) {
+                        fullSections.add(HomeSection("top_10_movies", "Top 10 Movies Today", top10Movies, isRanked = true, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 2. Trending Now
+                    if (trendingWithLogos.isNotEmpty()) {
+                        fullSections.add(HomeSection("trending_now", "Trending Now", trendingWithLogos, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 3. Top 10 TV Shows Today
+                    if (top10Tv.isNotEmpty()) {
+                        fullSections.add(HomeSection("top_10_tv", "Top 10 TV Shows Today", top10Tv, isRanked = true, viewAllRoute = NavRoutes.TV))
+                    }
+                    // 4. Action & Adventure Blockbusters
+                    if (actionMovies.isNotEmpty()) {
+                        fullSections.add(HomeSection("action_blockbusters", "Action & Adventure Blockbusters", actionMovies, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 5. Binge-Worthy TV Dramas
+                    if (tvDramas.isNotEmpty()) {
+                        fullSections.add(HomeSection("binge_tv_dramas", "Binge-Worthy TV Dramas", tvDramas, viewAllRoute = NavRoutes.TV))
+                    }
+                    // 6. Hit Comedies
+                    val hitComedies = hitComediesDef.await()
+                    if (hitComedies.isNotEmpty()) {
+                        fullSections.add(HomeSection("hit_comedies", "Hit Comedies", hitComedies, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 7. Mind-Bending Sci-Fi & Fantasy
+                    val sciFi = sciFiDef.await()
+                    if (sciFi.isNotEmpty()) {
+                        fullSections.add(HomeSection("sci_fi_fantasy", "Mind-Bending Sci-Fi & Fantasy", sciFi, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 8. Japanese Anime Hits
+                    val animeHits = animeHitsDef.await()
+                    if (animeHits.isNotEmpty()) {
+                        fullSections.add(HomeSection("anime_hits", "Japanese Anime Hits", animeHits, viewAllRoute = NavRoutes.ANIME))
+                    }
+                    // 9. Trending Korean Dramas (K-Dramas)
+                    val kdramas = kdramasDef.await()
+                    if (kdramas.isNotEmpty()) {
+                        fullSections.add(HomeSection("k_dramas", "Trending Korean Dramas (K-Dramas)", kdramas, viewAllRoute = NavRoutes.TV))
+                    }
+                    // 10. Edge-of-Your-Seat Thrillers
+                    val thrillers = thrillersDef.await()
+                    if (thrillers.isNotEmpty()) {
+                        fullSections.add(HomeSection("thrillers", "Edge-of-Your-Seat Thrillers", thrillers, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 11. Dark Crime & Mystery
+                    val crimeMystery = crimeMysteryDef.await()
+                    if (crimeMystery.isNotEmpty()) {
+                        fullSections.add(HomeSection("crime_mystery", "Dark Crime & Mystery", crimeMystery, viewAllRoute = NavRoutes.TV))
+                    }
+                    // 12. Romantic Favorites
+                    val romance = romanceDef.await()
+                    if (romance.isNotEmpty()) {
+                        fullSections.add(HomeSection("romance", "Romantic Favorites", romance, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 13. Chilling Horror
+                    val horror = horrorDef.await()
+                    if (horror.isNotEmpty()) {
+                        fullSections.add(HomeSection("horror", "Chilling Horror", horror, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 14. Fascinating Documentaries
+                    val documentaries = documentariesDef.await()
+                    if (documentaries.isNotEmpty()) {
+                        fullSections.add(HomeSection("documentaries", "Fascinating Documentaries", documentaries, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 15. Family Movie Night
+                    val family = familyDef.await()
+                    if (family.isNotEmpty()) {
+                        fullSections.add(HomeSection("family_movies", "Family Movie Night", family, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 16. Critically Acclaimed Masterpieces
+                    val acclaimed = acclaimedDef.await()
+                    if (acclaimed.isNotEmpty()) {
+                        fullSections.add(HomeSection("acclaimed", "Critically Acclaimed Masterpieces", acclaimed, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 17. New Releases in Theaters
+                    val nowPlaying = nowPlayingDef.await()
+                    if (nowPlaying.isNotEmpty()) {
+                        fullSections.add(HomeSection("now_playing", "Now Playing in Theaters", nowPlaying, showNewBadge = true, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 18. Top Rated TV Shows
+                    val topRatedTv = topRatedTvDef.await()
+                    if (topRatedTv.isNotEmpty()) {
+                        fullSections.add(HomeSection("top_rated_tv", "Top Rated TV Shows", topRatedTv, viewAllRoute = NavRoutes.TV))
+                    }
+                    // 19. Upcoming Movies
+                    val upcoming = upcomingDef.await()
+                    if (upcoming.isNotEmpty()) {
+                        fullSections.add(HomeSection("upcoming", "Upcoming Releases", upcoming, viewAllRoute = NavRoutes.MOVIES))
+                    }
+                    // 20. TV Action & Adventure
+                    val tvAction = tvActionDef.await()
+                    if (tvAction.isNotEmpty()) {
+                        fullSections.add(HomeSection("tv_action", "TV Action & Adventure", tvAction, viewAllRoute = NavRoutes.TV))
+                    }
+                    // 21. Laugh-Out-Loud TV Comedies
+                    val tvComedies = tvComediesDef.await()
+                    if (tvComedies.isNotEmpty()) {
+                        fullSections.add(HomeSection("tv_comedies", "Laugh-Out-Loud TV Comedies", tvComedies, viewAllRoute = NavRoutes.TV))
+                    }
+                    // 22. Anime Feature Films
+                    val animeMovies = animeMoviesDef.await()
+                    if (animeMovies.isNotEmpty()) {
+                        fullSections.add(HomeSection("anime_movies", "Anime Feature Films", animeMovies, viewAllRoute = NavRoutes.ANIME))
+                    }
+                    // 23. All-Time Classic Movies
+                    if (topRated.isNotEmpty()) {
+                        fullSections.add(HomeSection("classics", "All-Time Classic Movies", topRated, viewAllRoute = NavRoutes.MOVIES))
+                    }
+
+                    val fullData = stage1Data.copy(sections = fullSections)
+                    memoryCachedData = fullData
+                    withContext(Dispatchers.Main) {
+                        _uiState.value = HomeUiState.Success(fullData)
+                    }
+                }
             } catch (e: Exception) {
-                _uiState.value = HomeUiState.Error(e.message ?: "Failed to load home content")
+                if (_uiState.value !is HomeUiState.Success) {
+                    _uiState.value = HomeUiState.Error(e.message ?: "Failed to load home content")
+                }
             }
         }
     }

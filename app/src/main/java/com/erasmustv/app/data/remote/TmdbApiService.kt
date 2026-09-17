@@ -185,6 +185,8 @@ interface TmdbApiService {
         @Query("watch_region") watchRegion: String? = "US",
         @Query("with_original_language") withOriginalLanguage: String? = null,
         @Query("with_keywords") withKeywords: String? = null,
+        @Query("vote_average.gte") voteAverageGte: Double? = null,
+        @Query("vote_count.gte") voteCountGte: Int? = null,
         @Query("sort_by") sortBy: String = "popularity.desc",
         @Query("page") page: Int = 1
     ): TmdbPaginatedResponse<MediaItem>
@@ -197,6 +199,8 @@ interface TmdbApiService {
         @Query("watch_region") watchRegion: String? = "US",
         @Query("with_original_language") withOriginalLanguage: String? = null,
         @Query("with_keywords") withKeywords: String? = null,
+        @Query("vote_average.gte") voteAverageGte: Double? = null,
+        @Query("vote_count.gte") voteCountGte: Int? = null,
         @Query("sort_by") sortBy: String = "popularity.desc",
         @Query("page") page: Int = 1
     ): TmdbPaginatedResponse<MediaItem>

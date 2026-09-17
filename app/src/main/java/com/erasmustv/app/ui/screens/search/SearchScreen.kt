@@ -11,6 +11,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,9 +31,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
@@ -65,6 +72,7 @@ import com.erasmustv.app.core.theme.BorderHairline
 import com.erasmustv.app.core.theme.ErasmusTvTypography
 import com.erasmustv.app.core.theme.FocusWhite
 import com.erasmustv.app.core.theme.PitchBlack
+import com.erasmustv.app.core.theme.RatingGold
 import com.erasmustv.app.core.theme.SurfaceDark
 import com.erasmustv.app.core.theme.SurfaceElevated
 import com.erasmustv.app.core.theme.TextMuted
@@ -74,6 +82,7 @@ import com.erasmustv.app.data.model.MediaItem
 import com.erasmustv.app.ui.components.MediaPosterCard
 import com.erasmustv.app.ui.components.TvFocusableCard
 import com.erasmustv.app.ui.components.TvLeftNavRail
+import com.erasmustv.app.ui.components.TvSearchSkeleton
 import com.erasmustv.app.ui.navigation.NavRoutes
 
 private val KEYBOARD_ROWS = listOf(
@@ -169,12 +178,17 @@ fun SearchScreen(
                     .fillMaxHeight()
             ) {
                 // Search Input Header Display
+                val isQueryActive = query.isNotEmpty() || selectedCategory != null
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(SurfaceDark, RectangleShape)
-                        .border(1.dp, BorderHairline, RectangleShape)
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .border(
+                            width = 1.dp,
+                            color = if (isQueryActive) RatingGold.copy(alpha = 0.5f) else BorderHairline,
+                            shape = RectangleShape
+                        )
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -183,7 +197,7 @@ fun SearchScreen(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search Icon",
-                            tint = if (query.isNotEmpty()) FocusWhite else TextMuted,
+                            tint = if (isQueryActive) RatingGold else TextMuted,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -194,21 +208,21 @@ fun SearchScreen(
                                 else -> "Search titles, genres, studios..."
                             },
                             style = ErasmusTvTypography.Body.copy(
-                                fontSize = 13.sp,
-                                fontWeight = if (query.isNotEmpty() || selectedCategory != null) FontWeight.Medium else FontWeight.Normal
+                                fontSize = 13.5.sp,
+                                fontWeight = if (isQueryActive) FontWeight.SemiBold else FontWeight.Normal
                             ),
-                            color = if (query.isNotEmpty() || selectedCategory != null) TextPrimary else TextMuted.copy(alpha = 0.6f),
+                            color = if (isQueryActive) TextPrimary else TextMuted.copy(alpha = 0.6f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
 
-                        if (query.isNotEmpty() || selectedCategory != null) {
+                        if (isQueryActive) {
                             TvFocusableCard(
                                 onClick = { viewModel.onQueryChange("") },
                                 shape = RectangleShape,
                                 modifier = Modifier.size(26.dp),
-                                focusedScale = 1.0f,
+                                focusedScale = 1.025f,
                                 focusedBorderColor = FocusWhite,
                                 focusedBorderWidth = 1.5.dp
                             ) { isFocused ->
@@ -226,8 +240,8 @@ fun SearchScreen(
                                     Icon(
                                         imageVector = Icons.Default.Clear,
                                         contentDescription = "Clear",
-                                        tint = FocusWhite,
-                                        modifier = Modifier.size(15.dp)
+                                        tint = if (isFocused) FocusWhite else TextMuted,
+                                        modifier = Modifier.size(14.dp)
                                     )
                                 }
                             }
@@ -347,79 +361,195 @@ fun SearchScreen(
             ) {
                 when (val state = uiState) {
                     is SearchUiState.Loading -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(color = FocusWhite)
-                        }
+                        TvSearchSkeleton()
                     }
                     is SearchUiState.Error -> {
                         Box(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .background(SurfaceDark, RectangleShape)
+                                .border(1.dp, BorderHairline, RectangleShape)
+                                .padding(32.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = state.message, style = ErasmusTvTypography.Body, color = TextPrimary)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Text(
+                                    text = "Unable to Complete Search",
+                                    style = ErasmusTvTypography.SectionTitle.copy(fontSize = 16.sp),
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = "Check connection or try a different search term",
+                                    style = ErasmusTvTypography.Body.copy(fontSize = 12.sp),
+                                    color = TextMuted
+                                )
+                            }
                         }
                     }
                     is SearchUiState.Success -> {
-                        val displayItems = if (state.results.isNotEmpty()) state.results else state.trendingSuggestions
+                        val isSearchActive = state.query.isNotBlank()
                         val headerTitle = when {
                             state.isGenreCategory -> "${state.query} Movies & Shows"
-                            state.results.isNotEmpty() -> "Results for \"${state.query}\""
+                            isSearchActive -> "Results for \"${state.query}\""
                             else -> "Top Searches"
                         }
+                        val displayItems = if (isSearchActive) state.results else state.trendingSuggestions
 
-                        Text(
-                            text = headerTitle,
-                            style = ErasmusTvTypography.SectionTitle,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
+                        val movies = remember(displayItems) { displayItems.filter { it.mediaType == "movie" } }
+                        val series = remember(displayItems) { displayItems.filter { it.mediaType != "movie" } }
+                        val hasBoth = movies.isNotEmpty() && series.isNotEmpty()
 
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(3),
-                            contentPadding = PaddingValues(bottom = 24.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            itemsIndexed(
-                                items = displayItems,
-                                key = { _, item -> "${item.mediaType}:${item.id}" }
-                            ) { index, item ->
-                                val isFirstColInResults = index % 3 == 0
-                                val isTopRow = index < 3
-                                val isBottomRow = index >= (displayItems.size - ((displayItems.size - 1) % 3 + 1))
-                                MediaPosterCard(
-                                    item = item,
-                                    onClick = { onMediaClick(item) },
-                                    cardWidth = 140,
-                                    cardModifier = Modifier
-                                        .then(if (index == 0) Modifier.focusRequester(resultsFirstCardRequester) else Modifier)
-                                        .onKeyEvent { event ->
-                                            if (event.type == KeyEventType.KeyDown) {
-                                                when (event.key) {
-                                                    Key.DirectionLeft -> {
-                                                        if (isFirstColInResults) {
-                                                            try {
-                                                                initialKeyFocusRequester.requestFocus()
-                                                                true
-                                                            } catch (_: Exception) {
-                                                                false
-                                                            }
-                                                        } else false
-                                                    }
-                                                    Key.DirectionUp -> {
-                                                        if (isTopRow) true else false
-                                                    }
-                                                    Key.DirectionDown -> {
-                                                        if (isBottomRow) true else false
-                                                    }
-                                                    else -> false
+                        if (displayItems.isEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .background(SurfaceDark, RectangleShape)
+                                    .border(1.dp, BorderHairline, RectangleShape)
+                                    .padding(36.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(56.dp)
+                                            .background(SurfaceElevated, RectangleShape)
+                                            .border(1.dp, BorderHairline, RectangleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Search,
+                                            contentDescription = null,
+                                            tint = if (isSearchActive) RatingGold else TextMuted,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = if (isSearchActive) "No results found for \"${state.query}\"" else "No suggestions available",
+                                        style = ErasmusTvTypography.SectionTitle.copy(fontSize = 18.sp),
+                                        color = TextPrimary
+                                    )
+                                    Text(
+                                        text = if (isSearchActive) "Try searching for a different title, actor, or genre" else "Use the keyboard to search titles or select a category on the left",
+                                        style = ErasmusTvTypography.Body.copy(fontSize = 12.5.sp),
+                                        color = TextMuted
+                                    )
+                                }
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                contentPadding = PaddingValues(bottom = 32.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                if (hasBoth) {
+                                    // Categorized Section 1: Movies
+                                    item(span = { GridItemSpan(3) }) {
+                                        SearchResultSectionHeader(
+                                            title = if (isSearchActive) "Movies" else "Top Movies",
+                                            count = movies.size
+                                        )
+                                    }
+                                    itemsIndexed(
+                                        items = movies,
+                                        key = { _, item -> "m:${item.id}" }
+                                    ) { index, item ->
+                                        val isFirstColInResults = index % 3 == 0
+                                        MediaPosterCard(
+                                            item = item,
+                                            onClick = { onMediaClick(item) },
+                                            cardWidth = 140,
+                                            cardModifier = Modifier
+                                                .then(if (index == 0) Modifier.focusRequester(resultsFirstCardRequester) else Modifier)
+                                                .onKeyEvent { event ->
+                                                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft && isFirstColInResults) {
+                                                        try {
+                                                            initialKeyFocusRequester.requestFocus()
+                                                            true
+                                                        } catch (_: Exception) {
+                                                            false
+                                                        }
+                                                    } else false
                                                 }
-                                            } else false
-                                        }
-                                )
+                                        )
+                                    }
+
+                                    // Categorized Section 2: Series & TV Shows
+                                    item(span = { GridItemSpan(3) }) {
+                                        SearchResultSectionHeader(
+                                            title = if (isSearchActive) "Series & Shows" else "Top Series",
+                                            count = series.size,
+                                            modifier = Modifier.padding(top = 12.dp)
+                                        )
+                                    }
+                                    itemsIndexed(
+                                        items = series,
+                                        key = { _, item -> "s:${item.id}" }
+                                    ) { index, item ->
+                                        val isFirstColInResults = index % 3 == 0
+                                        MediaPosterCard(
+                                            item = item,
+                                            onClick = { onMediaClick(item) },
+                                            cardWidth = 140,
+                                            cardModifier = Modifier
+                                                .onKeyEvent { event ->
+                                                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft && isFirstColInResults) {
+                                                        try {
+                                                            initialKeyFocusRequester.requestFocus()
+                                                            true
+                                                        } catch (_: Exception) {
+                                                            false
+                                                        }
+                                                    } else false
+                                                }
+                                        )
+                                    }
+                                } else {
+                                    item(span = { GridItemSpan(3) }) {
+                                        SearchResultSectionHeader(
+                                            title = headerTitle,
+                                            count = displayItems.size
+                                        )
+                                    }
+                                    itemsIndexed(
+                                        items = displayItems,
+                                        key = { _, item -> "${item.mediaType}:${item.id}" }
+                                    ) { index, item ->
+                                        val isFirstColInResults = index % 3 == 0
+                                        MediaPosterCard(
+                                            item = item,
+                                            onClick = { onMediaClick(item) },
+                                            cardWidth = 140,
+                                            cardModifier = Modifier
+                                                .then(if (index == 0) Modifier.focusRequester(resultsFirstCardRequester) else Modifier)
+                                                .onKeyEvent { event ->
+                                                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft && isFirstColInResults) {
+                                                        try {
+                                                            initialKeyFocusRequester.requestFocus()
+                                                            true
+                                                        } catch (_: Exception) {
+                                                            false
+                                                        }
+                                                    } else false
+                                                }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -468,6 +598,10 @@ private fun TvKeyboardKey(
 
     Box(
         modifier = modifier
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = "Key $label"
+            }
             .clip(RectangleShape)
             .background(
                 if (isFocused) FocusWhite else SurfaceDark
@@ -536,6 +670,10 @@ private fun TvKeyboardActionKey(
 
     Row(
         modifier = modifier
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = "$label key"
+            }
             .clip(RectangleShape)
             .background(
                 if (isFocused) FocusWhite else SurfaceDark
@@ -580,7 +718,7 @@ private fun TvKeyboardActionKey(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = label,
+            contentDescription = null,
             tint = if (isFocused) PitchBlack else TextSecondary,
             modifier = Modifier.size(13.dp)
         )
@@ -607,20 +745,25 @@ private fun CategoryTextFilterItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
-    Box(
+    Row(
         modifier = Modifier
+            .semantics(mergeDescendants = true) {
+                role = Role.Tab
+                selected = isSelected
+                contentDescription = "$title genre filter${if (isSelected) ", selected" else ""}"
+            }
             .fillMaxWidth()
             .clip(RectangleShape)
             .background(
                 when {
                     isFocused -> FocusWhite.copy(alpha = 0.20f)
-                    isSelected -> FocusWhite.copy(alpha = 0.10f)
+                    isSelected -> Color(0x2E1E1E28)
                     else -> Color.Transparent
                 }
             )
             .border(
-                width = if (isFocused) 1.dp else 0.dp,
-                color = if (isFocused) FocusWhite else Color.Transparent,
+                width = if (isFocused) 1.dp else if (isSelected) 1.dp else 0.dp,
+                color = if (isFocused) FocusWhite else if (isSelected) RatingGold.copy(alpha = 0.4f) else Color.Transparent,
                 shape = RectangleShape
             )
             .clickable(
@@ -653,15 +796,61 @@ private fun CategoryTextFilterItem(
             }
             .focusable(interactionSource = interactionSource)
             .padding(horizontal = 10.dp, vertical = 7.dp),
-        contentAlignment = Alignment.CenterStart
+        verticalAlignment = Alignment.CenterVertically
     ) {
+        if (isSelected) {
+            Box(
+                modifier = Modifier
+                    .width(2.5.dp)
+                    .height(14.dp)
+                    .background(RatingGold, RoundedCornerShape(1.dp))
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
         Text(
             text = title,
             style = ErasmusTvTypography.Body.copy(
                 fontSize = 13.sp,
                 fontWeight = if (isFocused || isSelected) FontWeight.SemiBold else FontWeight.Normal
             ),
-            color = if (isFocused || isSelected) FocusWhite else TextSecondary
+            color = if (isFocused) FocusWhite else if (isSelected) FocusWhite else TextSecondary
         )
+    }
+}
+
+@Composable
+private fun SearchResultSectionHeader(
+    title: String,
+    count: Int,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = title,
+            style = ErasmusTvTypography.SectionTitle.copy(fontSize = 17.sp),
+            color = TextPrimary
+        )
+        Box(
+            modifier = Modifier
+                .background(SurfaceElevated, RectangleShape)
+                .border(1.dp, BorderHairline, RectangleShape)
+                .padding(horizontal = 8.dp, vertical = 2.dp)
+        ) {
+            Text(
+                text = "$count ${if (count == 1) "TITLE" else "TITLES"}",
+                style = ErasmusTvTypography.Badge.copy(
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.8.sp,
+                    color = RatingGold
+                )
+            )
+        }
     }
 }

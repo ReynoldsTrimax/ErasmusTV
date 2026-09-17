@@ -54,6 +54,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import com.erasmustv.app.core.theme.BorderHairline
 import com.erasmustv.app.core.theme.ErasmusTvTypography
 import com.erasmustv.app.core.theme.FocusWhite
@@ -120,18 +125,26 @@ fun TvLeftNavRail(
         onFocusChanged?.invoke(isRailFocused)
     }
 
+    val isReducedMotion = com.erasmustv.app.core.theme.rememberReducedMotion()
+
     // Animate the label reveal fraction as a single Float [0..1]:
     // 0 = collapsed (labels invisible), 1 = expanded (labels fully visible)
     val labelReveal by animateFloatAsState(
         targetValue = if (isRailFocused) 1.0f else 0.0f,
-        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
+        animationSpec = tween(
+            durationMillis = if (isReducedMotion) 0 else com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
+            easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+        ),
         label = "railLabelReveal"
     )
 
     // Dynamic width for sidebar: 52.dp when collapsed, 154.dp when expanded
     val railWidth by animateDpAsState(
         targetValue = if (isRailFocused) 154.dp else 52.dp,
-        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
+        animationSpec = tween(
+            durationMillis = if (isReducedMotion) 0 else com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
+            easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+        ),
         label = "railWidth"
     )
 
@@ -142,30 +155,26 @@ fun TvLeftNavRail(
             .clipToBounds()
             .zIndex(100f)
     ) {
-        // Frosted Glass Acrylic Background: Translucent with hairline right border
+        // Seamless dark overlay that bleeds into the black environment with zero hard separator (Recommendation #1 & #2)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.horizontalGradient(
-                        colors = listOf(
-                            Color(0x8008080E),
-                            Color(0x6008080E),
-                            Color(0x3508080E),
-                            Color(0x1508080E)
+                        colors = if (isRailFocused) listOf(
+                            Color(0xFA07070A),
+                            Color(0xEE07070A),
+                            Color(0xAA07070A),
+                            Color(0x3307070A),
+                            Color.Transparent
+                        ) else listOf(
+                            Color(0xCC07070A),
+                            Color(0x8807070A),
+                            Color(0x2207070A),
+                            Color.Transparent
                         )
                     )
                 )
-                .drawWithContent {
-                    drawContent()
-                    // Hairline frost vertical right border
-                    drawLine(
-                        color = Color(0x1AFFFFFF),
-                        start = Offset(size.width - 1f, 0f),
-                        end = Offset(size.width - 1f, size.height),
-                        strokeWidth = 1f
-                    )
-                }
         )
 
         Column(
@@ -265,20 +274,20 @@ private fun MinimalNavItem(
 ) {
     val isFocused by interactionSource.collectIsFocusedAsState()
 
-    // Single float animator: scale the entire row item slightly when focused
+    // Restrained subtle scale: primarily indicated through brightness rather than magnification (Recommendation #2 & #17)
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.08f else 1.0f,
-        animationSpec = tween(durationMillis = 120, easing = FastOutLinearInEasing),
+        targetValue = if (isFocused) 1.03f else 1.0f,
+        animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing),
         label = "navItemScale"
     )
 
     val contentColor by animateColorAsState(
         targetValue = when {
             isFocused -> Color.White
-            isSelected -> FocusWhite
-            else -> FocusWhite.copy(alpha = 0.50f)
+            isSelected -> FocusWhite.copy(alpha = 0.95f)
+            else -> FocusWhite.copy(alpha = 0.45f)
         },
-        animationSpec = tween(durationMillis = 120, easing = FastOutLinearInEasing),
+        animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing),
         label = "navItemColor"
     )
 
@@ -286,6 +295,11 @@ private fun MinimalNavItem(
 
     Box(
         modifier = modifier
+            .semantics(mergeDescendants = true) {
+                role = Role.Tab
+                selected = isSelected
+                contentDescription = "${destination.label}, navigation tab${if (isSelected) ", selected" else ""}"
+            }
             .height(36.dp)
             .fillMaxWidth()
             .clickable(
@@ -358,28 +372,39 @@ private fun MinimalNavItem(
                     transformOrigin = TransformOrigin(0f, 0.5f)
                 }
         ) {
-            // Delicate vertical active hairline indicator
+            // Precise 2.5dp vertical active indicator pill with fixed slot to prevent horizontal icon jitter
             Box(
                 modifier = Modifier
-                    .width(2.dp)
-                    .height(if (isSelected) 14.dp else 0.dp)
-                    .background(contentColor, RectangleShape)
-            )
+                    .width(2.5.dp)
+                    .height(18.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                color = if (isFocused) Color.White else FocusWhite,
+                                shape = RoundedCornerShape(1.5.dp)
+                            )
+                    )
+                }
+            }
 
-            Spacer(modifier = Modifier.width(if (isSelected) 8.dp else 10.dp))
+            Spacer(modifier = Modifier.width(9.5.dp))
 
             // Monochrome Icon
             if (destination.drawableRes != null) {
                 Icon(
                     painter = painterResource(id = destination.drawableRes),
-                    contentDescription = destination.label,
+                    contentDescription = null,
                     tint = contentColor,
                     modifier = Modifier.size(17.dp)
                 )
             } else if (destination.icon != null) {
                 Icon(
                     imageVector = destination.icon,
-                    contentDescription = destination.label,
+                    contentDescription = null,
                     tint = contentColor,
                     modifier = Modifier.size(17.dp)
                 )
@@ -427,21 +452,27 @@ private fun MinimalProfileItem(
     val isFocused by interactionSource.collectIsFocusedAsState()
 
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.08f else 1.0f,
-        animationSpec = tween(durationMillis = 120, easing = FastOutLinearInEasing),
+        targetValue = if (isFocused) 1.03f else 1.0f,
+        animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing),
         label = "profileItemScale"
     )
 
     val contentColor by animateColorAsState(
-        targetValue = if (isFocused) Color.White else FocusWhite.copy(alpha = 0.50f),
-        animationSpec = tween(durationMillis = 120, easing = FastOutLinearInEasing),
+        targetValue = if (isFocused) Color.White else FocusWhite.copy(alpha = 0.45f),
+        animationSpec = tween(durationMillis = 140, easing = FastOutSlowInEasing),
         label = "profileContentColor"
     )
 
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
+    val profileDesc = if (profile != null) "Switch profile, currently ${profile.name}" else "Profiles"
+
     Box(
         modifier = Modifier
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = profileDesc
+            }
             .height(36.dp)
             .fillMaxWidth()
             .clickable(
@@ -511,7 +542,7 @@ private fun MinimalProfileItem(
                     transformOrigin = TransformOrigin(0f, 0.5f)
                 }
         ) {
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
             // Just for that period of time while expanded: replace MySpace logo with profile avatar badge
             val showProfile = isRailFocused && profile != null
@@ -526,7 +557,7 @@ private fun MinimalProfileItem(
             } else {
                 Icon(
                     imageVector = TvNavIcons.MySpace,
-                    contentDescription = "My Space",
+                    contentDescription = null,
                     tint = contentColor,
                     modifier = Modifier.size(18.dp)
                 )

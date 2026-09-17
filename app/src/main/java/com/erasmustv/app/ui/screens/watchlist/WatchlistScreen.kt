@@ -34,13 +34,29 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import com.erasmustv.app.core.theme.BorderHairline
 import com.erasmustv.app.core.theme.ErasmusTvTypography
+import com.erasmustv.app.core.theme.FocusWhite
 import com.erasmustv.app.core.theme.PitchBlack
+import com.erasmustv.app.core.theme.RatingGold
+import com.erasmustv.app.core.theme.SurfaceElevated
 import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
+import com.erasmustv.app.core.theme.TextSecondary
 import com.erasmustv.app.data.model.MediaItem
 import com.erasmustv.app.ui.components.MediaPosterCard
 import com.erasmustv.app.ui.components.TvFocusableCard
+import com.erasmustv.app.ui.components.TvGridSkeleton
 import com.erasmustv.app.ui.components.TvLeftNavRail
 import com.erasmustv.app.ui.components.TvPivotBringIntoViewSpec
 import com.erasmustv.app.ui.navigation.NavRoutes
@@ -71,6 +87,17 @@ fun WatchlistScreen(
         label = "watchlistContentShift"
     )
 
+    // Request initial focus on first load; never steal focus if rail is already active
+    var hasRequestedInitialFocus by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(uiState) {
+        if (!hasRequestedInitialFocus && !isRailFocused && uiState is WatchlistUiState.Success) {
+            try {
+                contentFocusRequester.requestFocus()
+                hasRequestedInitialFocus = true
+            } catch (_: Exception) {}
+        }
+    }
+
     // Deterministic Back Handler:
     // When in content, pressing BACK hops focus cleanly to the sidebar rail
     BackHandler(enabled = !isRailFocused) {
@@ -92,19 +119,13 @@ fun WatchlistScreen(
     ) {
         when (val state = uiState) {
             is WatchlistUiState.Loading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(
-                        color = TextPrimary,
-                        modifier = Modifier.size(40.dp),
-                        strokeWidth = 2.5.dp
-                    )
-                }
+                TvGridSkeleton(contentShift = contentShift)
             }
             is WatchlistUiState.Error -> {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(start = 140.dp),
+                        .padding(start = 64.dp),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -112,9 +133,20 @@ fun WatchlistScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     TvFocusableCard(
                         onClick = { viewModel.loadWatchlist() },
+                        shape = RectangleShape,
+                        focusedScale = 1.025f,
+                        focusedBorderColor = FocusWhite,
+                        focusedBorderWidth = 1.5.dp,
                         modifier = Modifier.focusRequester(contentFocusRequester)
-                    ) {
-                        Text(text = "Retry", style = ErasmusTvTypography.ButtonText, modifier = Modifier.padding(16.dp))
+                    ) { isFocused ->
+                        Text(
+                            text = "Retry",
+                            style = ErasmusTvTypography.ButtonText,
+                            color = if (isFocused) PitchBlack else TextPrimary,
+                            modifier = Modifier
+                                .background(if (isFocused) Color.White else SurfaceElevated, RectangleShape)
+                                .padding(horizontal = 24.dp, vertical = 12.dp)
+                        )
                     }
                 }
             }
@@ -123,21 +155,107 @@ fun WatchlistScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(start = 140.dp),
+                            .graphicsLayer {
+                                translationX = contentShift.toPx()
+                            }
+                            .padding(start = 64.dp, end = 48.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .background(SurfaceElevated, RectangleShape)
+                                    .border(1.dp, BorderHairline, RectangleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bookmark,
+                                    contentDescription = null,
+                                    tint = RatingGold,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(18.dp))
+                            Text(
+                                text = "MY LIST",
+                                style = ErasmusTvTypography.Badge.copy(
+                                    fontSize = 11.sp,
+                                    letterSpacing = 1.6.sp,
+                                    color = RatingGold
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "Your Watchlist is empty",
-                                style = ErasmusTvTypography.SectionTitle.copy(fontSize = 24.sp),
+                                style = ErasmusTvTypography.SectionTitle.copy(fontSize = 22.sp),
                                 color = TextPrimary
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Add movies and TV shows from their detail pages to watch later.",
-                                style = ErasmusTvTypography.Body,
+                                text = "Explore movies and TV shows to add them to your watchlist.",
+                                style = ErasmusTvTypography.Body.copy(fontSize = 13.sp),
                                 color = TextMuted
                             )
+                            Spacer(modifier = Modifier.height(24.dp))
+                            TvFocusableCard(
+                                onClick = { onNavigate(NavRoutes.HOME) },
+                                shape = RectangleShape,
+                                focusedScale = 1.025f,
+                                focusedBorderColor = FocusWhite,
+                                focusedBorderWidth = 1.5.dp,
+                                contentDescription = "Explore Movies & Shows",
+                                role = androidx.compose.ui.semantics.Role.Button,
+                                modifier = Modifier
+                                    .focusRequester(contentFocusRequester)
+                                    .onKeyEvent { keyEvent ->
+                                        if (keyEvent.type == KeyEventType.KeyDown) {
+                                            when (keyEvent.key) {
+                                                Key.DirectionLeft -> {
+                                                    try {
+                                                        railFocusRequester.requestFocus()
+                                                        true
+                                                    } catch (_: Exception) {
+                                                        false
+                                                    }
+                                                }
+                                                Key.DirectionUp, Key.DirectionRight, Key.DirectionDown -> true
+                                                else -> false
+                                            }
+                                        } else false
+                                    }
+                            ) { isFocused ->
+                                Row(
+                                    modifier = Modifier
+                                        .background(
+                                            color = if (isFocused) Color.White else SurfaceElevated,
+                                            shape = RectangleShape
+                                        )
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (isFocused) Color.Transparent else BorderHairline,
+                                            shape = RectangleShape
+                                        )
+                                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Home,
+                                        contentDescription = null,
+                                        tint = if (isFocused) PitchBlack else TextPrimary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "Explore Movies & Shows",
+                                        style = ErasmusTvTypography.ButtonText,
+                                        color = if (isFocused) PitchBlack else TextPrimary
+                                    )
+                                }
+                            }
                         }
                     }
                 } else {

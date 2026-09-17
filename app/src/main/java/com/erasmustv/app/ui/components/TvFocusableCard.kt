@@ -24,29 +24,42 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.erasmustv.app.core.theme.FocusWhite
+
+import com.erasmustv.app.core.theme.TvMotion
+import com.erasmustv.app.core.theme.rememberReducedMotion
 
 @Composable
 fun TvFocusableCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     shape: Shape = RectangleShape,
-    focusedScale: Float = 1.0f,
+    focusedScale: Float = TvMotion.FocusScaleCard,
     focusedBorderWidth: Dp = 1.5.dp,
     unfocusedBorderWidth: Dp = 0.dp,
     focusedBorderColor: Color = FocusWhite,
     unfocusedBorderColor: Color = Color.Transparent,
+    contentDescription: String? = null,
+    role: Role? = Role.Button,
     content: @Composable BoxScope.(isFocused: Boolean) -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
+    val isReducedMotion = rememberReducedMotion()
 
-    val scale = if (focusedScale != 1.0f) {
+    val scale = if (focusedScale != 1.0f && !isReducedMotion) {
         val animatedScale by animateFloatAsState(
             targetValue = if (isFocused) focusedScale else 1.0f,
-            animationSpec = tween(durationMillis = 100, easing = FastOutLinearInEasing),
+            animationSpec = tween(
+                durationMillis = TvMotion.DURATION_FAST,
+                easing = TvMotion.EasingSilk
+            ),
             label = "tvCardScale"
         )
         animatedScale
@@ -54,9 +67,21 @@ fun TvFocusableCard(
         1.0f
     }
 
+    val shadowElevation by animateFloatAsState(
+        targetValue = if (isFocused && !isReducedMotion) 10f else 0f,
+        animationSpec = tween(
+            durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_FAST,
+            easing = TvMotion.EasingSilk
+        ),
+        label = "tvCardShadow"
+    )
+
     val borderAlpha by animateFloatAsState(
         targetValue = if (isFocused) 1.0f else 0.0f,
-        animationSpec = tween(durationMillis = 80, easing = FastOutLinearInEasing),
+        animationSpec = tween(
+            durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_FAST,
+            easing = TvMotion.EasingSilk
+        ),
         label = "tvCardBorderAlpha"
     )
 
@@ -65,10 +90,19 @@ fun TvFocusableCard(
 
     Box(
         modifier = modifier
+            .semantics(mergeDescendants = true) {
+                if (contentDescription != null) {
+                    this.contentDescription = contentDescription
+                }
+                if (role != null) {
+                    this.role = role
+                }
+            }
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
                 this.shape = shape
+                this.shadowElevation = shadowElevation
                 clip = false
             }
             .then(

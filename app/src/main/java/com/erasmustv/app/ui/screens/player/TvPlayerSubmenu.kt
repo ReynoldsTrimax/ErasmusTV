@@ -112,11 +112,21 @@ fun TvPlayerSubmenu(
             ) {
                 when (activeMenu) {
                     PlayerActiveMenu.Audio -> {
-                        val selectedIndex = audioTracks.indexOfFirst { it.isSelected }.coerceAtLeast(0)
+                        val displayTracks = if (audioTracks.isNotEmpty()) audioTracks else listOf(
+                            TvAudioTrack(
+                                id = "audio_default",
+                                mediaTrackGroup = androidx.media3.common.TrackGroup(androidx.media3.common.Format.Builder().build()),
+                                trackIndex = 0,
+                                label = "Default Audio",
+                                language = "STEREO",
+                                isSelected = true
+                            )
+                        )
+                        val selectedIndex = displayTracks.indexOfFirst { it.isSelected }.coerceAtLeast(0)
                         SubmenuContent(
                             title = "Audio Tracks",
-                            subtitle = "Select playback audio language",
-                            itemCount = audioTracks.size,
+                            subtitle = if (audioTracks.size > 1) "${audioTracks.size} audio tracks available" else "Playback audio language",
+                            itemCount = displayTracks.size,
                             initialSelectedIndex = selectedIndex,
                             onClose = onClose
                         ) { itemFocusRequesters ->
@@ -124,16 +134,18 @@ fun TvPlayerSubmenu(
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                itemsIndexed(audioTracks) { index, track ->
+                                itemsIndexed(displayTracks) { index, track ->
                                     SubmenuRowItem(
                                         title = track.label,
-                                        subtitle = if (track.language.isNotBlank()) track.language.uppercase() else null,
+                                        subtitle = if (track.language.isNotBlank() && !track.language.equals("und", ignoreCase = true)) track.language.uppercase() else null,
                                         isSelected = track.isSelected,
                                         isFirstItem = (index == 0),
-                                        isLastItem = (index == audioTracks.size - 1),
+                                        isLastItem = (index == displayTracks.size - 1),
                                         focusRequester = itemFocusRequesters.getOrNull(index),
                                         onClick = {
-                                            onSelectAudioTrack(track)
+                                            if (audioTracks.isNotEmpty()) {
+                                                onSelectAudioTrack(track)
+                                            }
                                             onClose()
                                         },
                                         onBackOrLeft = onClose

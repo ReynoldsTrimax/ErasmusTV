@@ -186,19 +186,34 @@ fun TvPlayerScreen(
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
             .setDataSourceFactory {
                 val state = viewModel.streamState.value
-                val referer = if (state is PlayerStreamState.Ready) state.referer else "https://cinejoy.to/"
-                val headers = mapOf(
-                    "Referer" to referer,
-                    "Origin" to "https://cinejoy.to",
-                    "Accept" to "*/*"
-                )
-                DefaultHttpDataSource.Factory()
-                    .setUserAgent(AppConfig.STREAM_USER_AGENT)
+                val rawReferer = if (state is PlayerStreamState.Ready) state.referer else null
+                val referer = rawReferer?.takeIf { it.isNotBlank() }
+                val headers = mutableMapOf<String, String>()
+                headers["Accept"] = "*/*"
+                if (!referer.isNullOrBlank()) {
+                    headers["Referer"] = referer
+                    val origin = when {
+                        referer.contains("cinejoy", ignoreCase = true) -> "https://cinejoy.to"
+                        referer.contains("vidfast", ignoreCase = true) -> "https://vidfast.vc"
+                        else -> referer.trimEnd('/')
+                    }
+                    headers["Origin"] = origin
+                }
+                val streamUrl = (state as? PlayerStreamState.Ready)?.streamUrl.orEmpty()
+                val isDirectCdn = streamUrl.contains("hakunaymatata", ignoreCase = true) || streamUrl.contains(".mp4", ignoreCase = true)
+                val userAgent = if (isDirectCdn) {
+                    "ExoPlayer/1.5.1 (Linux; Android TV)"
+                } else {
+                    AppConfig.STREAM_USER_AGENT
+                }
+                val httpFactory = DefaultHttpDataSource.Factory()
+                    .setUserAgent(userAgent)
                     .setAllowCrossProtocolRedirects(true)
                     .setConnectTimeoutMs(20000)
                     .setReadTimeoutMs(20000)
                     .setDefaultRequestProperties(headers)
-                    .createDataSource()
+                val baseDataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(context, httpFactory)
+                com.erasmustv.app.data.local.TvMediaCacheManager.createCacheDataSourceFactory(context, baseDataSourceFactory).createDataSource()
             }
 
         val audioSink = DefaultAudioSink.Builder(context)
@@ -229,13 +244,90 @@ fun TvPlayerScreen(
             }
         }
 
+        // High-performance TV load control: instant 1.5s start, up to 30 mins lookahead on disk, 30s instant rewind
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 120_000,
+                /* maxBufferMs = */ 1_800_000,
+                /* bufferForPlaybackMs = */ 1_500,
+                /* bufferForPlaybackAfterRebufferMs = */ 3_000
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .setBackBuffer(30_000, true)
+            .build()
+
         ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(loadControl)
             .build()
+            .apply {
+                trackSelectionParameters = trackSelectionParameters.buildUpon()
+                    .setPreferredAudioLanguages("hi", "hin", "en", "eng")
+                    .build()
+            }
     }
 
-
     var lastMedia3Tracks by remember { mutableStateOf<Tracks?>(null) }
+
+    fun formatAudioTrackLabel(code: String?, rawLabel: String?, fallbackIndex: Int): String {
+        val cleanCode = code?.trim()?.lowercase() ?: ""
+        val cleanLabel = rawLabel?.trim() ?: ""
+
+        val isGenericLabel = cleanLabel.isBlank() ||
+            cleanLabel.matches(Regex("(?i)^(audio|track|und|default|stereo|surround|aac|ac3|mp4a|\\d+|audio\\s*\\d+)$"))
+
+        val mappedLanguage = when (cleanCode) {
+            "hi", "hin" -> "Hindi"
+            "ta", "tam" -> "Tamil"
+            "te", "tel" -> "Telugu"
+            "ml", "mal" -> "Malayalam"
+            "kn", "kan" -> "Kannada"
+            "mr", "mar" -> "Marathi"
+            "bn", "ben" -> "Bengali"
+            "pa", "pan" -> "Punjabi"
+            "gu", "guj" -> "Gujarati"
+            "ur", "urd" -> "Urdu"
+            "en", "eng" -> "English"
+            "ja", "jpn" -> "Japanese"
+            "ko", "kor" -> "Korean"
+            "zh", "zho", "chi" -> "Chinese"
+            "es", "spa" -> "Spanish"
+            "fr", "fra", "fre" -> "French"
+            "de", "deu", "ger" -> "German"
+            "it", "ita" -> "Italian"
+            "pt", "por" -> "Portuguese"
+            "ru", "rus" -> "Russian"
+            "ar", "ara" -> "Arabic"
+            "tr", "tur" -> "Turkish"
+            "id", "ind" -> "Indonesian"
+            "th", "tha" -> "Thai"
+            "vi", "vie" -> "Vietnamese"
+            else -> if (cleanCode.isNotBlank()) {
+                try {
+                    val loc = Locale.forLanguageTag(cleanCode)
+                    val display = loc.getDisplayLanguage(Locale.ENGLISH)
+                    if (display.isNotBlank() && !display.equals(cleanCode, ignoreCase = true)) {
+                        display
+                    } else {
+                        Locale(cleanCode).getDisplayLanguage(Locale.ENGLISH).takeIf {
+                            it.isNotBlank() && !it.equals(cleanCode, ignoreCase = true)
+                        } ?: cleanCode.uppercase()
+                    }
+                } catch (_: Throwable) {
+                    cleanCode.uppercase()
+                }
+            } else ""
+        }
+
+        return when {
+            !isGenericLabel && mappedLanguage.isNotBlank() && !cleanLabel.contains(mappedLanguage, ignoreCase = true) -> {
+                "$mappedLanguage ($cleanLabel)"
+            }
+            !isGenericLabel -> cleanLabel
+            mappedLanguage.isNotBlank() -> mappedLanguage
+            else -> "Audio Track ${fallbackIndex + 1}"
+        }
+    }
 
     // Parse and synchronize real Media3 tracks and cluster captions
     fun syncTracks(
@@ -254,10 +346,7 @@ fun TvPlayerScreen(
                         for (i in 0 until group.length) {
                             val format = group.getTrackFormat(i)
                             val lang = format.language ?: ""
-                            val displayLang = if (lang.isNotBlank()) {
-                                Locale(lang).displayLanguage.takeIf { it.isNotBlank() } ?: lang
-                            } else "Audio ${audioTracks.size + 1}"
-                            val label = format.label ?: displayLang
+                            val label = formatAudioTrackLabel(lang, format.label, audioTracks.size)
                             val isSelected = group.isTrackSelected(i)
 
                             audioTracks.add(
@@ -266,7 +355,7 @@ fun TvPlayerScreen(
                                     mediaTrackGroup = group.mediaTrackGroup,
                                     trackIndex = i,
                                     label = label,
-                                    language = lang,
+                                    language = lang.ifBlank { "und" },
                                     isSelected = isSelected
                                 )
                             )
@@ -320,20 +409,7 @@ fun TvPlayerScreen(
                 )
             )
 
-            // Select highest quality track by default across the entire platform
-            val nonAutoTracks = qualityTracks.filter { !it.isAuto }
-            val highestTrack = nonAutoTracks.maxByOrNull {
-                (it.height ?: 0).toLong() * 10_000_000L + (it.bitrate ?: 0).toLong()
-            }
-
-            val targetSelectedId = selectedQualityTrackId ?: highestTrack?.id ?: "video_auto"
-
-            // If user hasn't explicitly selected a quality, apply highest resolution override to ExoPlayer
-            if (selectedQualityTrackId == null && highestTrack != null && highestTrack.mediaTrackGroup != null && highestTrack.trackIndex >= 0) {
-                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
-                    .setOverrideForType(TrackSelectionOverride(highestTrack.mediaTrackGroup, highestTrack.trackIndex))
-                    .build()
-            }
+            val targetSelectedId = selectedQualityTrackId ?: "video_auto"
 
             for (i in 0 until qualityTracks.size) {
                 val q = qualityTracks[i]
@@ -471,6 +547,9 @@ fun TvPlayerScreen(
                 isBuffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY) {
                     durationMs = exoPlayer.duration.coerceAtLeast(0L)
+                } else if (state == Player.STATE_ENDED) {
+                    // Movie/episode finished! Asynchronously clear media cache to reclaim flash storage
+                    com.erasmustv.app.data.local.TvMediaCacheManager.clearCacheAsync(context)
                 }
             }
 
@@ -505,6 +584,8 @@ fun TvPlayerScreen(
             viewModel.persistProgress(seconds, durationSeconds)
             exoPlayer.removeListener(listener)
             exoPlayer.release()
+            // Clear media cache asynchronously on player teardown
+            com.erasmustv.app.data.local.TvMediaCacheManager.clearCacheAsync(context)
         }
     }
 
@@ -902,18 +983,20 @@ fun TvPlayerScreen(
                         TvFocusableCard(
                             onClick = { viewModel.retry() },
                             shape = RectangleShape,
-                            focusedBorderColor = Color.Transparent,
+                            focusedScale = 1.025f,
+                            focusedBorderColor = FocusWhite,
+                            focusedBorderWidth = 1.5.dp,
                             modifier = Modifier.focusRequester(retryFocusRequester)
                         ) { isFocused ->
                             Box(
                                 modifier = Modifier
-                                    .background(if (isFocused) SurfaceDark else PitchBlack, RectangleShape)
+                                    .background(if (isFocused) Color.White else SurfaceDark, RectangleShape)
                                     .padding(horizontal = 24.dp, vertical = 14.dp)
                             ) {
                                 Text(
                                     text = "Try Again",
                                     style = ErasmusTvTypography.ButtonText,
-                                    color = if (isFocused) FocusWhite else TextPrimary
+                                    color = if (isFocused) PitchBlack else TextPrimary
                                 )
                             }
                         }
@@ -921,17 +1004,19 @@ fun TvPlayerScreen(
                         TvFocusableCard(
                             onClick = { activeMenu = PlayerActiveMenu.Servers },
                             shape = RectangleShape,
-                            focusedBorderColor = Color.Transparent
+                            focusedScale = 1.025f,
+                            focusedBorderColor = FocusWhite,
+                            focusedBorderWidth = 1.5.dp
                         ) { isFocused ->
                             Box(
                                 modifier = Modifier
-                                    .background(if (isFocused) SurfaceDark else PitchBlack, RectangleShape)
+                                    .background(if (isFocused) Color.White else SurfaceDark, RectangleShape)
                                     .padding(horizontal = 24.dp, vertical = 14.dp)
                             ) {
                                 Text(
                                     text = "Change Server",
                                     style = ErasmusTvTypography.ButtonText,
-                                    color = if (isFocused) FocusWhite else TextPrimary
+                                    color = if (isFocused) PitchBlack else TextPrimary
                                 )
                             }
                         }
@@ -939,17 +1024,19 @@ fun TvPlayerScreen(
                         TvFocusableCard(
                             onClick = onExit,
                             shape = RectangleShape,
-                            focusedBorderColor = Color.Transparent
+                            focusedScale = 1.025f,
+                            focusedBorderColor = FocusWhite,
+                            focusedBorderWidth = 1.5.dp
                         ) { isFocused ->
                             Box(
                                 modifier = Modifier
-                                    .background(if (isFocused) SurfaceDark else PitchBlack, RectangleShape)
+                                    .background(if (isFocused) Color.White else SurfaceDark, RectangleShape)
                                     .padding(horizontal = 24.dp, vertical = 14.dp)
                             ) {
                                 Text(
                                     text = "Exit",
                                     style = ErasmusTvTypography.ButtonText,
-                                    color = if (isFocused) FocusWhite else TextPrimary
+                                    color = if (isFocused) PitchBlack else TextPrimary
                                 )
                             }
                         }
@@ -1115,8 +1202,13 @@ fun TvPlayerScreen(
             currentSubtitleSize = subtitleSize,
             autoSyncStatus = autoSyncStatus,
             onSelectAudioTrack = { track ->
+                for (idx in audioTracks.indices) {
+                    val item = audioTracks[idx]
+                    audioTracks[idx] = item.copy(isSelected = (item.id == track.id))
+                }
                 exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
                     .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                    .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
                     .setOverrideForType(TrackSelectionOverride(track.mediaTrackGroup, track.trackIndex))
                     .build()
             },

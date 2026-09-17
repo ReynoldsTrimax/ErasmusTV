@@ -175,7 +175,7 @@ class TvPlayerViewModel(
                             streamUrl = server.url,
                             serverName = server.name,
                             startPositionMs = startPositionMs,
-                            referer = result.referer ?: "https://cinejoy.to/",
+                            referer = result.referer ?: "",
                             captions = subTracks
                         )
                         // Select primary English caption track by default
@@ -217,31 +217,36 @@ class TvPlayerViewModel(
 
             try {
                 val referer = when {
+                    track.url.contains("hakunaymatata.com", ignoreCase = true) -> null
                     track.url.contains("vidfast", ignoreCase = true) || track.url.contains("wyzie", ignoreCase = true) -> "https://vidfast.vc/"
                     track.url.contains("cinejoy", ignoreCase = true) -> "https://cinejoy.to/"
                     track.url.contains("strem.io", ignoreCase = true) -> "https://opensubtitles-v3.strem.io/"
-                    else -> "https://cinejoy.to/"
+                    else -> null
                 }
-                val req = okhttp3.Request.Builder()
+                val reqBuilder = okhttp3.Request.Builder()
                     .url(track.url)
                     .header("User-Agent", com.erasmustv.app.core.config.AppConfig.STREAM_USER_AGENT)
-                    .header("Referer", referer)
                     .header("Accept", "*/*")
-                    .build()
-                val resp = subtitleClient.newCall(req).execute()
-                if (!resp.isSuccessful) {
-                    android.util.Log.w("TvPlayerViewModel", "Subtitle fetch failed with HTTP ${resp.code} for ${track.url}")
-                    return@launch
+                if (!referer.isNullOrBlank()) {
+                    reqBuilder.header("Referer", referer)
                 }
+                val req = reqBuilder.build()
+                val resp = subtitleClient.newCall(req).execute()
                 val body = resp.body?.string() ?: ""
                 if (body.isNotBlank()) {
                     val parsed = com.erasmustv.app.data.subtitle.SubtitleParser.parse(body)
-                    android.util.Log.d("TvPlayerViewModel", "Successfully parsed ${parsed.size} cues for ${track.label} (${track.language}) from ${track.url}")
                     subtitleTextCache[track.url] = parsed
                     _activeSubtitleCues.value = parsed
+
+                    // If not already set and this is English, use as reference for sync
+                    if (_referenceSubtitleCues.value == null &&
+                        (track.language.startsWith("en", ignoreCase = true) || track.label.contains("English", ignoreCase = true))
+                    ) {
+                        _referenceSubtitleCues.value = parsed
+                    }
                 }
             } catch (e: Exception) {
-                android.util.Log.w("TvPlayerViewModel", "Failed to fetch subtitle text: ${e.message}")
+                android.util.Log.w("TvPlayerVM", "Failed to fetch subtitle track: ${track.url} (${e.message})")
             }
         }
     }
@@ -256,17 +261,20 @@ class TvPlayerViewModel(
 
             try {
                 val referer = when {
+                    track.url.contains("hakunaymatata.com", ignoreCase = true) -> null
                     track.url.contains("vidfast", ignoreCase = true) || track.url.contains("wyzie", ignoreCase = true) -> "https://vidfast.vc/"
                     track.url.contains("cinejoy", ignoreCase = true) -> "https://cinejoy.to/"
                     track.url.contains("strem.io", ignoreCase = true) -> "https://opensubtitles-v3.strem.io/"
-                    else -> "https://cinejoy.to/"
+                    else -> null
                 }
-                val req = okhttp3.Request.Builder()
+                val reqBuilder = okhttp3.Request.Builder()
                     .url(track.url)
                     .header("User-Agent", com.erasmustv.app.core.config.AppConfig.STREAM_USER_AGENT)
-                    .header("Referer", referer)
                     .header("Accept", "*/*")
-                    .build()
+                if (!referer.isNullOrBlank()) {
+                    reqBuilder.header("Referer", referer)
+                }
+                val req = reqBuilder.build()
                 val resp = subtitleClient.newCall(req).execute()
                 val body = resp.body?.string() ?: ""
                 if (body.isNotBlank()) {

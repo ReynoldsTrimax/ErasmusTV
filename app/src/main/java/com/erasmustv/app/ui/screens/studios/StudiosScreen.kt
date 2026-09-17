@@ -3,6 +3,7 @@ package com.erasmustv.app.ui.screens.studios
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,11 +17,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.width
@@ -87,6 +90,7 @@ import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
 import com.erasmustv.app.data.model.MediaItem
 import com.erasmustv.app.ui.components.MediaPosterCard
+import com.erasmustv.app.ui.components.TvFeedSkeleton
 import com.erasmustv.app.ui.components.TvFocusableCard
 import com.erasmustv.app.ui.components.TvLeftNavRail
 import com.erasmustv.app.ui.components.TvPivotBringIntoViewSpec
@@ -117,6 +121,7 @@ fun StudiosScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val activeProfile by viewModel.activeProfile.collectAsState()
+    val isReducedMotion = com.erasmustv.app.core.theme.rememberReducedMotion()
     val catalogFirstItemRequester = remember { FocusRequester() }
 
     val studioFocusRequesters = remember {
@@ -169,69 +174,88 @@ fun StudiosScreen(
             .fillMaxSize()
             .background(PitchBlack)
     ) {
-        when (val state = uiState) {
-            is StudiosUiState.Hub -> {
-                // Studios Grid View (Reference Screenshot 1)
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            translationX = contentShift.toPx()
-                        }
-                        .padding(start = 64.dp, top = 36.dp, end = 44.dp)
-                ) {
-                    Text(
-                        text = "Studios",
-                        style = ErasmusTvTypography.HeroTitleLarge.copy(fontSize = 32.sp),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 32.dp)
+        androidx.compose.animation.AnimatedContent(
+            targetState = uiState,
+            transitionSpec = {
+                if (isReducedMotion) {
+                    androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None
+                } else {
+                    androidx.compose.animation.fadeIn(
+                        androidx.compose.animation.core.tween(
+                            durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_ENTER,
+                            easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+                        )
+                    ) togetherWith androidx.compose.animation.fadeOut(
+                        androidx.compose.animation.core.tween(
+                            durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_FAST,
+                            easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+                        )
                     )
-
-                    CompositionLocalProvider(
-                        LocalBringIntoViewSpec provides remember { TvPivotBringIntoViewSpec(0.5f) }
+                }
+            },
+            label = "studiosStateTransition"
+        ) { state ->
+            when (state) {
+                is StudiosUiState.Hub -> {
+                    // Studios Grid View (Reference Screenshot 1)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                translationX = contentShift.toPx()
+                            }
+                            .padding(start = 64.dp, top = 36.dp, end = 44.dp)
                     ) {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(3),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            contentPadding = PaddingValues(bottom = 36.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        Text(
+                            text = "Studios",
+                            style = ErasmusTvTypography.HeroTitleLarge.copy(fontSize = 32.sp),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 32.dp)
+                        )
+
+                        CompositionLocalProvider(
+                            LocalBringIntoViewSpec provides remember { TvPivotBringIntoViewSpec(0.5f) }
                         ) {
-                            itemsIndexed(STUDIOS_DATA, key = { _, it -> it.id }) { index, studio ->
-                                val requester = studioFocusRequesters[studio.id]
-                                val isFirstColumn = (index % 3 == 0)
-                                val isTopRow = index < 3
-                                val isBottomRow = index >= (STUDIOS_DATA.size - ((STUDIOS_DATA.size - 1) % 3 + 1))
-                                StudioTile(
-                                    studio = studio,
-                                    onClick = { viewModel.selectStudio(studio) },
-                                    onNavigateLeftToRail = {
-                                        try {
-                                            railFocusRequester.requestFocus()
-                                        } catch (_: Exception) {}
-                                    },
-                                    isFirstColumn = isFirstColumn,
-                                    isTopRow = isTopRow,
-                                    isBottomRow = isBottomRow,
-                                    modifier = if (requester != null) Modifier.focusRequester(requester) else Modifier
-                                )
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(3),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                contentPadding = PaddingValues(bottom = 36.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                itemsIndexed(STUDIOS_DATA, key = { _, it -> it.id }) { index, studio ->
+                                    val requester = studioFocusRequesters[studio.id]
+                                    val isFirstColumn = (index % 3 == 0)
+                                    val isTopRow = index < 3
+                                    val isBottomRow = index >= (STUDIOS_DATA.size - ((STUDIOS_DATA.size - 1) % 3 + 1))
+                                    StudioTile(
+                                        studio = studio,
+                                        onClick = { viewModel.selectStudio(studio) },
+                                        onNavigateLeftToRail = {
+                                            try {
+                                                railFocusRequester.requestFocus()
+                                            } catch (_: Exception) {}
+                                        },
+                                        isFirstColumn = isFirstColumn,
+                                        isTopRow = isTopRow,
+                                        isBottomRow = isBottomRow,
+                                        modifier = if (requester != null) Modifier.focusRequester(requester) else Modifier
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
-            is StudiosUiState.Loading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FocusWhite)
+                is StudiosUiState.Loading -> {
+                    TvFeedSkeleton(contentShift = contentShift)
                 }
-            }
-            is StudiosUiState.StudioCatalog -> {
-                // Studio Specific Catalog (Reference Screenshot 2)
-                CompositionLocalProvider(
-                    LocalBringIntoViewSpec provides remember { TvPivotBringIntoViewSpec(0.5f) }
-                ) {
+                is StudiosUiState.StudioCatalog -> {
+                    // Studio Specific Catalog (Reference Screenshot 2)
+                    CompositionLocalProvider(
+                        LocalBringIntoViewSpec provides remember { TvPivotBringIntoViewSpec(0.5f) }
+                    ) {
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -361,6 +385,7 @@ fun StudiosScreen(
                             }
                         }
                     }
+                    }
                 }
             }
         }
@@ -418,7 +443,7 @@ private fun StudioTile(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(96.dp)
+            .height(110.dp) // Cinematic tile height with generous breathing room (Recommendation #12)
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     when (keyEvent.key) {
@@ -439,20 +464,28 @@ private fun StudioTile(
                 } else false
             },
         shape = RectangleShape,
-        focusedScale = 1.0f,
+        focusedScale = com.erasmustv.app.core.theme.TvMotion.FocusScaleStudio,
         focusedBorderColor = FocusWhite,
-        focusedBorderWidth = 1.5.dp
+        focusedBorderWidth = 2.dp
     ) { isFocused ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .clip(RectangleShape)
                 .background(
-                    if (isFocused) Color(0xFF1E1E22) else SurfaceElevated
+                    if (isFocused) {
+                        Brush.verticalGradient(
+                            listOf(Color(0xFF282834), Color(0xFF1A1A22))
+                        )
+                    } else {
+                        Brush.verticalGradient(
+                            listOf(Color(0xFF141418), Color(0xFF0C0C0F))
+                        )
+                    }
                 )
                 .border(
-                    width = 1.dp,
-                    color = if (isFocused) FocusWhite else com.erasmustv.app.core.theme.SurfaceCardBorder,
+                    width = if (isFocused) 2.dp else 1.dp,
+                    color = if (isFocused) FocusWhite else Color(0x1AFFFFFF),
                     shape = RectangleShape
                 ),
             contentAlignment = Alignment.Center
@@ -464,21 +497,41 @@ private fun StudioTile(
 
 @Composable
 private fun StudioTileContent(studio: StudioInfo, isFocused: Boolean) {
+    val isReducedMotion = com.erasmustv.app.core.theme.rememberReducedMotion()
+    val logoScale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (isFocused && !isReducedMotion) 1.05f else 1.0f,
+        animationSpec = androidx.compose.animation.core.tween(
+            durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_FAST,
+            easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+        ),
+        label = "studioLogoScale"
+    )
+
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .graphicsLayer {
+                scaleX = logoScale
+                scaleY = logoScale
+            }
     ) {
         if (studio.logoDrawableRes != null) {
-            Image(
-                painter = painterResource(id = studio.logoDrawableRes),
-                contentDescription = studio.name,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-            )
+            // Normalized logo container: max-width 55%, max-height 46%, contain (Recommendation #13)
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = studio.logoDrawableRes),
+                    contentDescription = studio.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth(0.55f)
+                        .fillMaxHeight(0.46f)
+                )
+            }
         } else {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,

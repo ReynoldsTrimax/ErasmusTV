@@ -32,8 +32,8 @@ object ErasmusTvTypography {
     val SectionTitle = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 17.sp,
-        lineHeight = 22.sp,
+        fontSize = 18.sp,
+        lineHeight = 24.sp,
         letterSpacing = (-0.2).sp,
         color = TextPrimary
     )
@@ -41,53 +41,53 @@ object ErasmusTvTypography {
     val SectionAction = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
+        fontSize = 12.5.sp,
         color = TextMuted
     )
 
     val CardTitle = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
+        fontSize = 13.sp,
+        lineHeight = 17.sp,
         color = TextPrimary
     )
 
     val Body = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 17.sp,
+        fontSize = 12.5.sp,
+        lineHeight = 18.sp,
         color = TextSecondary
     )
 
     val BodyLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
-        fontSize = 13.sp,
-        lineHeight = 18.sp,
+        fontSize = 13.5.sp,
+        lineHeight = 19.sp,
         color = TextSecondary
     )
 
     val Badge = TextStyle(
         fontFamily = FontFamily.SansSerif,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 10.sp,
-        letterSpacing = 0.3.sp,
+        fontWeight = FontWeight.Bold,
+        fontSize = 12.sp,
+        letterSpacing = 0.5.sp,
         color = TextPrimary
     )
 
     val ButtonText = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 12.sp,
+        fontSize = 13.sp,
         color = TextPrimary
     )
 
     val BrandBadge = TextStyle(
         fontFamily = BostoneFontFamily,
         fontWeight = FontWeight.Normal,
-        fontSize = 11.sp,
+        fontSize = 12.5.sp,
         letterSpacing = 1.5.sp,
         color = TextPrimary
     )
@@ -95,15 +95,15 @@ object ErasmusTvTypography {
     val MatchScore = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
-        fontSize = 11.5.sp,
+        fontSize = 12.sp,
         color = MatchGreen
     )
 
     val HeroTitleLarge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Black,
-        fontSize = 28.sp,
-        lineHeight = 34.sp,
+        fontSize = 32.sp,
+        lineHeight = 38.sp,
         letterSpacing = (-0.3).sp,
         color = TextPrimary
     )
@@ -111,7 +111,7 @@ object ErasmusTvTypography {
     val HeroMeta = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
+        fontSize = 12.5.sp,
         color = TextSecondary
     )
 
@@ -128,15 +128,15 @@ object ErasmusTvTypography {
     val CastSummary = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Normal,
-        fontSize = 11.5.sp,
-        lineHeight = 16.sp,
+        fontSize = 12.5.sp,
+        lineHeight = 17.sp,
         color = TextSecondary
     )
 
     val Top10Badge = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Black,
-        fontSize = 8.5.sp,
+        fontSize = 11.sp,
         letterSpacing = 0.4.sp,
         color = TextPrimary
     )

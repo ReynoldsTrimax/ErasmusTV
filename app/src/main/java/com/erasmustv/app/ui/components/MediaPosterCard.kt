@@ -10,9 +10,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import com.erasmustv.app.core.theme.PitchBlack
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -37,6 +39,8 @@ import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
 import com.erasmustv.app.data.model.MediaItem
 
+import androidx.compose.ui.semantics.Role
+
 /**
  * Movie & TV Poster Card.
  * Artwork-dominated presentation with clean 2:3 ratio, sharp square geometry,
@@ -48,14 +52,33 @@ fun MediaPosterCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     cardModifier: Modifier = Modifier,
-    cardWidth: Int = 138
+    cardWidth: Int = 138,
+    rank: Int? = null,
+    badge: String? = null
 ) {
     val context = LocalContext.current
     val imageRequest = remember(item.posterPath) {
         ImageRequest.Builder(context)
             .data(AppConfig.posterUrl(item.posterPath))
-            .crossfade(false)
+            .crossfade(200)
             .build()
+    }
+
+    val a11yDescription = remember(item, rank, badge) {
+        buildString {
+            if (rank != null) {
+                append("Number $rank, ")
+            }
+            if (badge != null) {
+                append("$badge, ")
+            }
+            append(item.title)
+            append(if (item.isTv) ", TV Series" else ", Movie")
+            item.year?.let { append(", $it") }
+            if (item.voteAverage != null && item.voteAverage > 0) {
+                append(", rated ${item.ratingFormatted} stars")
+            }
+        }
     }
 
     Column(
@@ -67,27 +90,58 @@ fun MediaPosterCard(
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f),
             shape = RectangleShape,
-            focusedScale = 1.0f,
+            focusedScale = com.erasmustv.app.core.theme.TvMotion.FocusScaleCard,
             focusedBorderColor = FocusWhite,
-            focusedBorderWidth = 1.5.dp
+            focusedBorderWidth = 1.5.dp,
+            contentDescription = a11yDescription,
+            role = Role.Button
         ) { isFocused ->
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(RectangleShape)
-                    .background(SurfaceCard)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            listOf(
+                                if (isFocused) Color(0xFF1E1E28) else Color(0xFF141418),
+                                if (isFocused) Color(0xFF131318) else Color(0xFF0C0C0F)
+                            )
+                        )
+                    )
                     .border(
                         width = 1.dp,
-                        color = if (isFocused) FocusWhite else com.erasmustv.app.core.theme.SurfaceCardBorder,
+                        color = if (isFocused) Color.Transparent else com.erasmustv.app.core.theme.SurfaceCardBorder,
                         shape = RectangleShape
                     )
             ) {
                 AsyncImage(
                     model = imageRequest,
-                    contentDescription = item.title,
+                    contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
+
+                // Restrained corner badge (e.g., NEW, TOP 10)
+                if (!badge.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .background(PitchBlack.copy(alpha = 0.85f), RectangleShape)
+                            .border(1.dp, Color(0x33FFFFFF), RectangleShape)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = badge,
+                            style = ErasmusTvTypography.Badge.copy(
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 0.5.sp
+                            ),
+                            color = if (badge == "TOP 10") RatingGold else Color.White
+                        )
+                    }
+                }
             }
         }
 
@@ -113,7 +167,7 @@ fun MediaPosterCard(
                 Text(
                     text = "★ ${item.ratingFormatted}",
                     style = ErasmusTvTypography.Badge.copy(
-                        fontSize = 10.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     ),
                     color = RatingGold,
@@ -121,7 +175,7 @@ fun MediaPosterCard(
                 )
                 Text(
                     text = " · ",
-                    style = ErasmusTvTypography.Badge.copy(fontSize = 10.sp),
+                    style = ErasmusTvTypography.Badge.copy(fontSize = 12.sp),
                     color = TextMuted
                 )
             }
@@ -129,20 +183,20 @@ fun MediaPosterCard(
             item.year?.let { y ->
                 Text(
                     text = y,
-                    style = ErasmusTvTypography.Badge.copy(fontSize = 10.sp),
+                    style = ErasmusTvTypography.Badge.copy(fontSize = 12.sp),
                     color = TextSecondary,
                     maxLines = 1
                 )
                 Text(
                     text = " · ",
-                    style = ErasmusTvTypography.Badge.copy(fontSize = 10.sp),
+                    style = ErasmusTvTypography.Badge.copy(fontSize = 12.sp),
                     color = TextMuted
                 )
             }
 
             Text(
                 text = if (item.isTv) "Series" else "Movie",
-                style = ErasmusTvTypography.Badge.copy(fontSize = 10.sp),
+                style = ErasmusTvTypography.Badge.copy(fontSize = 12.sp),
                 color = TextMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

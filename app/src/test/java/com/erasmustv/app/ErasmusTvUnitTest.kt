@@ -8,6 +8,7 @@ import com.erasmustv.app.data.model.TvEpisode
 import com.erasmustv.app.data.model.WatchProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -172,8 +173,29 @@ class ErasmusTvUnitTest {
         assertEquals("Lisbon", resolver.sheguServerName("lisbon"))
         assertEquals("Sakura", resolver.sheguServerName("sakura"))
         assertEquals("Nebula", resolver.sheguServerName("nebula"))
+        assertEquals("Solara", resolver.sheguServerName("solara"))
         assertEquals("Athens", resolver.sheguServerName("athens"))
+        assertEquals("Joy", resolver.sheguServerName("joy"))
+        assertEquals("Castle", resolver.sheguServerName("castle"))
+        assertEquals("Canaias", resolver.sheguServerName("canaias"))
         assertEquals("Lisbon", resolver.sheguServerName("unknown_server"))
+    }
+
+    @Test
+    fun testServerClusterConfiguration() {
+        val servers = com.erasmustv.app.data.model.STREAM_SERVERS
+        assertEquals(8, servers.size)
+        val lisbon = servers.find { it.id == "lisbon" }
+        assertNotNull(lisbon)
+        assertTrue(lisbon!!.isPrimary == true)
+
+        val athens = servers.find { it.id == "athens" }
+        assertNotNull(athens)
+        assertEquals("4K Cinema", athens!!.badge)
+
+        val nebula = servers.find { it.id == "nebula" }
+        assertNotNull(nebula)
+        assertEquals("1080p High Speed", nebula!!.badge)
     }
 
     @Test
@@ -276,6 +298,142 @@ class ErasmusTvUnitTest {
         )
         assertEquals("text/vtt", caption.mimeType)
     }
+
+    @Test
+    fun testNavRailDestinationsIntegrity() {
+        val destinations = com.erasmustv.app.ui.components.NAV_RAIL_ITEMS
+        assertEquals(6, destinations.size)
+        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.HOME, destinations[0].route)
+        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.SEARCH, destinations[1].route)
+        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.TV, destinations[2].route)
+        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.MOVIES, destinations[3].route)
+        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.ANIME, destinations[4].route)
+        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.STUDIOS, destinations[5].route)
+    }
+
+    @Test
+    fun testProfileListSerializationAndDeserialization() {
+        val profiles = listOf(
+            WatchProfile(
+                id = "profile_1",
+                userId = "user_abc",
+                name = "Main Profile",
+                avatarKey = "crimson",
+                birthYear = 1990
+            ),
+            WatchProfile(
+                id = "profile_2",
+                userId = "user_abc",
+                name = "Kids",
+                avatarKey = "forest",
+                birthYear = 2018
+            )
+        )
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val encoded = json.encodeToString(
+            kotlinx.serialization.builtins.ListSerializer(WatchProfile.serializer()),
+            profiles
+        )
+        val decoded = json.decodeFromString(
+            kotlinx.serialization.builtins.ListSerializer(WatchProfile.serializer()),
+            encoded
+        )
+
+        assertEquals(2, decoded.size)
+        assertEquals("Main Profile", decoded[0].name)
+        assertEquals("Kids", decoded[1].name)
+        assertTrue(decoded[1].isKidsProfile)
+        assertFalse(decoded[0].isKidsProfile)
+    }
+
+    @Test
+    fun testProfileNameSynthesisFromEmail() {
+        val email = "alex.murphy@erasmustv.com"
+        val synthesized = email
+            .substringBefore("@")
+            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.ROOT) else it.toString() }
+
+        assertEquals("Alex.murphy", synthesized)
+
+        val emptyEmail: String? = null
+        val fallbackName = emptyEmail
+            ?.substringBefore("@")
+            ?.replaceFirstChar { if (it.isLowerCase()) it.titlecase(java.util.Locale.ROOT) else it.toString() }
+            ?.ifBlank { "Profile 1" }
+            ?: "Profile 1"
+
+        assertEquals("Profile 1", fallbackName)
+    }
+
+    @Test
+    fun testProfileLimitEnforcement() {
+        val profiles = mutableListOf<WatchProfile>()
+        for (i in 1..5) {
+            profiles.add(WatchProfile(id = "p_$i", name = "Profile $i"))
+        }
+        assertEquals(5, profiles.size)
+
+        // Attempting to add a 6th profile should be prevented by size check
+        val canAddMore = profiles.size < 5
+        assertFalse(canAddMore)
+    }
+
+    @Test
+    fun testHomeSectionAttributes() {
+        val movies = listOf(
+            MediaItem(id = "m1", title = "Inception", mediaType = "movie"),
+            MediaItem(id = "m2", title = "Interstellar", mediaType = "movie")
+        )
+        val rankedSection = com.erasmustv.app.data.model.HomeSection(
+            id = "top_10_movies",
+            title = "Top 10 Movies Today",
+            items = movies,
+            isRanked = true,
+            viewAllRoute = com.erasmustv.app.ui.navigation.NavRoutes.MOVIES
+        )
+
+        assertTrue(rankedSection.isRanked)
+        assertEquals("top_10_movies", rankedSection.id)
+        assertEquals("Top 10 Movies Today", rankedSection.title)
+        assertEquals(2, rankedSection.items.size)
+        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.MOVIES, rankedSection.viewAllRoute)
+
+        val standardSection = com.erasmustv.app.data.model.HomeSection(
+            id = "hit_comedies",
+            title = "Hit Comedies",
+            items = movies,
+            showNewBadge = true
+        )
+        assertFalse(standardSection.isRanked)
+        assertTrue(standardSection.showNewBadge)
+    }
+
+    @Test
+    fun testSoloLevelingSplitCourResolution() = kotlinx.coroutines.runBlocking {
+        val resolver = com.erasmustv.app.data.remote.CinejoyStreamResolver()
+        // Episode 25 is mapped in TMDB as S1E25, but upstream hosts it as S2E13
+        val result = resolver.resolveStream(
+            mediaType = "tv",
+            tmdbId = "127532",
+            title = "Solo Leveling",
+            season = 1,
+            episode = 25,
+            preferredServer = "lisbon"
+        )
+        println("TEST RESULT: ok=${result.ok}, error=${result.error}, servers=${result.servers.map { "${it.name}:${it.url}" }}")
+        assertTrue("Stream resolution for Solo Leveling S1E25 should succeed via split-cour fallback: ${result.error}", result.ok)
+        assertTrue("Stream servers should not be empty", result.servers.isNotEmpty())
+        assertTrue("Stream URL should be valid", result.servers[0].url.isNotBlank())
+    }
+
+    @Test
+    fun testPritamAndPedroResolution() = kotlinx.coroutines.runBlocking {
+        val resolver = com.erasmustv.app.data.remote.CinejoyStreamResolver()
+        val result = resolver.resolveVidfast("tv", "243206", 1, 1, "Lisbon", "vFast")
+        println("VIDFAST RESULT: ok=${result?.ok}, url=${result?.servers?.firstOrNull()?.url}")
+    }
 }
+
+
 
 

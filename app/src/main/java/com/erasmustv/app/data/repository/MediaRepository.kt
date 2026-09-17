@@ -118,6 +118,75 @@ class MediaRepository(
         tmdbApi.getTrending("all", "day", apiKey).results
     }
 
+    suspend fun getTop10Movies(): Result<List<MediaItem>> = runCatching {
+        tmdbApi.getTrending("movie", "day", apiKey).results.take(10).map {
+            it.copy(mediaType = "movie")
+        }
+    }
+
+    suspend fun getTop10Tv(): Result<List<MediaItem>> = runCatching {
+        tmdbApi.getTrending("tv", "day", apiKey).results.take(10).map {
+            it.copy(mediaType = "tv")
+        }
+    }
+
+    suspend fun getDiscoverMovies(
+        withGenres: String? = null,
+        withOriginalLanguage: String? = null,
+        sortBy: String = "popularity.desc",
+        voteAverageGte: Double? = null,
+        voteCountGte: Int? = null,
+        page: Int = 1
+    ): Result<List<MediaItem>> = runCatching {
+        tmdbApi.discoverMovie(
+            apiKey = apiKey,
+            withGenres = withGenres,
+            withOriginalLanguage = withOriginalLanguage,
+            sortBy = sortBy,
+            voteAverageGte = voteAverageGte,
+            voteCountGte = voteCountGte,
+            page = page
+        ).results.map { it.copy(mediaType = "movie") }
+    }
+
+    suspend fun getDiscoverTv(
+        withGenres: String? = null,
+        withOriginalLanguage: String? = null,
+        sortBy: String = "popularity.desc",
+        voteAverageGte: Double? = null,
+        voteCountGte: Int? = null,
+        page: Int = 1
+    ): Result<List<MediaItem>> = runCatching {
+        tmdbApi.discoverTv(
+            apiKey = apiKey,
+            withGenres = withGenres,
+            withOriginalLanguage = withOriginalLanguage,
+            sortBy = sortBy,
+            voteAverageGte = voteAverageGte,
+            voteCountGte = voteCountGte,
+            page = page
+        ).results.map { it.copy(mediaType = "tv") }
+    }
+
+    suspend fun getKdramas(page: Int = 1): Result<List<MediaItem>> = runCatching {
+        tmdbApi.discoverTv(
+            apiKey = apiKey,
+            withOriginalLanguage = "ko",
+            sortBy = "popularity.desc",
+            page = page
+        ).results.map { it.copy(mediaType = "tv") }
+    }
+
+    suspend fun getCriticallyAcclaimedMovies(page: Int = 1): Result<List<MediaItem>> = runCatching {
+        tmdbApi.discoverMovie(
+            apiKey = apiKey,
+            voteAverageGte = 7.5,
+            voteCountGte = 300,
+            sortBy = "vote_average.desc",
+            page = page
+        ).results.map { it.copy(mediaType = "movie") }
+    }
+
     suspend fun getPopularMovies(page: Int = 1): Result<List<MediaItem>> = runCatching {
         tmdbApi.getPopularMovies(apiKey, page).results.map {
             it.copy(mediaType = "movie")

@@ -80,10 +80,18 @@ import com.erasmustv.app.data.model.MediaItem
 import com.erasmustv.app.ui.components.HeroBillboard
 import com.erasmustv.app.ui.components.MediaSectionRow
 import com.erasmustv.app.ui.components.RankedSectionRow
+import com.erasmustv.app.ui.components.TvFeedSkeleton
 import com.erasmustv.app.ui.components.TvFocusableCard
 import com.erasmustv.app.ui.components.TvLeftNavRail
 import com.erasmustv.app.ui.components.TvPivotBringIntoViewSpec
 import com.erasmustv.app.ui.navigation.NavRoutes
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import com.erasmustv.app.core.theme.TvMotion
+import com.erasmustv.app.core.theme.rememberReducedMotion
 import kotlinx.coroutines.launch
 
 private val AnimeHeroHorizontalGradient = Brush.horizontalGradient(
@@ -126,18 +134,38 @@ fun AnimeScreen(
     onProfileClick: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isReducedMotion = rememberReducedMotion()
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(PitchBlack)
     ) {
-        when (val state = uiState) {
-            is AnimeUiState.Loading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = FocusWhite)
+        AnimatedContent(
+            targetState = uiState,
+            transitionSpec = {
+                if (isReducedMotion) {
+                    androidx.compose.animation.EnterTransition.None togetherWith androidx.compose.animation.ExitTransition.None
+                } else {
+                    fadeIn(
+                        animationSpec = tween(
+                            durationMillis = TvMotion.DURATION_ENTER,
+                            easing = TvMotion.EasingSilk
+                        )
+                    ) togetherWith fadeOut(
+                        animationSpec = tween(
+                            durationMillis = TvMotion.DURATION_FAST,
+                            easing = TvMotion.EasingSilk
+                        )
+                    )
                 }
-            }
+            },
+            label = "animeScreenFeedTransition"
+        ) { state ->
+            when (state) {
+                is AnimeUiState.Loading -> {
+                    TvFeedSkeleton()
+                }
             is AnimeUiState.Error -> {
                 Column(
                     modifier = Modifier.fillMaxSize(),
@@ -152,7 +180,8 @@ fun AnimeScreen(
                 }
             }
             is AnimeUiState.Success -> {
-                val data = state.data
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val data = state.data
                 val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
                 val heroPlayFocusRequester = remember { FocusRequester() }
                 val heroSeeMoreFocusRequester = remember { FocusRequester() }
@@ -175,12 +204,17 @@ fun AnimeScreen(
 
                 val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
-                var selectedHeroItem by remember(data.heroAnime?.id) { mutableStateOf(data.heroAnime) }
+                val initialHero = data.heroAnime
+                    ?: data.trendingAnime.firstOrNull()
+                    ?: data.topRatedAnime.firstOrNull()
+                    ?: data.shonenAnime.firstOrNull()
+                var selectedHeroItem by remember(initialHero?.id) { mutableStateOf(initialHero) }
 
                 // Request initial focus once; never steal focus on recomposition or return
                 var hasRequestedInitialFocus by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
                 LaunchedEffect(Unit) {
                     if (!hasRequestedInitialFocus) {
+                        kotlinx.coroutines.delay(60)
                         try {
                             heroPlayFocusRequester.requestFocus()
                             hasRequestedInitialFocus = true
@@ -263,7 +297,7 @@ fun AnimeScreen(
                                 }
                             ) {
                                 HeroBillboard(
-                                    item = selectedHeroItem ?: data.heroAnime,
+                                    item = selectedHeroItem ?: initialHero,
                                     onPlayClick = onPlayClick,
                                     onDetailsClick = onMediaClick,
                                     heroFocusRequester = heroPlayFocusRequester,
@@ -438,4 +472,6 @@ fun AnimeScreen(
             }
         }
     }
+}
+}
 }
