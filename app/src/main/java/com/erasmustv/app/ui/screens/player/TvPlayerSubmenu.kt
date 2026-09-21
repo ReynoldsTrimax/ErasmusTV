@@ -27,7 +27,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -55,6 +57,7 @@ import com.erasmustv.app.core.theme.SurfaceElevated
 import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
+import com.erasmustv.app.data.model.DirectServer
 import com.erasmustv.app.data.model.StreamServer
 import kotlinx.coroutines.delay
 
@@ -71,6 +74,8 @@ fun TvPlayerSubmenu(
     qualityTracks: List<TvQualityTrack>,
     servers: List<StreamServer>,
     currentServerId: String,
+    fallbackServers: List<DirectServer> = emptyList(),
+    currentSubServerIndex: Int = 0,
     currentSubtitleFont: SubtitleFont = SubtitleFont.SANS_SERIF,
     currentSubtitleSize: SubtitleSize = SubtitleSize.MEDIUM,
     autoSyncStatus: String = "Auto-sync: Active (±0.0s)",
@@ -78,6 +83,7 @@ fun TvPlayerSubmenu(
     onSelectSubtitleTrack: (TvSubtitleTrack) -> Unit,
     onSelectQualityTrack: (TvQualityTrack) -> Unit,
     onSelectServer: (String) -> Unit,
+    onSelectSubServer: (Int) -> Unit = {},
     onSelectSubtitleFont: (SubtitleFont) -> Unit = {},
     onSelectSubtitleSize: (SubtitleSize) -> Unit = {},
     onNudgeSubtitleSync: (Long) -> Unit = {},
@@ -129,8 +135,9 @@ fun TvPlayerSubmenu(
                             itemCount = displayTracks.size,
                             initialSelectedIndex = selectedIndex,
                             onClose = onClose
-                        ) { itemFocusRequesters ->
+                        ) { listState, itemFocusRequesters ->
                             LazyColumn(
+                                state = listState,
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
@@ -175,8 +182,11 @@ fun TvPlayerSubmenu(
                                         color = TextPrimary
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
+                                    val availableTracksCount = (subtitleTracks.size - 1).coerceAtLeast(0)
                                     Text(
-                                        text = if (subtitleTab == 0) "Select language or turn off" else "Customize font, size & sync",
+                                        text = if (subtitleTab == 0) {
+                                            if (availableTracksCount > 0) "$availableTracksCount tracks available • Select language" else "Select language or turn off"
+                                        } else "Customize font, size & sync",
                                         style = ErasmusTvTypography.Badge.copy(fontSize = 12.sp),
                                         color = TextMuted
                                     )
@@ -211,14 +221,19 @@ fun TvPlayerSubmenu(
                             if (subtitleTab == 0) {
                                 // Subtitle Tracks List
                                 val selectedIndex = subtitleTracks.indexOfFirst { it.isSelected }.coerceAtLeast(0)
+                                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
                                 val trackFocusRequesters = remember(subtitleTracks.size) {
                                     List(subtitleTracks.size) { FocusRequester() }
                                 }
                                 LaunchedEffect(Unit) {
+                                    if (selectedIndex > 0) {
+                                        listState.scrollToItem(selectedIndex)
+                                    }
                                     delay(50)
                                     trackFocusRequesters.getOrNull(selectedIndex)?.requestFocus()
                                 }
                                 LazyColumn(
+                                    state = listState,
                                     verticalArrangement = Arrangement.spacedBy(4.dp),
                                     modifier = Modifier.fillMaxSize()
                                 ) {
@@ -363,8 +378,9 @@ fun TvPlayerSubmenu(
                             itemCount = qualityTracks.size,
                             initialSelectedIndex = selectedIndex,
                             onClose = onClose
-                        ) { itemFocusRequesters ->
+                        ) { listState, itemFocusRequesters ->
                             LazyColumn(
+                                state = listState,
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
@@ -388,27 +404,95 @@ fun TvPlayerSubmenu(
                     }
 
                     PlayerActiveMenu.Servers -> {
-                        val selectedIndex = servers.indexOfFirst { it.id == currentServerId }.coerceAtLeast(0)
+                        val showSubStreams = fallbackServers.size > 1
+                        val totalItems = (if (showSubStreams) fallbackServers.size else 0) + servers.size
+
+                        val currentServerIndex = servers.indexOfFirst { it.id.equals(currentServerId, ignoreCase = true) }.coerceAtLeast(0)
+                        val isRegionalSelected = currentServerId != "lisbon" && servers.any { it.id.equals(currentServerId, ignoreCase = true) }
+
+                        val selectedFocusIndex: Int
+                        val scrollTargetIndex: Int
+
+                        if (showSubStreams) {
+                            if (isRegionalSelected) {
+                                selectedFocusIndex = fallbackServers.size + currentServerIndex
+                                scrollTargetIndex = 2 + fallbackServers.size + currentServerIndex
+                            } else {
+                                val subIndex = currentSubServerIndex.coerceIn(0, (fallbackServers.size - 1).coerceAtLeast(0))
+                                selectedFocusIndex = subIndex
+                                scrollTargetIndex = 1 + subIndex
+                            }
+                        } else {
+                            selectedFocusIndex = currentServerIndex
+                            scrollTargetIndex = currentServerIndex
+                        }
+
                         SubmenuContent(
                             title = "Streaming Server",
-                            subtitle = "Switch cluster source if experiencing buffering",
-                            itemCount = servers.size,
-                            initialSelectedIndex = selectedIndex,
+                            subtitle = "Switch cluster source or 4K/HD stream edition",
+                            itemCount = totalItems,
+                            initialSelectedIndex = selectedFocusIndex,
+                            lazyListScrollTarget = scrollTargetIndex,
                             onClose = onClose
-                        ) { itemFocusRequesters ->
+                        ) { listState, itemFocusRequesters ->
                             LazyColumn(
+                                state = listState,
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
+                                if (showSubStreams) {
+                                    item {
+                                        Text(
+                                            text = "ACTIVE CLUSTER EDITIONS",
+                                            style = ErasmusTvTypography.Badge.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                                            color = TextMuted,
+                                            modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)
+                                        )
+                                    }
+                                    itemsIndexed(fallbackServers) { index, subServer ->
+                                        val isSelected = (!isRegionalSelected && index == currentSubServerIndex)
+                                        val editionBadge = when {
+                                            subServer.name.contains("4K Master", ignoreCase = true) -> "4K Master Adaptive Ladder"
+                                            subServer.name.contains("4K UHD", ignoreCase = true) -> "4K Cinema Direct Rip"
+                                            subServer.name.contains("4K", ignoreCase = true) -> "4K Ultra HD"
+                                            subServer.name.contains("Adaptive", ignoreCase = true) -> "Adaptive HD"
+                                            else -> if (subServer.kind == "hls") "HLS Stream" else "Direct Stream"
+                                        }
+                                        SubmenuRowItem(
+                                            title = subServer.name,
+                                            subtitle = editionBadge,
+                                            isSelected = isSelected,
+                                            isFirstItem = (index == 0),
+                                            isLastItem = false,
+                                            focusRequester = itemFocusRequesters.getOrNull(index),
+                                            onClick = {
+                                                onSelectSubServer(index)
+                                                onClose()
+                                            },
+                                            onBackOrLeft = onClose
+                                        )
+                                    }
+                                    item {
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            text = "REGIONAL CLUSTER SERVERS",
+                                            style = ErasmusTvTypography.Badge.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                                            color = TextMuted,
+                                            modifier = Modifier.padding(bottom = 6.dp)
+                                        )
+                                    }
+                                }
+
+                                val offset = if (showSubStreams) fallbackServers.size else 0
                                 itemsIndexed(servers) { index, server ->
-                                    val isSelected = server.id == currentServerId
+                                    val isSelected = server.id.equals(currentServerId, ignoreCase = true) && (!showSubStreams || isRegionalSelected)
                                     SubmenuRowItem(
                                         title = "${server.flag}  ${server.name}",
                                         subtitle = "${server.badge} · ${server.description}",
                                         isSelected = isSelected,
-                                        isFirstItem = (index == 0),
+                                        isFirstItem = (!showSubStreams && index == 0),
                                         isLastItem = (index == servers.size - 1),
-                                        focusRequester = itemFocusRequesters.getOrNull(index),
+                                        focusRequester = itemFocusRequesters.getOrNull(offset + index),
                                         onClick = {
                                             onSelectServer(server.id)
                                             onClose()
@@ -434,18 +518,48 @@ private fun SubmenuContent(
     subtitle: String,
     itemCount: Int,
     initialSelectedIndex: Int,
+    lazyListScrollTarget: Int = initialSelectedIndex,
     onClose: () -> Unit,
-    content: @Composable (focusRequesters: List<FocusRequester>) -> Unit
+    content: @Composable (listState: LazyListState, focusRequesters: List<FocusRequester>) -> Unit
 ) {
+    val initialScrollIndex = (lazyListScrollTarget - 2).coerceAtLeast(0)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialScrollIndex)
     val focusRequesters = remember(itemCount) {
         List(itemCount) { FocusRequester() }
     }
+    val closeButtonFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(itemCount, initialSelectedIndex) {
+    LaunchedEffect(itemCount, initialSelectedIndex, lazyListScrollTarget) {
         if (focusRequesters.isNotEmpty()) {
+            val scrollTarget = (lazyListScrollTarget - 2).coerceAtLeast(0)
+            if (scrollTarget > 0 && listState.firstVisibleItemIndex != scrollTarget) {
+                listState.scrollToItem(scrollTarget)
+            }
             delay(80)
             val target = focusRequesters.getOrNull(initialSelectedIndex) ?: focusRequesters.firstOrNull()
-            target?.requestFocus()
+            var focused = false
+            try {
+                target?.requestFocus()
+                focused = true
+            } catch (_: Exception) {}
+
+            if (!focused) {
+                try {
+                    focusRequesters.firstOrNull()?.requestFocus()
+                    focused = true
+                } catch (_: Exception) {}
+            }
+
+            if (!focused) {
+                try {
+                    closeButtonFocusRequester.requestFocus()
+                } catch (_: Exception) {}
+            }
+        } else {
+            delay(80)
+            try {
+                closeButtonFocusRequester.requestFocus()
+            } catch (_: Exception) {}
         }
     }
 
@@ -472,26 +586,35 @@ private fun SubmenuContent(
                 )
             }
 
-            SubmenuCloseButton(onClose = onClose)
+            SubmenuCloseButton(
+                onClose = onClose,
+                focusRequester = closeButtonFocusRequester
+            )
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        content(focusRequesters)
+        content(listState, focusRequesters)
     }
 }
 
 @Composable
 private fun SubmenuCloseButton(
     onClose: () -> Unit,
+    focusRequester: FocusRequester? = null,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
 
+    val reqModifier = if (focusRequester != null) {
+        Modifier.focusRequester(focusRequester)
+    } else Modifier
+
     Box(
         modifier = modifier
             .size(36.dp)
+            .then(reqModifier)
             .then(
                 if (isFocused) {
                     Modifier

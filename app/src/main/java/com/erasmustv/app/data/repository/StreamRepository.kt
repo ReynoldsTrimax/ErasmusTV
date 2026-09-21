@@ -6,6 +6,7 @@ import com.erasmustv.app.data.model.ContinueWatchingItem
 import com.erasmustv.app.data.model.DirectStreamResult
 import com.erasmustv.app.data.model.PlaybackProgress
 import com.erasmustv.app.data.model.SubtitleTrack
+import com.erasmustv.app.data.remote.BingrStreamResolver
 import com.erasmustv.app.data.remote.CinejoyStreamResolver
 import com.erasmustv.app.data.remote.SubtitleResolver
 
@@ -14,9 +15,21 @@ import kotlinx.coroutines.coroutineScope
 
 class StreamRepository(
     private val cinejoyResolver: CinejoyStreamResolver,
+    private val bingrResolver: BingrStreamResolver = BingrStreamResolver(),
     private val subtitleResolver: SubtitleResolver,
     private val progressStore: PlaybackProgressStore
 ) {
+
+    constructor(
+        cinejoyResolver: CinejoyStreamResolver,
+        subtitleResolver: SubtitleResolver,
+        progressStore: PlaybackProgressStore
+    ) : this(
+        cinejoyResolver = cinejoyResolver,
+        bingrResolver = BingrStreamResolver(),
+        subtitleResolver = subtitleResolver,
+        progressStore = progressStore
+    )
 
     suspend fun extractStream(
         mediaType: String,
@@ -29,6 +42,39 @@ class StreamRepository(
         imdbId: String? = null
     ): Result<DirectStreamResult> = runCatching {
         coroutineScope {
+            // Check Bingr cluster first if explicitly requested
+            if (bingrResolver.isBingrServer(server)) {
+                val bingrHit = bingrResolver.resolveBingrStream(
+                    mediaType = mediaType,
+                    tmdbId = tmdbId,
+                    title = title ?: "Video",
+                    season = season,
+                    episode = episode,
+                    year = year,
+                    imdbId = imdbId,
+                    preferredServer = server
+                )
+                if (bingrHit != null && bingrHit.ok && bingrHit.servers.isNotEmpty()) {
+                    val subsDeferred = async {
+                        subtitleResolver.getSubtitles(
+                            tmdbId = tmdbId,
+                            mediaType = mediaType,
+                            imdbId = imdbId,
+                            season = season,
+                            episode = episode
+                        )
+                    }
+                    val externalSubs = try {
+                        subsDeferred.await()
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+
+                    return@coroutineScope mergeCaptions(bingrHit, externalSubs)
+                }
+            }
+
+            // Fallback to legacy Cinejoy/Shegu/Vidfast resolver
             val streamDeferred = async {
                 cinejoyResolver.resolveStream(
                     mediaType = mediaType,
@@ -55,49 +101,100 @@ class StreamRepository(
             val streamResult = streamDeferred.await()
             val externalSubs = try {
                 subsDeferred.await()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 emptyList()
             }
 
             if (!streamResult.ok) {
+                // Secondary cluster-wide fallback: try Aphelion from Bingr cluster if not already queried
+                if (!bingrResolver.isBingrServer(server)) {
+                    val fallbackHit = bingrResolver.resolveBingrStream(
+                        mediaType = mediaType,
+                        tmdbId = tmdbId,
+                        title = title ?: "Video",
+                        season = season,
+                        episode = episode,
+                        year = year,
+                        imdbId = imdbId,
+                        preferredServer = "aphelion"
+                    )
+                    if (fallbackHit != null && fallbackHit.ok && fallbackHit.servers.isNotEmpty()) {
+                        return@coroutineScope mergeCaptions(fallbackHit, externalSubs)
+                    }
+                }
                 return@coroutineScope streamResult
             }
 
-            val combinedCaptions = mutableListOf<CinejoyCaption>()
-            val seenUrls = mutableSetOf<String>()
-            val seenLangs = mutableSetOf<String>()
-
-            // 1. Keep valid Cinejoy embedded captions
-            for (cap in streamResult.captions) {
-                if (cap.url.isNotBlank() && seenUrls.add(cap.url)) {
-                    seenLangs.add(cap.language.lowercase())
-                    combinedCaptions.add(cap)
-                }
-            }
-
-            // 2. Add external subtitles
-            for (sub in externalSubs) {
-                val lang = sub.language.lowercase()
-                if (sub.url.isNotBlank() && seenUrls.add(sub.url)) {
-                    if (lang.startsWith("en") || seenLangs.add(lang)) {
-                        combinedCaptions.add(
-                            CinejoyCaption(
-                                label = sub.label,
-                                language = sub.language,
-                                url = sub.url,
-                                mimeType = sub.mimeType
-                            )
-                        )
-                    }
-                }
-            }
-
-            combinedCaptions.sortWith(compareBy<CinejoyCaption> {
-                if (it.language.startsWith("en", ignoreCase = true)) 0 else 1
-            }.thenBy { it.label })
-
-            streamResult.copy(captions = combinedCaptions)
+            mergeCaptions(streamResult, externalSubs)
         }
+    }
+
+    private fun mergeCaptions(
+        streamResult: DirectStreamResult,
+        externalSubs: List<SubtitleTrack>
+    ): DirectStreamResult {
+        val combinedCaptions = mutableListOf<CinejoyCaption>()
+        val seenUrls = mutableSetOf<String>()
+
+        // 1. Keep valid embedded captions from stream
+        for (cap in streamResult.captions) {
+            if (cap.url.isNotBlank() && seenUrls.add(cap.url)) {
+                val normLang = SubtitleResolver.normalizeLangCode(cap.language)
+                val normLabelLang = SubtitleResolver.normalizeLangCode(cap.label)
+                val displayFromLabel = SubtitleResolver.getLanguageDisplayName(normLabelLang)
+                val displayFromLang = SubtitleResolver.getLanguageDisplayName(normLang)
+                
+                val finalLabel = when {
+                    SubtitleResolver.LANG_NAMES.containsKey(cap.label.lowercase().trim()) -> displayFromLabel
+                    cap.label.length <= 3 -> displayFromLang
+                    cap.label.isNotBlank() -> cap.label
+                    else -> displayFromLang
+                }
+                val finalLang = if (normLang.length > 3 && normLabelLang.length <= 3) normLabelLang else normLang
+                combinedCaptions.add(cap.copy(label = finalLabel, language = finalLang))
+            }
+        }
+
+        // 2. Add all external subtitles (Wyzie, OpenSubtitles Stremio, etc.)
+        for (sub in externalSubs) {
+            if (sub.url.isNotBlank() && seenUrls.add(sub.url)) {
+                combinedCaptions.add(
+                    CinejoyCaption(
+                        label = sub.label,
+                        language = sub.language,
+                        url = sub.url,
+                        mimeType = sub.mimeType
+                    )
+                )
+            }
+        }
+
+        // 3. Disambiguate duplicate labels across embedded and external captions
+        val labelCounts = mutableMapOf<String, Int>()
+        val disambiguated = mutableListOf<CinejoyCaption>()
+        for (cap in combinedCaptions) {
+            val base = cap.label.trim()
+            val count = labelCounts.getOrDefault(base, 0) + 1
+            labelCounts[base] = count
+            val finalLabel = if (count > 1) {
+                if (base.contains("#")) "$base-$count" else "$base #$count"
+            } else {
+                base
+            }
+            disambiguated.add(cap.copy(label = finalLabel))
+        }
+
+        // 4. Sort: English first (Standard then CC), then alphabetical by label
+        disambiguated.sortWith(
+            compareBy<CinejoyCaption> {
+                val isEn = it.language.startsWith("en", ignoreCase = true) || it.label.contains("English", ignoreCase = true)
+                if (!isEn) 2
+                else if (it.label.contains("[CC]", ignoreCase = true)) 1
+                else 0
+            }.thenBy { it.label }
+        )
+
+        return streamResult.copy(captions = disambiguated)
     }
 
     suspend fun getSubtitles(

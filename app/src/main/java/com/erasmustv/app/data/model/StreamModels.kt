@@ -79,6 +79,71 @@ val STREAM_SERVERS = listOf(
         country = "ES",
         badge = "Global Edge",
         description = "Global low-latency edge mirror"
+    ),
+    StreamServer(
+        id = "aphelion",
+        name = "Aphelion",
+        flag = "🌐",
+        country = "GL",
+        badge = "4K Ultra HD",
+        description = "Flagship zero-buffer cluster with 4K/1080p edge streams and multi-audio",
+        isPrimary = true
+    ),
+    StreamServer(
+        id = "polaris",
+        name = "Polaris",
+        flag = "🇺🇸",
+        country = "US",
+        badge = "1080p Full HD",
+        description = "High-bitrate CloudFront edge cluster with multilingual subtitles"
+    ),
+    StreamServer(
+        id = "bastion",
+        name = "Bastion",
+        flag = "🇮🇳",
+        country = "IN",
+        badge = "1080p Full HD",
+        description = "Low-latency regional edge cluster with synced WebVTT captions"
+    ),
+    StreamServer(
+        id = "hallyu",
+        name = "Hallyu",
+        flag = "🇰🇷",
+        country = "KR",
+        badge = "1080p Asian & Anime",
+        description = "Specialized Asian drama, K-content, and anime streaming cluster"
+    ),
+    StreamServer(
+        id = "nova",
+        name = "Nova",
+        flag = "🇺🇸",
+        country = "US",
+        badge = "1080p High Speed",
+        description = "Ultra-fast direct cloud stream cluster"
+    ),
+    StreamServer(
+        id = "edmunds",
+        name = "Edmunds",
+        flag = "🇺🇸",
+        country = "US",
+        badge = "Cinema Mirror",
+        description = "High-capacity cinema mirror cluster"
+    ),
+    StreamServer(
+        id = "animesalt",
+        name = "AnimeSalt",
+        flag = "⚡",
+        country = "JP",
+        badge = "1080p Anime Multi",
+        description = "Direct zero-buffer Anime cluster with multi-audio and synced subs"
+    ),
+    StreamServer(
+        id = "ryuu",
+        name = "Ryuu",
+        flag = "🐉",
+        country = "JP",
+        badge = "1080p Animex",
+        description = "Animex AniList anime sub & dub cluster"
     )
 )
 

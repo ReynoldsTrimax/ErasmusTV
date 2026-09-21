@@ -2,6 +2,7 @@ package com.erasmustv.app.data.remote
 
 import android.util.Log
 import com.erasmustv.app.core.config.AppConfig
+import com.erasmustv.app.core.util.DeviceCodecCapability
 import com.erasmustv.app.data.model.CinejoyCaption
 import com.erasmustv.app.data.model.DirectServer
 import com.erasmustv.app.data.model.DirectStreamResult
@@ -57,6 +58,10 @@ class CinejoyStreamResolver(
     private val cache = ConcurrentHashMap<String, CachedResult>()
     private val CACHE_MS = 10 * 60 * 1000L // 10 minutes
 
+    fun clearCache() {
+        cache.clear()
+    }
+
     private data class CachedResult(
         val timestamp: Long,
         val result: DirectStreamResult
@@ -72,26 +77,30 @@ class CinejoyStreamResolver(
         title: String,
         season: Int? = null,
         episode: Int? = null,
-        preferredServer: String = "lisbon",
         year: String? = null,
-        imdbId: String? = null
+        imdbId: String? = null,
+        preferredServer: String = "lisbon"
     ): DirectStreamResult = withContext(Dispatchers.IO) {
         val isTv = mediaType.equals("tv", ignoreCase = true)
         val s = if (isTv) season ?: 1 else null
         val e = if (isTv) episode ?: 1 else null
 
-        val cacheKey = "$preferredServer:$mediaType:$tmdbId:$s:$e"
+        val isHevc10 = DeviceCodecCapability.isHevcMain10Supported()
+        val cacheKey = "$preferredServer:$mediaType:$tmdbId:$s:$e:hevc10=$isHevc10"
         val cached = cache[cacheKey]
         if (cached != null && System.currentTimeMillis() - cached.timestamp < CACHE_MS) {
             return@withContext cached.result
         }
 
+        val legacyCinejoyServers = listOf("lisbon", "sakura", "nebula", "solara", "athens", "joy", "castle", "canaias")
         // Preferred server first, then cluster fallback sequence
         val serverOrder = buildList {
             add(preferredServer)
-            STREAM_SERVERS.map { it.id }.filter { !it.equals(preferredServer, ignoreCase = true) }.forEach {
-                add(it)
-            }
+            STREAM_SERVERS.map { it.id }
+                .filter { legacyCinejoyServers.contains(it.lowercase()) && !it.equals(preferredServer, ignoreCase = true) }
+                .forEach {
+                    add(it)
+                }
         }
 
         for (serverId in serverOrder) {
@@ -220,19 +229,103 @@ class CinejoyStreamResolver(
     ): DirectStreamResult? {
         val serverName = sheguServerName(serverId)
 
+        val hasVidfastOffset = isTv && tmdbId == "66732"
+
         // Cluster priority routing
         when (serverId.lowercase()) {
             "lisbon" -> {
-                // Lisbon: 4K / HLS flagship (vFast primary sub-server with internal vRapid fallback)
-                resolveVidfast(mediaType, tmdbId, season, episode, serverName, preferredSubServer = "vFast")?.let { return it }
-                resolveVidlove(mediaType, tmdbId, season, episode, serverName)?.let { return it }
-                resolveVidlink(mediaType, tmdbId, season, episode, serverName)?.let { return it }
+                if (hasVidfastOffset) {
+                    Log.i(TAG, "Bypassing Vidfast for $title due to known upstream episode index offset. Routing to verified cluster mirrors.")
+                    val vidlinkHit = resolveVidlink(mediaType, tmdbId, season, episode, serverName = serverName)
+                    if (vidlinkHit != null && vidlinkHit.ok && vidlinkHit.servers.isNotEmpty()) {
+                        val vidloveHit = resolveVidlove(mediaType, tmdbId, season, episode, serverName = "$serverName (Cloud)")
+                        val merged = vidlinkHit.servers + (vidloveHit?.servers ?: emptyList())
+                        return vidlinkHit.copy(servers = merged)
+                    }
+                    val vidloveHit = resolveVidlove(mediaType, tmdbId, season, episode, serverName = serverName)
+                    if (vidloveHit != null && vidloveHit.ok && vidloveHit.servers.isNotEmpty()) {
+                        return vidloveHit
+                    }
+                }
+
+                // Lisbon: 4K / HLS flagship (4K Master adaptive ladder primary with 4K UHD Direct fallback)
+                val vidfastHit = resolveVidfast(mediaType, tmdbId, season, episode, serverName, preferredSubServer = "4k_master")
+                val isHevc10 = DeviceCodecCapability.isHevcMain10Supported()
+                val primaryUrl = vidfastHit?.servers?.firstOrNull()?.url.orEmpty()
+                val isOnlyRawCdn1 = primaryUrl.contains("/r2/cdn1/") && vidfastHit?.servers?.none { it.url.contains("/vd/") || it.url.contains("/r2/cdn2/") } == true
+
+                if (vidfastHit != null && vidfastHit.ok && !isOnlyRawCdn1) {
+                    return vidfastHit
+                }
+
+                // If vidfast returned only raw cdn1 (single-variant 10-bit HEVC) or null, query mirrors for resilient fallback
+                val vidlinkHit = resolveVidlink(mediaType, tmdbId, season, episode, serverName = "$serverName (Mirror)")
+                val vidloveHit = resolveVidlove(mediaType, tmdbId, season, episode, serverName = "$serverName (Cloud)")
+
+                if (!isHevc10 && isOnlyRawCdn1) {
+                    // Device cannot decode HEVC Main 10! Elevate Vidlink/Vidlove over unplayable r2/cdn1
+                    if (vidlinkHit != null && vidlinkHit.ok && vidlinkHit.servers.isNotEmpty()) {
+                        val merged = vidlinkHit.servers + (vidloveHit?.servers ?: emptyList()) + (vidfastHit?.servers ?: emptyList())
+                        return vidlinkHit.copy(servers = merged)
+                    }
+                    if (vidloveHit != null && vidloveHit.ok && vidloveHit.servers.isNotEmpty()) {
+                        val merged = vidloveHit.servers + (vidfastHit?.servers ?: emptyList())
+                        return vidloveHit.copy(servers = merged)
+                    }
+                }
+
+                if (vidfastHit != null && vidfastHit.ok && vidfastHit.servers.isNotEmpty()) {
+                    val fallbacks = (vidlinkHit?.servers ?: emptyList()) + (vidloveHit?.servers ?: emptyList())
+                    return vidfastHit.copy(servers = vidfastHit.servers + fallbacks)
+                }
+
+                vidloveHit?.let { return it }
+                vidlinkHit?.let { return it }
             }
             "athens" -> {
-                // Athens: 4K Cinema Mirror (vRapid primary sub-server for genuine 4K with internal vFast fallback)
-                resolveVidfast(mediaType, tmdbId, season, episode, serverName, preferredSubServer = "vRapid")?.let { return it }
-                resolveVidlove(mediaType, tmdbId, season, episode, serverName)?.let { return it }
-                resolveVidlink(mediaType, tmdbId, season, episode, serverName)?.let { return it }
+                if (hasVidfastOffset) {
+                    val vidlinkHit = resolveVidlink(mediaType, tmdbId, season, episode, serverName = serverName)
+                    if (vidlinkHit != null && vidlinkHit.ok && vidlinkHit.servers.isNotEmpty()) {
+                        val vidloveHit = resolveVidlove(mediaType, tmdbId, season, episode, serverName = "$serverName (Cloud)")
+                        return vidlinkHit.copy(servers = vidlinkHit.servers + (vidloveHit?.servers ?: emptyList()))
+                    }
+                    val vidloveHit = resolveVidlove(mediaType, tmdbId, season, episode, serverName = serverName)
+                    if (vidloveHit != null && vidloveHit.ok && vidloveHit.servers.isNotEmpty()) {
+                        return vidloveHit
+                    }
+                }
+
+                // Athens: 4K Cinema Mirror (4K UHD Direct primary with 4K Master ladder fallback)
+                val vidfastHit = resolveVidfast(mediaType, tmdbId, season, episode, serverName, preferredSubServer = "4k_direct")
+                val isHevc10 = DeviceCodecCapability.isHevcMain10Supported()
+                val primaryUrl = vidfastHit?.servers?.firstOrNull()?.url.orEmpty()
+                val isOnlyRawCdn1 = primaryUrl.contains("/r2/cdn1/") && vidfastHit?.servers?.none { it.url.contains("/vd/") || it.url.contains("/r2/cdn2/") } == true
+
+                if (vidfastHit != null && vidfastHit.ok && !isOnlyRawCdn1) {
+                    return vidfastHit
+                }
+
+                val vidlinkHit = resolveVidlink(mediaType, tmdbId, season, episode, serverName = "$serverName (Mirror)")
+                val vidloveHit = resolveVidlove(mediaType, tmdbId, season, episode, serverName = "$serverName (Cloud)")
+
+                if (!isHevc10 && isOnlyRawCdn1) {
+                    if (vidlinkHit != null && vidlinkHit.ok && vidlinkHit.servers.isNotEmpty()) {
+                        val merged = vidlinkHit.servers + (vidloveHit?.servers ?: emptyList()) + (vidfastHit?.servers ?: emptyList())
+                        return vidlinkHit.copy(servers = merged)
+                    }
+                    if (vidloveHit != null && vidloveHit.ok && vidloveHit.servers.isNotEmpty()) {
+                        val merged = vidloveHit.servers + (vidfastHit?.servers ?: emptyList())
+                        return vidloveHit.copy(servers = merged)
+                    }
+                }
+
+                if (vidfastHit != null && vidfastHit.ok && vidfastHit.servers.isNotEmpty()) {
+                    val fallbacks = (vidlinkHit?.servers ?: emptyList()) + (vidloveHit?.servers ?: emptyList())
+                    return vidfastHit.copy(servers = vidfastHit.servers + fallbacks)
+                }
+
+                vidloveHit?.let { return it }
+                vidlinkHit?.let { return it }
             }
             "nebula" -> {
                 // Nebula: High-speed US edge CDN (Vidlink direct MP4, fallback to Vidlove and Vidfast 1080p/4K)
@@ -267,12 +360,16 @@ class CinejoyStreamResolver(
             }
             "canaias" -> {
                 // Canaias: Global low-latency edge mirror
-                resolveVidfast(mediaType, tmdbId, season, episode, serverName)?.let { return it }
+                if (!hasVidfastOffset) {
+                    resolveVidfast(mediaType, tmdbId, season, episode, serverName)?.let { return it }
+                }
                 resolveVidlove(mediaType, tmdbId, season, episode, serverName)?.let { return it }
                 resolveVidlink(mediaType, tmdbId, season, episode, serverName)?.let { return it }
             }
             else -> {
-                resolveVidfast(mediaType, tmdbId, season, episode, serverName)?.let { return it }
+                if (!hasVidfastOffset) {
+                    resolveVidfast(mediaType, tmdbId, season, episode, serverName)?.let { return it }
+                }
                 resolveVidlove(mediaType, tmdbId, season, episode, serverName)?.let { return it }
                 resolveVidlink(mediaType, tmdbId, season, episode, serverName)?.let { return it }
             }
@@ -499,14 +596,14 @@ class CinejoyStreamResolver(
                 res.body?.string() ?: return null
             }
 
-            // Next.js RSC Flight stream encodes tokens with escaped quotes: \"en\":\"...\"
-            val escapedTokenPattern = java.util.regex.Pattern.compile("""(?:\\\"|")en(?:\\\"|")\s*:\s*(?:\\\"|")([^\\\"]+)(?:\\\"|")""")
-            var matcher = escapedTokenPattern.matcher(html)
+            // Next.js RSC Flight stream encodes tokens with escaped quotes: \"en\":\"...\" or \\"en\\":\\"...\\"
+            val tokenPattern = java.util.regex.Pattern.compile("""(?:en|token)[\\]*":[\\]*"([a-zA-Z0-9_\-]{25,})""")
+            var matcher = tokenPattern.matcher(html)
             val token = if (matcher.find()) {
                 matcher.group(1)
             } else {
-                val standardPattern = java.util.regex.Pattern.compile("\"(?:en|token)\":\"(.*?)\"")
-                matcher = standardPattern.matcher(html)
+                val fallbackPattern = java.util.regex.Pattern.compile("""(?:\\*\"|")en(?:\\*\"|")\s*:\s*(?:\\*\"|")([a-zA-Z0-9_\-]{25,})""")
+                matcher = fallbackPattern.matcher(html)
                 if (matcher.find()) matcher.group(1) else null
             } ?: return null
 
@@ -559,44 +656,98 @@ class CinejoyStreamResolver(
             } ?: return null
             val serversList = decServersJson.optJSONArray("result") ?: return null
             if (serversList.length() == 0) return null
+            println("[$tmdbId] VIDFAST SERVERS LIST: $serversList")
 
-            // Sort servers according to preferred sub-cluster (vFast vs vRapid)
-            val vFastPayloads = mutableListOf<String>()
-            val vRapidPayloads = mutableListOf<String>()
-            val otherPayloads = mutableListOf<String>()
+            // Sort servers according to preferred sub-cluster, 4K availability, and hardware codec support
+            data class VidfastCandidate(
+                val name: String,
+                val payload: String,
+                val is4k: Boolean,
+                val isDirect: Boolean,
+                val isMaster: Boolean
+            )
+            val fourKCandidates = mutableListOf<VidfastCandidate>()
+            val adaptiveCandidates = mutableListOf<VidfastCandidate>()
+            val otherCandidates = mutableListOf<VidfastCandidate>()
 
             for (i in 0 until serversList.length()) {
                 val s = serversList.optJSONObject(i) ?: continue
                 val sName = s.optString("name")
                 val sData = s.optString("data")
+                val sImg = s.optString("image")
+                val sDesc = s.optString("description")
                 if (sData.isNotBlank()) {
-                    if (sName.contains("vFast", ignoreCase = true)) {
-                        vFastPayloads.add(sData)
-                    } else if (sName.contains("vRapid", ignoreCase = true)) {
-                        vRapidPayloads.add(sData)
+                    val is4k = sImg.contains("4k", ignoreCase = true) ||
+                               sDesc.contains("4k", ignoreCase = true) ||
+                               sName.contains("4k", ignoreCase = true) ||
+                               sName.contains("vFast", ignoreCase = true)
+                    val isDirect = sName.contains("vFast", ignoreCase = true) || sDesc.contains("direct", ignoreCase = true)
+                    val isMaster = sName.contains("vRapid", ignoreCase = true) || sName.contains("vBlaze", ignoreCase = true)
+                    val candidate = VidfastCandidate(sName, sData, is4k, isDirect, isMaster)
+                    if (is4k) {
+                        fourKCandidates.add(candidate)
+                    } else if (isMaster || sName.contains("vEdge", ignoreCase = true) || sName.contains("Cobra", ignoreCase = true)) {
+                        adaptiveCandidates.add(candidate)
                     } else {
-                        otherPayloads.add(sData)
+                        otherCandidates.add(candidate)
                     }
                 }
             }
 
-            val candidatePayloads = mutableListOf<String>()
-            if (preferredSubServer?.equals("vRapid", ignoreCase = true) == true) {
-                // vRapid priority for Athens / Cinema 4K
-                candidatePayloads.addAll(vRapidPayloads)
-                candidatePayloads.addAll(vFastPayloads)
-                candidatePayloads.addAll(otherPayloads)
+            val isHevc10 = DeviceCodecCapability.isHevcMain10Supported()
+            val candidatePayloads = mutableListOf<VidfastCandidate>()
+
+            val prefersDirect = preferredSubServer?.contains("direct", ignoreCase = true) == true ||
+                                preferredSubServer?.equals("vFast", ignoreCase = true) == true ||
+                                serverName.contains("athens", ignoreCase = true)
+
+            if (prefersDirect) {
+                // Athens / Direct preference: 4K UHD Direct first, then 4K Master ladder, then adaptives
+                candidatePayloads.addAll(fourKCandidates.filter { it.isDirect })
+                candidatePayloads.addAll(fourKCandidates.filter { it.isMaster })
+                candidatePayloads.addAll(fourKCandidates.filter { !it.isDirect && !it.isMaster })
+                candidatePayloads.addAll(adaptiveCandidates)
+                candidatePayloads.addAll(otherCandidates)
             } else {
-                // Default / vFast priority for Lisbon & flagship
-                candidatePayloads.addAll(vFastPayloads)
-                candidatePayloads.addAll(vRapidPayloads)
-                candidatePayloads.addAll(otherPayloads)
+                // Lisbon / Master preference: 4K Master ladder first, then 4K UHD Direct, then adaptives
+                candidatePayloads.addAll(fourKCandidates.filter { it.isMaster })
+                candidatePayloads.addAll(fourKCandidates.filter { it.isDirect })
+                candidatePayloads.addAll(fourKCandidates.filter { !it.isDirect && !it.isMaster })
+                candidatePayloads.addAll(adaptiveCandidates)
+                candidatePayloads.addAll(otherCandidates)
             }
 
-            var decryptedStreamJson: JSONObject? = null
-            for (dataPayload in candidatePayloads.take(4)) {
+            data class DiscoveredVidfastStream(
+                val server: DirectServer,
+                val captions: List<CinejoyCaption>,
+                val score: Int,
+                val is4k: Boolean,
+                val isMaster: Boolean,
+                val isDirect: Boolean
+            )
+
+            val discoveredStreams = mutableListOf<DiscoveredVidfastStream>()
+            var attempts = 0
+            for (candidate in candidatePayloads) {
+                val has4kMaster = discoveredStreams.any { it.is4k && it.isMaster }
+                val has4kDirect = discoveredStreams.any { it.is4k && it.isDirect }
+                if (has4kMaster && has4kDirect) {
+                    break
+                }
+                // Skip redundant master mirrors if we already have a functional 4K master ladder (e.g. vBlaze when vRapid succeeded)
+                if (candidate.isMaster && has4kMaster) {
+                    continue
+                }
+                // Skip redundant direct streams if we already have a functional 4K direct rip
+                if (candidate.isDirect && has4kDirect) {
+                    continue
+                }
+                if (attempts >= 6 || (discoveredStreams.size >= 3 && discoveredStreams.any { it.score >= 95 })) {
+                    break
+                }
+                attempts++
                 try {
-                    val streamReqBuilder = Request.Builder().url("$streamEndpoint/$dataPayload").post("".toRequestBody())
+                    val streamReqBuilder = Request.Builder().url("$streamEndpoint/${candidate.payload}").post("".toRequestBody())
                     vidfastHeaders.forEach { (k, v) -> streamReqBuilder.header(k, v) }
                     val streamEncrypted = client.newCall(streamReqBuilder.build()).execute().use { res ->
                         if (!res.isSuccessful) return@use null
@@ -619,40 +770,88 @@ class CinejoyStreamResolver(
                     }
 
                     if (decJson?.optInt("status") == 200 && decJson.optJSONObject("result") != null) {
-                        decryptedStreamJson = decJson
-                        break
+                        val streamResult = decJson.optJSONObject("result") ?: continue
+                        val playlistUrl = streamResult.optString("url").takeIf { it.isNotBlank() } ?: continue
+
+                        val captions = mutableListOf<CinejoyCaption>()
+                        val tracksArray = streamResult.optJSONArray("tracks")
+                        if (tracksArray != null) {
+                            for (i in 0 until tracksArray.length()) {
+                                val tr = tracksArray.optJSONObject(i) ?: continue
+                                val file = tr.optString("file").takeIf { it.isNotBlank() } ?: continue
+                                val label = tr.optString("label").takeIf { it.isNotBlank() } ?: "Subtitle"
+                                val lang = label.lowercase().take(2)
+                                captions.add(CinejoyCaption(label = label, language = lang, url = file, mimeType = "text/vtt"))
+                            }
+                        }
+
+                        val hasMasterM3u8 = playlistUrl.contains("master.m3u8", ignoreCase = true)
+                        val hasDirect2160p = playlistUrl.contains("2160p", ignoreCase = true) || playlistUrl.contains("/r2/cdn1/") || candidate.isDirect
+                        val isMasterStream = hasMasterM3u8 || (candidate.isMaster && !hasDirect2160p)
+                        val isDirectStream = hasDirect2160p || (!hasMasterM3u8 && candidate.isDirect)
+                        val is4kStream = candidate.is4k || hasDirect2160p || playlistUrl.contains("/vd/")
+
+                        val score = when {
+                            prefersDirect && isDirectStream && isHevc10 -> 100
+                            prefersDirect && isMasterStream -> 98
+                            !prefersDirect && isMasterStream -> 100
+                            !prefersDirect && isDirectStream && isHevc10 -> 98
+                            playlistUrl.contains("/r2/cdn2/") -> 85
+                            isDirectStream && !isHevc10 -> 30
+                            playlistUrl.contains(".mp4", ignoreCase = true) -> 50
+                            else -> 40
+                        }
+
+                        val serverLabel = when {
+                            is4kStream && isMasterStream -> "$serverName (4K Master)"
+                            is4kStream && isDirectStream -> "$serverName (4K UHD Direct)"
+                            is4kStream -> "$serverName (4K Cinema)"
+                            isMasterStream -> "$serverName (Master HD)"
+                            playlistUrl.contains("/r2/cdn2/") -> "$serverName (Adaptive HD)"
+                            else -> "$serverName (${candidate.name})"
+                        }
+
+                        discoveredStreams.add(
+                            DiscoveredVidfastStream(
+                                server = DirectServer(
+                                    name = serverLabel,
+                                    url = playlistUrl,
+                                    kind = if (playlistUrl.contains(".mp4", ignoreCase = true)) "file" else "hls"
+                                ),
+                                captions = captions,
+                                score = score,
+                                is4k = is4kStream,
+                                isMaster = isMasterStream,
+                                isDirect = isDirectStream
+                            )
+                        )
+
+                        // If we found both top-tier 4K streams (Master + Direct), break early
+                        if (discoveredStreams.any { it.is4k && it.isMaster } && discoveredStreams.any { it.is4k && it.isDirect }) {
+                            break
+                        }
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Vidfast candidate payload error: ${e.message}")
                 }
             }
 
-            val streamResult = decryptedStreamJson?.optJSONObject("result") ?: return null
-            val playlistUrl = streamResult.optString("url").takeIf { it.isNotBlank() } ?: return null
+            if (discoveredStreams.isEmpty()) return null
 
-            val captions = mutableListOf<CinejoyCaption>()
-            val tracksArray = streamResult.optJSONArray("tracks")
-            if (tracksArray != null) {
-                for (i in 0 until tracksArray.length()) {
-                    val tr = tracksArray.optJSONObject(i) ?: continue
-                    val file = tr.optString("file").takeIf { it.isNotBlank() } ?: continue
-                    val label = tr.optString("label").takeIf { it.isNotBlank() } ?: "Subtitle"
-                    val lang = label.lowercase().take(2)
-                    captions.add(CinejoyCaption(label = label, language = lang, url = file, mimeType = "text/vtt"))
-                }
-            }
+            // Prioritize highest compatibility and quality score
+            discoveredStreams.sortByDescending { it.score }
+
+            // Consolidate captions across streams, taking the richest subtitle track set
+            val bestCaptions = discoveredStreams.maxByOrNull { it.captions.size }?.captions ?: emptyList()
+
+            // Keep descriptive labels for all streams so both 4K Master and 4K UHD Direct are distinct and selectable
+            val servers = discoveredStreams.map { it.server }
 
             return DirectStreamResult(
                 ok = true,
                 referer = "https://vidfast.vc/",
-                captions = captions,
-                servers = listOf(
-                    DirectServer(
-                        name = serverName,
-                        url = playlistUrl,
-                        kind = if (playlistUrl.contains(".mp4", ignoreCase = true)) "file" else "hls"
-                    )
-                )
+                captions = bestCaptions,
+                servers = servers
             )
         } catch (e: Exception) {
             e.printStackTrace()

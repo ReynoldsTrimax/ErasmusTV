@@ -11,6 +11,7 @@ import androidx.navigation.navArgument
 import com.erasmustv.app.data.local.PlaybackProgressStore
 import com.erasmustv.app.data.local.ProfileManager
 import com.erasmustv.app.data.local.SessionManager
+import com.erasmustv.app.data.remote.BingrStreamResolver
 import com.erasmustv.app.data.remote.CinejoyStreamResolver
 import com.erasmustv.app.data.remote.ErasmusStreamApiService
 import com.erasmustv.app.data.remote.OmdbApiService
@@ -57,12 +58,13 @@ class AppContainer(
     val subtitleResolver: SubtitleResolver,
     val streamApi: ErasmusStreamApiService? = null,
     val omdbApi: OmdbApiService? = null,
-    val okHttpClient: okhttp3.OkHttpClient? = null
+    val okHttpClient: okhttp3.OkHttpClient? = null,
+    val bingrResolver: BingrStreamResolver = BingrStreamResolver()
 ) {
     val authRepository = AuthRepository(supabaseApi, sessionManager)
     val profileRepository = ProfileRepository(supabaseApi, profileManager, sessionManager)
     val mediaRepository = MediaRepository(tmdbApi, omdbApi)
-    val streamRepository = StreamRepository(cinejoyResolver, subtitleResolver, progressStore)
+    val streamRepository = StreamRepository(cinejoyResolver, bingrResolver, subtitleResolver, progressStore)
     val watchlistRepository = WatchlistRepository(supabaseApi, sessionManager)
 }
 

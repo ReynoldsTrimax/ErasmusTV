@@ -146,10 +146,11 @@ class MainActivity : ComponentActivity() {
                         is com.erasmustv.app.data.model.SessionCheckResult.Authenticated,
                         is com.erasmustv.app.data.model.SessionCheckResult.Guest -> {
                             val navController = rememberNavController()
+                            val targetRoute = intent?.getStringExtra("target_route")?.takeIf { it.isNotBlank() } ?: NavRoutes.PROFILES
                             AppNavigation(
                                 navController = navController,
                                 container = container,
-                                startDestination = NavRoutes.PROFILES
+                                startDestination = targetRoute
                             )
                         }
                         is com.erasmustv.app.data.model.SessionCheckResult.Unauthenticated -> {

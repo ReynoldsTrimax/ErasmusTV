@@ -145,6 +145,7 @@ fun TvPlayerScreen(
 
     // Error Retry Focus Requester
     val retryFocusRequester = remember { FocusRequester() }
+    val changeServerFocusRequester = remember { FocusRequester() }
 
     // Subtitle Customization & Background Auto-Sync Engine
     val subtitlePrefs = remember { SubtitlePreferencesManager(context) }
@@ -195,12 +196,14 @@ fun TvPlayerScreen(
                     val origin = when {
                         referer.contains("cinejoy", ignoreCase = true) -> "https://cinejoy.to"
                         referer.contains("vidfast", ignoreCase = true) -> "https://vidfast.vc"
+                        referer.contains("bingr", ignoreCase = true) -> "https://bingr.one"
+                        referer.contains("gaiaflix", ignoreCase = true) -> "https://gaiaflix.live"
                         else -> referer.trimEnd('/')
                     }
                     headers["Origin"] = origin
                 }
                 val streamUrl = (state as? PlayerStreamState.Ready)?.streamUrl.orEmpty()
-                val isDirectCdn = streamUrl.contains("hakunaymatata", ignoreCase = true) || streamUrl.contains(".mp4", ignoreCase = true)
+                val isDirectCdn = streamUrl.contains("hakunaymatata", ignoreCase = true)
                 val userAgent = if (isDirectCdn) {
                     "ExoPlayer/1.5.1 (Linux; Android TV)"
                 } else {
@@ -247,12 +250,12 @@ fun TvPlayerScreen(
         // High-performance TV load control: instant 1.5s start, up to 30 mins lookahead on disk, 30s instant rewind
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
             .setBufferDurationsMs(
-                /* minBufferMs = */ 120_000,
+                /* minBufferMs = */ 25_000,
                 /* maxBufferMs = */ 1_800_000,
                 /* bufferForPlaybackMs = */ 1_500,
                 /* bufferForPlaybackAfterRebufferMs = */ 3_000
             )
-            .setPrioritizeTimeOverSizeThresholds(true)
+            .setPrioritizeTimeOverSizeThresholds(false)
             .setBackBuffer(30_000, true)
             .build()
 
@@ -263,6 +266,8 @@ fun TvPlayerScreen(
             .apply {
                 trackSelectionParameters = trackSelectionParameters.buildUpon()
                     .setPreferredAudioLanguages("hi", "hin", "en", "eng")
+                    .setForceHighestSupportedBitrate(true)
+                    .setMaxVideoSize(3840, 2160)
                     .build()
             }
     }
@@ -371,11 +376,16 @@ fun TvPlayerScreen(
                             val isSelected = group.isTrackSelected(i)
                             if (isSelected) videoHasOverride = true
 
+                            // Check both width and height (and max dimension) to accurately detect
+                            // 21:9 Cinemascope letterboxed 4K content (e.g. 3840x1600 or 3840x1634)
+                            val maxDim = maxOf(w, h)
+                            val is4K = maxDim >= 3840 || w >= 3840 || h >= 2160 || (w >= 3000 && bitrate >= 10_000_000)
                             val label = when {
-                                h >= 2160 -> "4K Ultra HD"
-                                h >= 1080 -> "1080p Full HD"
-                                h >= 720 -> "720p HD"
-                                h >= 480 -> "480p SD"
+                                is4K -> "4K Ultra HD"
+                                maxDim >= 2560 || h >= 1440 -> "1440p Quad HD"
+                                maxDim >= 1920 || h >= 1080 -> "1080p Full HD"
+                                maxDim >= 1280 || h >= 720 -> "720p HD"
+                                maxDim >= 850 || h >= 480 -> "480p SD"
                                 h > 0 -> "${h}p"
                                 else -> "Standard Quality"
                             }
@@ -398,6 +408,23 @@ fun TvPlayerScreen(
                 }
             }
 
+            // Sort quality tracks descending by max dimension then bitrate
+            qualityTracks.sortWith(
+                compareByDescending<TvQualityTrack> { maxOf(it.width, it.height) }
+                    .thenByDescending { it.bitrate }
+            )
+
+            // Disambiguate duplicate labels if any (e.g. two 1080p renditions with different bitrates)
+            val labelCounts = qualityTracks.filter { !it.isAuto }.groupingBy { it.label }.eachCount()
+            for (idx in qualityTracks.indices) {
+                val q = qualityTracks[idx]
+                if (!q.isAuto && (labelCounts[q.label] ?: 0) > 1 && q.bitrate > 0) {
+                    val rateKbps = q.bitrate / 1000
+                    val disambiguated = "${q.label} ($rateKbps kbps)"
+                    qualityTracks[idx] = q.copy(label = disambiguated)
+                }
+            }
+
             // Explicit "Auto" option for video quality
             qualityTracks.add(
                 0,
@@ -409,7 +436,18 @@ fun TvPlayerScreen(
                 )
             )
 
-            val targetSelectedId = selectedQualityTrackId ?: "video_auto"
+            // Automatically lock onto highest quality available track (4K UHD / 1080p Full HD) unless user selected otherwise
+            val highestTrack = qualityTracks.filter { !it.isAuto }
+                .maxByOrNull { (maxOf(it.width, it.height).toLong() * 10_000_000L) + it.bitrate.coerceAtLeast(0) }
+
+            if (selectedQualityTrackId == null && highestTrack != null && highestTrack.mediaTrackGroup != null && highestTrack.trackIndex >= 0) {
+                selectedQualityTrackId = highestTrack.id
+                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+                    .setOverrideForType(TrackSelectionOverride(highestTrack.mediaTrackGroup, highestTrack.trackIndex))
+                    .build()
+            }
+
+            val targetSelectedId = selectedQualityTrackId ?: highestTrack?.id ?: "video_auto"
 
             for (i in 0 until qualityTracks.size) {
                 val q = qualityTracks[i]
@@ -614,6 +652,26 @@ fun TvPlayerScreen(
         }
     }
 
+    // Initial Buffering Watchdog: If continuous buffering lasts > 7.5s with 0 rendered frames, trigger failover
+    LaunchedEffect(isBuffering, currentPositionMs, streamState) {
+        if (isBuffering && currentPositionMs == 0L && streamState is PlayerStreamState.Ready) {
+            delay(7500)
+            if (isBuffering && currentPositionMs == 0L && streamState is PlayerStreamState.Ready) {
+                android.util.Log.w("TvPlayerScreen", "Buffering watchdog triggered (>7.5s with 0 rendered frames). Failing over to backup stream...")
+                val switched = viewModel.switchToNextFallbackServer("Initial buffering timeout (>7.5s)")
+                if (!switched) {
+                    val currentId = viewModel.currentServerId.value
+                    val available = viewModel.availableServers
+                    val currentIndex = available.indexOfFirst { it.id.equals(currentId, ignoreCase = true) }
+                    val nextServer = if (currentIndex in 0 until available.size - 1) available[currentIndex + 1] else null
+                    if (nextServer != null) {
+                        viewModel.selectServer(nextServer.id)
+                    }
+                }
+            }
+        }
+    }
+
     // Stream ready handler: load stream into ExoPlayer
     LaunchedEffect(streamState) {
         if (streamState is PlayerStreamState.Ready) {
@@ -625,24 +683,32 @@ fun TvPlayerScreen(
                 MimeTypes.APPLICATION_M3U8
             }
 
-            val subtitleConfigs = ready.captions.filter { it.url.isNotBlank() }.map { sub ->
+            val primaryTrack = ready.captions.firstOrNull {
+                it.language.startsWith("en", ignoreCase = true) ||
+                it.language.equals("eng", ignoreCase = true) ||
+                it.label.contains("English", ignoreCase = true)
+            } ?: ready.captions.firstOrNull()
+
+            // Pass only the primary track to ExoPlayer native media source to prevent flooding CDN with 140+ concurrent subtitle downloads
+            val subtitleConfigs = if (primaryTrack != null && primaryTrack.url.isNotBlank()) {
                 val subMime = when {
-                    sub.mimeType.isNotBlank() -> sub.mimeType
-                    sub.url.contains(".vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
-                    sub.url.contains(".ass", ignoreCase = true) || sub.url.contains(".ssa", ignoreCase = true) || sub.url.contains("wyzie", ignoreCase = true) -> MimeTypes.TEXT_SSA
-                    sub.url.contains(".srt", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
-                    sub.url.contains("strem.io", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
+                    primaryTrack.mimeType.isNotBlank() -> primaryTrack.mimeType
+                    primaryTrack.url.contains(".vtt", ignoreCase = true) -> MimeTypes.TEXT_VTT
+                    primaryTrack.url.contains(".ass", ignoreCase = true) || primaryTrack.url.contains(".ssa", ignoreCase = true) || primaryTrack.url.contains("wyzie", ignoreCase = true) -> MimeTypes.TEXT_SSA
+                    primaryTrack.url.contains(".srt", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
+                    primaryTrack.url.contains("strem.io", ignoreCase = true) -> MimeTypes.APPLICATION_SUBRIP
                     else -> MimeTypes.APPLICATION_SUBRIP
                 }
-                val isDefault = sub.language.startsWith("en", ignoreCase = true) ||
-                        sub.language.equals("eng", ignoreCase = true) ||
-                        sub.label.contains("English", ignoreCase = true)
-                Media3Item.SubtitleConfiguration.Builder(Uri.parse(sub.url))
-                    .setMimeType(subMime)
-                    .setLanguage(sub.language)
-                    .setLabel(sub.label)
-                    .setSelectionFlags(if (isDefault) C.SELECTION_FLAG_DEFAULT else 0)
-                    .build()
+                listOf(
+                    Media3Item.SubtitleConfiguration.Builder(Uri.parse(primaryTrack.url))
+                        .setMimeType(subMime)
+                        .setLanguage(primaryTrack.language)
+                        .setLabel(primaryTrack.label)
+                        .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                        .build()
+                )
+            } else {
+                emptyList()
             }
 
             val mediaItem = Media3Item.Builder()
@@ -651,11 +717,13 @@ fun TvPlayerScreen(
                 .setSubtitleConfigurations(subtitleConfigs)
                 .build()
 
+            selectedQualityTrackId = null
             exoPlayer.setMediaItem(mediaItem)
             exoPlayer.prepare()
             syncTracks(captions = ready.captions)
-            if (ready.startPositionMs > 0) {
-                exoPlayer.seekTo(ready.startPositionMs)
+            val resumePos = if (exoPlayer.currentPosition > 0L) exoPlayer.currentPosition else ready.startPositionMs
+            if (resumePos > 0L) {
+                exoPlayer.seekTo(resumePos)
             }
             exoPlayer.playWhenReady = true
         }
@@ -664,24 +732,28 @@ fun TvPlayerScreen(
     // Hierarchical Back Handler: Submenu -> Scrubbing -> Controls -> Exit
     BackHandler {
         when {
-            streamState is PlayerStreamState.Error -> {
-                onExit()
-            }
-
             activeMenu != PlayerActiveMenu.None -> {
                 val closingMenu = activeMenu
                 activeMenu = PlayerActiveMenu.None
                 coroutineScope.launch {
                     delay(50)
-                    when (closingMenu) {
-                        PlayerActiveMenu.Episodes -> episodesFocusRequester.requestFocus()
-                        PlayerActiveMenu.Audio -> audioFocusRequester.requestFocus()
-                        PlayerActiveMenu.Subtitles -> subtitleFocusRequester.requestFocus()
-                        PlayerActiveMenu.Quality -> qualityFocusRequester.requestFocus()
-                        PlayerActiveMenu.Servers -> serverFocusRequester.requestFocus()
-                        else -> timelineFocusRequester.requestFocus()
+                    if (streamState is PlayerStreamState.Error) {
+                        changeServerFocusRequester.requestFocus()
+                    } else {
+                        when (closingMenu) {
+                            PlayerActiveMenu.Episodes -> episodesFocusRequester.requestFocus()
+                            PlayerActiveMenu.Audio -> audioFocusRequester.requestFocus()
+                            PlayerActiveMenu.Subtitles -> subtitleFocusRequester.requestFocus()
+                            PlayerActiveMenu.Quality -> qualityFocusRequester.requestFocus()
+                            PlayerActiveMenu.Servers -> serverFocusRequester.requestFocus()
+                            else -> timelineFocusRequester.requestFocus()
+                        }
                     }
                 }
+            }
+
+            streamState is PlayerStreamState.Error -> {
+                onExit()
             }
 
             isScrubbing -> {
@@ -1006,7 +1078,8 @@ fun TvPlayerScreen(
                             shape = RectangleShape,
                             focusedScale = 1.025f,
                             focusedBorderColor = FocusWhite,
-                            focusedBorderWidth = 1.5.dp
+                            focusedBorderWidth = 1.5.dp,
+                            modifier = Modifier.focusRequester(changeServerFocusRequester)
                         ) { isFocused ->
                             Box(
                                 modifier = Modifier
@@ -1198,6 +1271,8 @@ fun TvPlayerScreen(
             qualityTracks = qualityTracks,
             servers = viewModel.availableServers,
             currentServerId = currentServerId,
+            fallbackServers = (viewModel.streamState.value as? PlayerStreamState.Ready)?.fallbackServers ?: emptyList(),
+            currentSubServerIndex = (viewModel.streamState.value as? PlayerStreamState.Ready)?.currentServerIndex ?: 0,
             currentSubtitleFont = subtitleFont,
             currentSubtitleSize = subtitleSize,
             autoSyncStatus = autoSyncStatus,
@@ -1284,18 +1359,25 @@ fun TvPlayerScreen(
             onSelectServer = { serverId ->
                 viewModel.selectServer(serverId)
             },
+            onSelectSubServer = { subIndex ->
+                viewModel.selectSubServer(subIndex)
+            },
             onClose = {
                 val closingMenu = activeMenu
                 activeMenu = PlayerActiveMenu.None
                 coroutineScope.launch {
                     delay(50)
-                    when (closingMenu) {
-                        PlayerActiveMenu.Episodes -> episodesFocusRequester.requestFocus()
-                        PlayerActiveMenu.Audio -> audioFocusRequester.requestFocus()
-                        PlayerActiveMenu.Subtitles -> subtitleFocusRequester.requestFocus()
-                        PlayerActiveMenu.Quality -> qualityFocusRequester.requestFocus()
-                        PlayerActiveMenu.Servers -> serverFocusRequester.requestFocus()
-                        else -> timelineFocusRequester.requestFocus()
+                    if (streamState is PlayerStreamState.Error) {
+                        changeServerFocusRequester.requestFocus()
+                    } else {
+                        when (closingMenu) {
+                            PlayerActiveMenu.Episodes -> episodesFocusRequester.requestFocus()
+                            PlayerActiveMenu.Audio -> audioFocusRequester.requestFocus()
+                            PlayerActiveMenu.Subtitles -> subtitleFocusRequester.requestFocus()
+                            PlayerActiveMenu.Quality -> qualityFocusRequester.requestFocus()
+                            PlayerActiveMenu.Servers -> serverFocusRequester.requestFocus()
+                            else -> timelineFocusRequester.requestFocus()
+                        }
                     }
                 }
             }

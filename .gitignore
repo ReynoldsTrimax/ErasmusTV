@@ -60,4 +60,6 @@ node_modules
 # Antigravity Workspace Customizations
 .agents/
 scratch/
+artifacts/
+
 
