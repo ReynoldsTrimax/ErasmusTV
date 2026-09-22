@@ -20,6 +20,7 @@ class MediaRepository(
     private val apiKey = AppConfig.TMDB_API_KEY
     private val omdbApiKey = AppConfig.OMDB_API_KEY.ifBlank { "trilogy" }
     private val logoCache = java.util.concurrent.ConcurrentHashMap<String, String?>()
+    private val taglineCache = java.util.concurrent.ConcurrentHashMap<String, String?>()
 
     suspend fun resolveRatings(
         voteAverage: Double?,
@@ -112,6 +113,21 @@ class MediaRepository(
             ?.filePath
         logoCache[cacheKey] = bestLogo
         bestLogo
+    }
+
+    suspend fun getMediaTagline(mediaType: String, id: String): Result<String?> = runCatching {
+        val mType = if (mediaType.equals("tv", ignoreCase = true)) "tv" else "movie"
+        val cacheKey = "$mType:$id"
+        if (taglineCache.containsKey(cacheKey)) {
+            return@runCatching taglineCache[cacheKey]
+        }
+        val tagline = if (mType == "tv") {
+            getTvDetails(id).getOrNull()?.tagline
+        } else {
+            getMovieDetails(id).getOrNull()?.tagline
+        }
+        taglineCache[cacheKey] = tagline
+        tagline
     }
 
     suspend fun getTrending(): Result<List<MediaItem>> = runCatching {
@@ -275,6 +291,9 @@ class MediaRepository(
             logoCache["movie:${raw.id}"] = bestLogo
         }
         val logo = bestLogo ?: logoCache["movie:${raw.id}"]
+        if (!raw.tagline.isNullOrBlank()) {
+            taglineCache["movie:${raw.id}"] = raw.tagline
+        }
 
         val ratings = resolveRatings(
             voteAverage = raw.voteAverage,
@@ -320,6 +339,9 @@ class MediaRepository(
             logoCache["tv:${raw.id}"] = bestLogo
         }
         val logo = bestLogo ?: logoCache["tv:${raw.id}"]
+        if (!raw.tagline.isNullOrBlank()) {
+            taglineCache["tv:${raw.id}"] = raw.tagline
+        }
 
         val imdbId = raw.externalIds?.imdbId
         val ratings = resolveRatings(

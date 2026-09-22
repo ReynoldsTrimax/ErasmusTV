@@ -19,7 +19,7 @@ object NavRoutes {
     const val DETAILS = "details/{mediaType}/{id}"
     fun details(mediaType: String, id: String) = "details/$mediaType/$id"
 
-    const val PLAYER = "player/{mediaType}/{id}/{title}?season={season}&episode={episode}&posterPath={posterPath}&backdropPath={backdropPath}"
+    const val PLAYER = "player/{mediaType}/{id}/{title}?season={season}&episode={episode}&posterPath={posterPath}&backdropPath={backdropPath}&logoPath={logoPath}&tagline={tagline}"
     fun player(
         mediaType: String,
         id: String,
@@ -27,14 +27,18 @@ object NavRoutes {
         season: Int? = null,
         episode: Int? = null,
         posterPath: String? = null,
-        backdropPath: String? = null
+        backdropPath: String? = null,
+        logoPath: String? = null,
+        tagline: String? = null
     ): String {
         val encodedTitle = Uri.encode(title)
         val s = season ?: 1
         val e = episode ?: 1
         val encodedPoster = Uri.encode(posterPath ?: "")
         val encodedBackdrop = Uri.encode(backdropPath ?: "")
-        return "player/$mediaType/$id/$encodedTitle?season=$s&episode=$e&posterPath=$encodedPoster&backdropPath=$encodedBackdrop"
+        val encodedLogo = Uri.encode(logoPath ?: "")
+        val encodedTagline = Uri.encode(tagline ?: "")
+        return "player/$mediaType/$id/$encodedTitle?season=$s&episode=$e&posterPath=$encodedPoster&backdropPath=$encodedBackdrop&logoPath=$encodedLogo&tagline=$encodedTagline"
     }
 }
 

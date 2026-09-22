@@ -1,0 +1,241 @@
+package com.erasmustv.app.data.model
+
+import kotlin.random.Random
+
+enum class JokeCategory {
+    BOTH,
+    MOVIE,
+    TV
+}
+
+data class LoadingJoke(
+    val text: String,
+    val category: JokeCategory
+)
+
+object TvLoadingJokes {
+
+    val BOTH_JOKES = listOf(
+        "Adjusting dialogue volume so Hans Zimmer's brass doesn't blow your speakers...",
+        "Tuning the brightness because the director insisted on filming in pitch darkness...",
+        "Don't worry, we won't tell anyone you use subtitles for English audio.",
+        "Popcorn countdown: grab your drink before the opening credits roll.",
+        "Bribing your Wi-Fi router for maximum bitrate...",
+        "Checking if your couch has molded to your exact body shape yet...",
+        "May the bitrate be with you.",
+        "Warming up the pixels. Only organic, free-range photons here.",
+        "Locking in 4K because 1080p is so 2016.",
+        "Ensuring your OLED displays true absolute pitch blacks...",
+        "Negotiating with the CDN for the sharpest pixels on the internet...",
+        "Hold fast! The crew is digging up the treasure...",
+        "Adjusting the sails. High seas mean high latency.",
+        "Batten down the hatches, we're outrunning the copyright lawyers.",
+        "Polishing the peglegs... please hold.",
+        "Even Blackbeard had to wait for the wind.",
+        "Siphoning bytes from a server in international waters...",
+        "We pay our seeders in exposure. Please wait while they cooperate.",
+        "Our 12-year-old developer is working as fast as he can.",
+        "Connecting to a server located in a very legally flexible country.",
+        "Getting your content before Netflix notices.",
+        "Grab your popcorn. Or a snack that requires less chewing — this might take a second.",
+        "Cheaper than Netflix, just slightly slower.",
+        "Think of this buffer as a mandatory commercial break, minus the commercials.",
+        "The best things in life are free. And slow. Mostly free.",
+        "We'd go faster, but our budget is literally zero dollars.",
+        "Keep your friends close and your buffer closer.",
+        "You had me at \"Connecting...\"",
+        "With great bandwidth comes great responsibility.",
+        "Arnold promised 'I'll be back.' We promise the stream is coming.",
+        "Winter is coming. The stream is coming shortly after.",
+        "The first rule of buffering is we do not talk about buffering.",
+        "Elementary, my dear bandwidth.",
+        "Frankly, my dear, we don't give a lag.",
+        "Nobody puts this loading screen in a corner.",
+        "You can't handle the bitrate.",
+        "Routing your stream through three continents for reasons we can't legally discuss.",
+        "Pinging a server that has definitely heard worse requests than this one.",
+        "Querying 12 server nodes. 11 said no. One said yes. Connecting to that one now.",
+        "Successfully located the stream. Currently convincing it to move in your direction.",
+        "Our caching strategy: aggressive, relentless, borderline personal.",
+        "The stream exists. It is on its way. These are confirmed facts.",
+        "Converting your bandwidth anxiety into actual loading progress. Almost there.",
+        "Running a quiet background check on the CDN. Results: legally interesting.",
+        "Your connection is doing its absolute best right now. Today, that's enough.",
+        "We asked a guy who knows a guy. The stream is on its way.",
+        "You have found the world's most reliable free streaming site. Take a moment.",
+        "No ads. No upsell. No \"upgrade to premium.\" This is the internet as it was meant to be.",
+        "Your watch history is safe with us. We don't actually track it. It's better for everyone.",
+        "Calculating the hours you've saved not watching commercials this year. It's significant.",
+        "Whatever you're watching, you have excellent taste. We have no idea what it is. We believe you.",
+        "Loading quietly so nobody in the house knows you're still awake at this hour.",
+        "Adjusting everything for the 2am experience. The neighbours will not know.",
+        "We checked. It's not available on any legitimate platform in your region. You're welcome.",
+        "The number of streaming subscriptions you'd need to watch this legally: 3. You chose wisely.",
+        "This is a safe space. No watch history, no judgement, no recommendations based on your shame.",
+        "Fetching the version the studio didn't want released at this bitrate.",
+        "Confirming the aspect ratio wasn't cropped and stretched by a streaming platform.",
+        "The audio track was mixed for a cinema. Your neighbours are about to find out.",
+        "Loading the colour-graded version, not the washed-out streaming-optimised one.",
+        "Your screen is technically capable of displaying all of this. Your eyes may need a moment.",
+        "The compass points toward the stream. Slightly northwest, but it's getting there.",
+        "Dispatching a carrier pigeon to retrieve your content. Faster than you'd expect.",
+        "Coordinates confirmed. Stream located. ETA: momentarily.",
+        "Whistling innocently while the stream loads. Completely nothing to see here.",
+        "We have people on the inside. They're working on it."
+    ).map { LoadingJoke(it, JokeCategory.BOTH) }
+
+    val MOVIE_JOKES = listOf(
+        "Christopher Nolan is rendering this backward in time. Please hold...",
+        "Quentin Tarantino is currently double-checking the cast's footwear...",
+        "Applying 70mm grain so you feel like a certified film purist...",
+        "Cutting 45 minutes of Martin Scorsese exposition...",
+        "Waiting for Denis Villeneuve to finish filming another sand dune...",
+        "Checking if this movie really needed a 3-hour runtime...",
+        "Fetching 24.000 fps because 23.976 wasn't purist enough.",
+        "Spinning up the 35mm projector spools...",
+        "Downloading more RAM... jk, just fetching your movie.",
+        "Houston, we have a buffer.",
+        "I'm going to make your bandwidth an offer it can't refuse.",
+        "You're gonna need a bigger buffer.",
+        "Say hello to my little stream.",
+        "Here's buffering at you, kid.",
+        "Stanley Kubrick is reviewing every single frame for continuity errors. This may take a while.",
+        "David Lynch has added another dream sequence. You might want to brew some coffee.",
+        "Wes Anderson is centering the shot. And the shot inside the shot. And the one inside that.",
+        "Michael Bay is negotiating how many explosions are technically \"too many.\"",
+        "Tim Burton is gluing one more button to the main character's eyeball.",
+        "James Cameron is reminding the crew this could've been a 4-hour cut. You got lucky.",
+        "Steven Spielberg is personally making sure the lens flare hits at exactly the right moment.",
+        "Ridley Scott is restoring the director's cut you didn't know you needed.",
+        "Peter Jackson is deciding which 20 minutes to cut from the theatrical version.",
+        "The Coen Brothers have refused to explain what the ending means. Loading anyway.",
+        "Hunting for the post-credits scene you almost left the cinema before.",
+        "The popcorn would've been $18 at the cinema. You're welcome.",
+        "Confirming this isn't a \"the trailer was better\" situation.",
+        "This film was shot on actual film. Respect the load time.",
+        "Loading the version without the 20-minute studio logo montage.",
+        "Calibrating audio so dialogue is audible and action doesn't blow your speakers off the wall.",
+        "Pre-ordering the 4K Blu-ray in your mind while you wait.",
+        "Checking that the runtime you looked up is the runtime you're actually getting.",
+        "This was filmed on location in 14 countries. Buffer time is the cheap part.",
+        "Muting the trailer you've already seen six times before the feature starts.",
+        "Confirming this is the good sequel. Not the one everyone pretends doesn't exist.",
+        "Cross-referencing 14 prequels so the opening scene makes any sense whatsoever.",
+        "Verifying this isn't part of the extended universe you quietly gave up on in 2019.",
+        "Confirming the mid-credits scene is actually mid-credits and not 12 minutes of silence.",
+        "Checking whether the CGI villain looks better in 4K or significantly, noticeably worse.",
+        "Loading the film before they announce the prequel spinoff nobody asked for.",
+        "This is a reboot. The original was beloved. We're cautiously optimistic.",
+        "The director's cut is 40 minutes longer than the studio release. This is the director's cut.",
+        "Loading the franchise entry where they attempt a course-correction. Partially succeeding.",
+        "This film was shot back-to-back with two sequels. The ambition is genuinely impressive.",
+        "Preparing the jump scare at minute 47. You will not be ready regardless.",
+        "The villain's monologue is 11 minutes long. It is worth every second.",
+        "Confirming that yes, everyone who investigates the strange noise dies.",
+        "Loading the film where the dog survives. You deserve to know this upfront.",
+        "Counting how many cars get flipped in the next two hours. Current estimate: a lot.",
+        "Loading the romance where you've already guessed the ending from the poster.",
+        "The protagonists almost kiss three separate times before they actually do. Trust the process.",
+        "Preparing the heist. The crew will absolutely betray each other. Eventually.",
+        "This is a psychological thriller. Everything is exactly as suspicious as it seems.",
+        "The twist is in the last eight minutes. You will immediately want to rewatch everything.",
+        "This film has 11 Oscar nominations. At least three are genuinely deserved.",
+        "A24 presents: beautiful cinematography, ambiguous ending, no explanation whatsoever.",
+        "This has won every award except the specific one that would've made the most sense.",
+        "Certified Fresh at 97%. Audience score: \"I just wanted to see explosions.\"",
+        "Art-house disclaimer: the aspect ratio is intentional. So is the pacing.",
+        "Loading the prestige drama that made everyone cry and then refuse to discuss.",
+        "The director gave exactly one interview explaining the ending and it explained nothing.",
+        "For your consideration: four hours of a man staring at water. Loading now.",
+        "The ending divided the internet for six months. You're about to experience why.",
+        "This is the film critics called \"a masterpiece\" and audiences called \"long.\""
+    ).map { LoadingJoke(it, JokeCategory.MOVIE) }
+
+    val TV_JOKES = listOf(
+        "Skipping the recap you literally watched 3 minutes ago...",
+        "Pretending you didn't just tell someone 'just one more episode'...",
+        "Re-buffering the emotional damage from the last episode...",
+        "One does not simply skip the intro.",
+        "Preparing the theme song you'll skip every time but secretly know every single word of.",
+        "Netflix would've asked if you're still watching by now. We trust you completely.",
+        "\"Previously on...\" incoming. You watched it yesterday. We know. Loading it anyway.",
+        "Disabling the \"Are you still watching?\" prompt. You are. You obviously are.",
+        "The skip intro button loads before the oboe solo. You have about 4 seconds.",
+        "Loading the show that was cancelled on a cliffhanger that was never, ever resolved.",
+        "This show had the best pilot ever written and was cancelled after 8 episodes. Unforgivable.",
+        "The series finale was described as \"satisfying\" by the writers. Judge for yourself.",
+        "Warning: the creators knew about the cancellation. The ending absolutely shows it.",
+        "This was renewed for season 2. Season 2 was cancelled two weeks before it aired.",
+        "The showrunner fought for 5 seasons. The network gave them 2. Here's season 2.",
+        "This ended on a cliffhanger in 2017 and there has been silence ever since.",
+        "Loading the episode where your favourite character makes a catastrophically bad decision.",
+        "Statistically, someone you like dies in this episode. Begin preparing now.",
+        "The writers had a meeting about this plot point. Nobody stopped them. This is what happened.",
+        "This character was only supposed to appear in one episode. They stayed for three seasons.",
+        "The fan favourite gets 45 more minutes of screen time across this season. Enjoy them.",
+        "A character dies in this episode. The internet did not handle it well. Neither will you.",
+        "The showrunner personally apologised for this episode in a podcast interview. Loading it anyway.",
+        "The original showrunner left after season 3. You'll be able to tell the exact episode.",
+        "This was co-written by the showrunner's assistant after the strike. Surprisingly good.",
+        "The writers' room had 12 people and 12 completely different ideas. All of them survived to air.",
+        "Season 4 was greenlit before season 3 finished airing. Godspeed to everyone involved.",
+        "The network asked for a procedural. The showrunner made something else entirely. This is it.",
+        "Loading the version of the season the showrunner wanted before the network's notes arrived.",
+        "This episode ends on a cliffhanger. The next one jumps three weeks forward in time. Enjoy.",
+        "Episode 4 is the slow one. Push through. Episode 5 changes everything — we mean everything.",
+        "This is the bottle episode. Two characters, one room, 42 minutes. Peak television.",
+        "Season 2 takes 4 episodes to find its footing. It finds it. Commit to the process.",
+        "This is the midseason finale. You will not handle what happens.",
+        "Loading the season everyone agrees is the weakest but is still better than most TV.",
+        "\"Just one more episode\" — said by 47% of viewers before watching four more.",
+        "This series has 8 seasons. The first 6 are absolutely worth it.",
+        "Loading the episode that broke the internet in real time. Somehow still holds up.",
+        "You've been watching for 3 hours. No judgment here. We're genuinely proud of you.",
+        "Loading the spin-off nobody asked for but everyone watched immediately.",
+        "This is technically a reboot. The original ran 11 seasons and ended strangely.",
+        "Loading the prequel series that retcons exactly one thing you really liked. Just one.",
+        "This character got a spin-off purely because everyone tweeted about them for two years.",
+        "It shares the same universe as something you've already seen. Whether that's good: TBD.",
+        "All 8 episodes dropped at midnight. This is episode 1. Pace yourself. (You won't.)",
+        "This show was renewed for season 2 three days after episode 1 dropped. Extremely confident.",
+        "Loading the \"limited series\" that got extended because the finale was too good to end on.",
+        "This was originally a movie pitch. They turned it into a series. It was the right call.",
+        "It's a \"Netflix Original\" in the sense that Netflix acquired it after it aired somewhere else.",
+        "This episode is 22 minutes long. It will feel like 2. You will want more immediately.",
+        "Runtime: 58 minutes. Emotional damage: not quantifiable.",
+        "This is the season finale. It is 82 minutes long. You will not be disappointed.",
+        "Episode title: \"Part 4.\" Description: \"Things escalate.\" Extremely informative. Loading.",
+        "The episode description gives nothing away. The episode gives away absolutely everything.",
+        "Loading the episode where the main couple finally gets together, thereby changing everything.",
+        "The villain gets a full backstory episode this season. You will feel terrible for them. That's the plan.",
+        "This is the holiday special. It's genuinely good and weirdly important to the main plot.",
+        "A character disappears between seasons with zero explanation. This is that season.",
+        "The fan theory that divided Reddit? Partially addressed in this episode. Partially.",
+        "This is episode 9 of 10. You already know what happens in episode 9. Brace yourself.",
+        "Loading the season where a character randomly picks up a hobby and it becomes an actual subplot.",
+        "The season 1 villain is the season 3 fan favourite. Character development of the highest order.",
+        "This episode features a character from 4 seasons ago. You will remember exactly who they are.",
+        "They recast one character between seasons. You will notice immediately and completely move on."
+    ).map { LoadingJoke(it, JokeCategory.TV) }
+
+    val ALL_JOKES: List<LoadingJoke> = BOTH_JOKES + MOVIE_JOKES + TV_JOKES
+
+    /**
+     * Draws a random joke from the eligible pool:
+     * - Movies: MOVIE + BOTH jokes
+     * - TV Shows: TV + BOTH jokes
+     *
+     * @param mediaType "movie", "tv", or generic string
+     * @param random Random generator instance for reproducible testing
+     */
+    fun getRandomJoke(mediaType: String, random: Random = Random.Default): String {
+        val isTv = mediaType.equals("tv", ignoreCase = true)
+        val pool = if (isTv) {
+            TV_JOKES + BOTH_JOKES
+        } else {
+            MOVIE_JOKES + BOTH_JOKES
+        }
+        val randomIndex = random.nextInt(pool.size)
+        return pool[randomIndex].text
+    }
+}

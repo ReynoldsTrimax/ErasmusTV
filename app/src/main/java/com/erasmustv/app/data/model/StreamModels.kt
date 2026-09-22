@@ -207,6 +207,7 @@ data class ContinueWatchingItem(
     val posterPath: String? = null,
     val backdropPath: String? = null,
     val logoPath: String? = null,
+    val tagline: String? = null,
     val seconds: Long,
     val duration: Long? = null,
     val updatedAt: Long

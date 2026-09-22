@@ -9,6 +9,7 @@ import com.erasmustv.app.data.model.STREAM_SERVERS
 import com.erasmustv.app.data.model.StreamServer
 import com.erasmustv.app.data.model.SubtitleTrack
 import com.erasmustv.app.data.model.TvEpisode
+import com.erasmustv.app.data.model.TvLoadingJokes
 import com.erasmustv.app.data.model.TvSeason
 import com.erasmustv.app.data.repository.MediaRepository
 import com.erasmustv.app.data.repository.StreamRepository
@@ -40,6 +41,7 @@ class TvPlayerViewModel(
     val posterPath: String? = null,
     val backdropPath: String? = null,
     val logoPath: String? = null,
+    val tagline: String? = null,
     private val streamRepository: StreamRepository,
     private val profileManager: ProfileManager,
     private val mediaRepository: MediaRepository? = null,
@@ -89,6 +91,15 @@ class TvPlayerViewModel(
         .build()
 
 
+    private val _currentLoadingJoke = MutableStateFlow(TvLoadingJokes.getRandomJoke(mediaType))
+    val currentLoadingJoke: StateFlow<String> = _currentLoadingJoke.asStateFlow()
+
+    private val _mediaLogo = MutableStateFlow<String?>(logoPath?.takeIf { it.isNotBlank() })
+    val mediaLogo: StateFlow<String?> = _mediaLogo.asStateFlow()
+
+    private val _mediaTagline = MutableStateFlow<String?>(tagline?.takeIf { it.isNotBlank() })
+    val mediaTagline: StateFlow<String?> = _mediaTagline.asStateFlow()
+
     private val _streamState = MutableStateFlow<PlayerStreamState>(PlayerStreamState.Resolving)
     val streamState: StateFlow<PlayerStreamState> = _streamState.asStateFlow()
 
@@ -97,9 +108,29 @@ class TvPlayerViewModel(
 
     val availableServers: List<StreamServer> = STREAM_SERVERS
 
+    fun refreshLoadingJoke() {
+        _currentLoadingJoke.value = TvLoadingJokes.getRandomJoke(mediaType)
+    }
+
     init {
         viewModelScope.launch {
             cachedProfileId = profileManager.getActiveProfile()?.id ?: "default-profile"
+        }
+        if (_mediaLogo.value.isNullOrBlank() && mediaRepository != null) {
+            viewModelScope.launch {
+                val fetched = mediaRepository.getMediaLogo(mediaType, tmdbId).getOrNull()
+                if (!fetched.isNullOrBlank()) {
+                    _mediaLogo.value = fetched
+                }
+            }
+        }
+        if (_mediaTagline.value.isNullOrBlank() && mediaRepository != null) {
+            viewModelScope.launch {
+                val fetched = mediaRepository.getMediaTagline(mediaType, tmdbId).getOrNull()
+                if (!fetched.isNullOrBlank()) {
+                    _mediaTagline.value = fetched
+                }
+            }
         }
         resolveStream("lisbon")
         if (mediaType.equals("tv", ignoreCase = true)) {
@@ -135,6 +166,7 @@ class TvPlayerViewModel(
         _currentSeason.value = seasonNumber
         _currentEpisode.value = episodeNumber
         _currentEpisodeTitle.value = episodeTitle
+        refreshLoadingJoke()
         loadEpisodesForSeason(seasonNumber)
         resolveStream(_currentServerId.value)
     }

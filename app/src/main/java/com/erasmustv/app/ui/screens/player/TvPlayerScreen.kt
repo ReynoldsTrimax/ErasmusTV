@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -101,13 +102,17 @@ fun TvPlayerScreen(
     val showSeasons by viewModel.showSeasons.collectAsState()
     val currentSeasonEpisodes by viewModel.currentSeasonEpisodes.collectAsState()
     val isLoadingEpisodes by viewModel.isLoadingEpisodes.collectAsState()
+    val currentLoadingJoke by viewModel.currentLoadingJoke.collectAsState()
+    val mediaLogo by viewModel.mediaLogo.collectAsState()
+    val mediaTagline by viewModel.mediaTagline.collectAsState()
 
     // Player UI States
-    var showControls by remember { mutableStateOf(true) }
+    var showControls by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var activeMenu by remember { mutableStateOf(PlayerActiveMenu.None) }
     var isPlaying by remember { mutableStateOf(false) }
     var isBuffering by remember { mutableStateOf(true) }
+    var hasPlaybackStarted by remember { mutableStateOf(false) }
     var currentPositionMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
 
@@ -579,12 +584,22 @@ fun TvPlayerScreen(
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
+                if (playing) {
+                    hasPlaybackStarted = true
+                }
+            }
+
+            override fun onRenderedFirstFrame() {
+                hasPlaybackStarted = true
             }
 
             override fun onPlaybackStateChanged(state: Int) {
                 isBuffering = state == Player.STATE_BUFFERING
                 if (state == Player.STATE_READY) {
                     durationMs = exoPlayer.duration.coerceAtLeast(0L)
+                    if (exoPlayer.playWhenReady) {
+                        hasPlaybackStarted = true
+                    }
                 } else if (state == Player.STATE_ENDED) {
                     // Movie/episode finished! Asynchronously clear media cache to reclaim flash storage
                     com.erasmustv.app.data.local.TvMediaCacheManager.clearCacheAsync(context)
@@ -636,10 +651,13 @@ fun TvPlayerScreen(
         }
     }
 
-    // Auto-hide controls timer (8s of inactivity when playing, suspended when scrubbing, menu open, or timeline focused)
+    // Auto-hide controls timer:
+    // 8s when playing, 6s when paused (auto-hides controls back to the "You Are Watching" view)
+    // Suspended when scrubbing, menu open, or timeline focused
     LaunchedEffect(showControls, isPlaying, isScrubbing, isTimelineFocused, activeMenu, lastInteractionTime) {
-        if (showControls && isPlaying && !isScrubbing && !isTimelineFocused && activeMenu == PlayerActiveMenu.None) {
-            delay(8000)
+        if (showControls && !isScrubbing && !isTimelineFocused && activeMenu == PlayerActiveMenu.None) {
+            val timeout = if (isPlaying) 8000L else 6000L
+            delay(timeout)
             showControls = false
         }
     }
@@ -674,6 +692,9 @@ fun TvPlayerScreen(
 
     // Stream ready handler: load stream into ExoPlayer
     LaunchedEffect(streamState) {
+        if (streamState is PlayerStreamState.Resolving) {
+            hasPlaybackStarted = false
+        }
         if (streamState is PlayerStreamState.Ready) {
             val ready = streamState as PlayerStreamState.Ready
 
@@ -810,13 +831,10 @@ fun TvPlayerScreen(
                             KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                                 if (exoPlayer.isPlaying) {
                                     exoPlayer.pause()
+                                    showControls = false
                                 } else {
                                     exoPlayer.play()
-                                }
-                                showControls = true
-                                coroutineScope.launch {
-                                    delay(50)
-                                    timelineFocusRequester.requestFocus()
+                                    showControls = false
                                 }
                                 true
                             }
@@ -858,21 +876,23 @@ fun TvPlayerScreen(
                             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                                 if (exoPlayer.isPlaying) {
                                     exoPlayer.pause()
-                                    showControls = true
+                                    showControls = false
                                 } else {
                                     exoPlayer.play()
+                                    showControls = false
                                 }
                                 true
                             }
 
                             KeyEvent.KEYCODE_MEDIA_PLAY -> {
                                 exoPlayer.play()
+                                showControls = false
                                 true
                             }
 
                             KeyEvent.KEYCODE_MEDIA_PAUSE -> {
                                 exoPlayer.pause()
-                                showControls = true
+                                showControls = false
                                 true
                             }
 
@@ -926,13 +946,10 @@ fun TvPlayerScreen(
                                 KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                                     if (exoPlayer.isPlaying) {
                                         exoPlayer.pause()
+                                        showControls = false
                                     } else {
                                         exoPlayer.play()
-                                    }
-                                    showControls = true
-                                    coroutineScope.launch {
-                                        delay(50)
-                                        timelineFocusRequester.requestFocus()
+                                        showControls = false
                                     }
                                     true
                                 }
@@ -974,21 +991,23 @@ fun TvPlayerScreen(
                                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
                                     if (exoPlayer.isPlaying) {
                                         exoPlayer.pause()
-                                        showControls = true
+                                        showControls = false
                                     } else {
                                         exoPlayer.play()
+                                        showControls = false
                                     }
                                     true
                                 }
 
                                 KeyEvent.KEYCODE_MEDIA_PLAY -> {
                                     exoPlayer.play()
+                                    showControls = false
                                     true
                                 }
 
                                 KeyEvent.KEYCODE_MEDIA_PAUSE -> {
                                     exoPlayer.pause()
-                                    showControls = true
+                                    showControls = false
                                     true
                                 }
 
@@ -1002,28 +1021,57 @@ fun TvPlayerScreen(
             }
         }
 
-        // Layer 2: Buffering Overlay
-        if (isBuffering || streamState is PlayerStreamState.Resolving) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(PitchBlack.copy(alpha = 0.50f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Layer 2: Pre-Playback Loading Joke & Mid-Playback Buffering
+        if (streamState !is PlayerStreamState.Error) {
+            if (!hasPlaybackStarted) {
+                // Pre-playback loading phase: shimmering joke as the indicator (no spinner)
+                TvShimmerLoadingJoke(
+                    jokeText = currentLoadingJoke,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else if (isBuffering) {
+                // Mid-playback buffering / seeking phase: plain spinner only (completely without buffering text)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(PitchBlack.copy(alpha = 0.50f)),
+                    contentAlignment = Alignment.Center
+                ) {
                     CircularProgressIndicator(
                         color = FocusWhite,
                         strokeWidth = 3.dp,
                         modifier = Modifier.size(48.dp)
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = if (streamState is PlayerStreamState.Resolving) "Connecting to stream cluster..." else "Buffering...",
-                        style = ErasmusTvTypography.BodyLarge,
-                        color = TextPrimary
-                    )
                 }
             }
+        }
+
+        // Layer 2.5: "YOU ARE WATCHING" Pause Overlay with Original Title Logo
+        val isPaused = !isPlaying && hasPlaybackStarted && !isBuffering && streamState is PlayerStreamState.Ready
+        AnimatedVisibility(
+            visible = isPaused && !showControls && activeMenu == PlayerActiveMenu.None,
+            enter = fadeIn(
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = 2500,
+                    easing = androidx.compose.animation.core.LinearOutSlowInEasing
+                )
+            ),
+            exit = fadeOut(
+                animationSpec = androidx.compose.animation.core.tween(
+                    durationMillis = 300,
+                    easing = androidx.compose.animation.core.FastOutLinearInEasing
+                )
+            )
+        ) {
+            TvPlayerPauseOverlay(
+                title = viewModel.title,
+                logoPath = mediaLogo,
+                tagline = mediaTagline,
+                mediaType = viewModel.mediaType,
+                season = currentSeason,
+                episode = currentEpisode,
+                episodeTitle = currentEpisodeTitle
+            )
         }
 
         // Layer 3: Playback Error Screen
@@ -1209,8 +1257,10 @@ fun TvPlayerScreen(
                         onTogglePlayPause = {
                             if (exoPlayer.isPlaying) {
                                 exoPlayer.pause()
+                                showControls = false
                             } else {
                                 exoPlayer.play()
+                                showControls = false
                             }
                         },
                         topBarFocusRequester = when (lastFocusedTopBarButton) {
@@ -1245,8 +1295,10 @@ fun TvPlayerScreen(
                         onTogglePlayPause = {
                             if (exoPlayer.isPlaying) {
                                 exoPlayer.pause()
+                                showControls = false
                             } else {
                                 exoPlayer.play()
+                                showControls = false
                             }
                         },
                         onOpenAudio = { activeMenu = PlayerActiveMenu.Audio },

@@ -25,6 +25,11 @@ class CinejoyStreamResolver(
         .writeTimeout(10, TimeUnit.SECONDS)
         .build()
 ) {
+    private val fastProbeClient: OkHttpClient = client.newBuilder()
+        .connectTimeout(2000, TimeUnit.MILLISECONDS)
+        .readTimeout(2000, TimeUnit.MILLISECONDS)
+        .writeTimeout(2000, TimeUnit.MILLISECONDS)
+        .build()
     companion object {
         private const val TAG = "CinejoyResolver"
         private const val ENC_API = "https://enc-dec.app/api"
@@ -729,11 +734,36 @@ class CinejoyStreamResolver(
             val discoveredStreams = mutableListOf<DiscoveredVidfastStream>()
             var attempts = 0
             for (candidate in candidatePayloads) {
+                val hasTopTier = discoveredStreams.any { it.score >= 95 }
                 val has4kMaster = discoveredStreams.any { it.is4k && it.isMaster }
                 val has4kDirect = discoveredStreams.any { it.is4k && it.isDirect }
+
+                // Stop immediately if both top-tier 4K options are discovered
                 if (has4kMaster && has4kDirect) {
                     break
                 }
+
+                // If Lisbon (prefersDirect == false) and we already have a 4K Master stream (score >= 95),
+                // return immediately in ~0.6s without probing dead or slow secondary mirrors!
+                if (!prefersDirect && hasTopTier) {
+                    break
+                }
+
+                // If Athens (prefersDirect == true) and we already have a direct stream, stop immediately
+                if (prefersDirect && has4kDirect) {
+                    break
+                }
+
+                // If we already have any top-tier stream (e.g. Athens fell back to master), stop after at most 2 attempts
+                if (hasTopTier && attempts >= 2) {
+                    break
+                }
+
+                // Stop if we have any discovered stream and the next candidate is NOT 4K
+                if (discoveredStreams.isNotEmpty() && !candidate.is4k) {
+                    break
+                }
+
                 // Skip redundant master mirrors if we already have a functional 4K master ladder (e.g. vBlaze when vRapid succeeded)
                 if (candidate.isMaster && has4kMaster) {
                     continue
@@ -742,18 +772,22 @@ class CinejoyStreamResolver(
                 if (candidate.isDirect && has4kDirect) {
                     continue
                 }
-                if (attempts >= 6 || (discoveredStreams.size >= 3 && discoveredStreams.any { it.score >= 95 })) {
+                if (attempts >= 3) {
                     break
                 }
                 attempts++
                 try {
                     val streamReqBuilder = Request.Builder().url("$streamEndpoint/${candidate.payload}").post("".toRequestBody())
                     vidfastHeaders.forEach { (k, v) -> streamReqBuilder.header(k, v) }
-                    val streamEncrypted = client.newCall(streamReqBuilder.build()).execute().use { res ->
+                    val streamEncrypted = fastProbeClient.newCall(streamReqBuilder.build()).execute().use { res ->
                         if (!res.isSuccessful) return@use null
                         res.body?.string()?.takeIf { it.isNotBlank() }
                     }
-                    if (streamEncrypted.isNullOrBlank()) continue
+                    if (streamEncrypted.isNullOrBlank()) {
+                        // If probe failed and we already have a stream, stop immediately
+                        if (discoveredStreams.isNotEmpty()) break
+                        continue
+                    }
 
                     val decStreamBody = JSONObject().apply { put("text", streamEncrypted) }
                     val decStreamReq = Request.Builder()
@@ -763,7 +797,7 @@ class CinejoyStreamResolver(
                         .post(decStreamBody.toString().toRequestBody(JSON_MEDIA_TYPE))
                         .build()
 
-                    val decJson = client.newCall(decStreamReq).execute().use { res ->
+                    val decJson = fastProbeClient.newCall(decStreamReq).execute().use { res ->
                         if (!res.isSuccessful) return@use null
                         val body = res.body?.string() ?: return@use null
                         JSONObject(body)
@@ -826,13 +860,39 @@ class CinejoyStreamResolver(
                             )
                         )
 
-                        // If we found both top-tier 4K streams (Master + Direct), break early
-                        if (discoveredStreams.any { it.is4k && it.isMaster } && discoveredStreams.any { it.is4k && it.isDirect }) {
+                        // For 4K Master HLS ladder from Vidfast (moon.quietridge.top/vd/),
+                        // add the /vdb/ backup mirror immediately with 0 extra network delay so users have a redundant 4K sub-server
+                        if (isMasterStream && playlistUrl.contains("/vd/")) {
+                            val backupUrl = playlistUrl.replace("/vd/", "/vdb/")
+                            discoveredStreams.add(
+                                DiscoveredVidfastStream(
+                                    server = DirectServer(
+                                        name = "$serverName (4K Master Backup)",
+                                        url = backupUrl,
+                                        kind = "hls"
+                                    ),
+                                    captions = captions,
+                                    score = score - 2,
+                                    is4k = true,
+                                    isMaster = true,
+                                    isDirect = false
+                                )
+                            )
+                        }
+
+                        // If Lisbon found 4K Master, break immediately in ~0.6s
+                        if (!prefersDirect && isMasterStream) {
+                            break
+                        }
+
+                        // If Athens found 4K Direct, break immediately in ~0.6s
+                        if (prefersDirect && isDirectStream) {
                             break
                         }
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Vidfast candidate payload error: ${e.message}")
+                    if (discoveredStreams.isNotEmpty()) break
                 }
             }
 

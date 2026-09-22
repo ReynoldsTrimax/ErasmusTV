@@ -183,7 +183,9 @@ fun AppNavigation(
                             item.id,
                             item.title,
                             posterPath = item.posterPath,
-                            backdropPath = item.backdropPath
+                            backdropPath = item.backdropPath,
+                            logoPath = item.logoPath,
+                            tagline = item.tagline
                         )
                     )
                 },
@@ -196,7 +198,9 @@ fun AppNavigation(
                             cw.season,
                             cw.episode,
                             posterPath = cw.posterPath,
-                            backdropPath = cw.backdropPath
+                            backdropPath = cw.backdropPath,
+                            logoPath = cw.logoPath,
+                            tagline = cw.tagline
                         )
                     )
                 },
@@ -224,7 +228,9 @@ fun AppNavigation(
                             item.id,
                             item.title,
                             posterPath = item.posterPath,
-                            backdropPath = item.backdropPath
+                            backdropPath = item.backdropPath,
+                            logoPath = item.logoPath,
+                            tagline = item.tagline
                         )
                     )
                 },
@@ -254,7 +260,9 @@ fun AppNavigation(
                             1,
                             1,
                             posterPath = item.posterPath,
-                            backdropPath = item.backdropPath
+                            backdropPath = item.backdropPath,
+                            logoPath = item.logoPath,
+                            tagline = item.tagline
                         )
                     )
                 },
@@ -285,7 +293,9 @@ fun AppNavigation(
                             item.id,
                             item.title,
                             posterPath = item.posterPath,
-                            backdropPath = item.backdropPath
+                            backdropPath = item.backdropPath,
+                            logoPath = item.logoPath,
+                            tagline = item.tagline
                         )
                     )
                 },
@@ -361,8 +371,8 @@ fun AppNavigation(
             MediaDetailScreen(
                 viewModel = vm,
                 onBackClick = { navController.popBackStack() },
-                onPlayClick = { mType, mId, mTitle, s, e, poster, backdrop ->
-                    navController.navigate(NavRoutes.player(mType, mId, mTitle, s, e, poster, backdrop))
+                onPlayClick = { mType, mId, mTitle, s, e, poster, backdrop, logo, tagline ->
+                    navController.navigate(NavRoutes.player(mType, mId, mTitle, s, e, poster, backdrop, logo, tagline))
                 },
                 onSimilarClick = { item ->
                     navController.navigate(NavRoutes.details(item.mediaType, item.id))
@@ -428,6 +438,14 @@ fun AppNavigation(
                 navArgument("backdropPath") {
                     type = NavType.StringType
                     defaultValue = ""
+                },
+                navArgument("logoPath") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("tagline") {
+                    type = NavType.StringType
+                    defaultValue = ""
                 }
             )
         ) { backStackEntry ->
@@ -438,10 +456,14 @@ fun AppNavigation(
             val episode = backStackEntry.arguments?.getInt("episode")
             val rawPoster = backStackEntry.arguments?.getString("posterPath")
             val rawBackdrop = backStackEntry.arguments?.getString("backdropPath")
+            val rawLogo = backStackEntry.arguments?.getString("logoPath")
+            val rawTagline = backStackEntry.arguments?.getString("tagline")
             val posterPath = if (rawPoster.isNullOrBlank()) null else rawPoster
             val backdropPath = if (rawBackdrop.isNullOrBlank()) null else rawBackdrop
+            val logoPath = if (rawLogo.isNullOrBlank()) null else rawLogo
+            val tagline = if (rawTagline.isNullOrBlank()) null else rawTagline
 
-            val vm = remember(mediaType, id, season, episode, posterPath, backdropPath) {
+            val vm = remember(mediaType, id, season, episode, posterPath, backdropPath, logoPath, tagline) {
                 TvPlayerViewModel(
                     mediaType = mediaType,
                     tmdbId = id,
@@ -450,6 +472,8 @@ fun AppNavigation(
                     episode = episode,
                     posterPath = posterPath,
                     backdropPath = backdropPath,
+                    logoPath = logoPath,
+                    tagline = tagline,
                     streamRepository = container.streamRepository,
                     profileManager = container.profileManager,
                     mediaRepository = container.mediaRepository,

@@ -126,7 +126,7 @@ private val DetailHeroVerticalGradient = Brush.verticalGradient(
 fun MediaDetailScreen(
     viewModel: MediaDetailViewModel,
     onBackClick: () -> Unit,
-    onPlayClick: (mediaType: String, id: String, title: String, season: Int?, episode: Int?, posterPath: String?, backdropPath: String?) -> Unit,
+    onPlayClick: (mediaType: String, id: String, title: String, season: Int?, episode: Int?, posterPath: String?, backdropPath: String?, logoPath: String?, tagline: String?) -> Unit,
     onSimilarClick: (MediaItem) -> Unit,
     onNavigate: ((String) -> Unit)? = null,
     onProfileClick: (() -> Unit)? = null
@@ -260,7 +260,7 @@ fun MediaDetailScreen(
                                 primaryActionLabel = if (state.resumePosition > 0) "Resume" else "Play Movie",
                                 playFocusRequester = primaryActionFocusRequester,
                                 onPlayClick = {
-                                    onPlayClick("movie", movie.id, movie.title, null, null, movie.posterPath, movie.backdropPath)
+                                    onPlayClick("movie", movie.id, movie.title, null, null, movie.posterPath, movie.backdropPath, movie.logoPath, movie.tagline)
                                 },
                                 onToggleWatchlist = { viewModel.toggleWatchlist() },
                                 onNavigateLeftToRail = {
@@ -372,7 +372,7 @@ fun MediaDetailScreen(
                                 playFocusRequester = primaryActionFocusRequester,
                                 onPlayClick = {
                                     val s = state.selectedSeason?.seasonNumber ?: 1
-                                    onPlayClick("tv", tv.id, tv.title, s, 1, tv.posterPath, tv.backdropPath)
+                                    onPlayClick("tv", tv.id, tv.title, s, 1, tv.posterPath, tv.backdropPath, tv.logoPath, tv.tagline)
                                 },
                                 onToggleWatchlist = { viewModel.toggleWatchlist() },
                                 onNavigateLeftToRail = {
@@ -406,7 +406,7 @@ fun MediaDetailScreen(
                                     selectedSeason = state.selectedSeason,
                                     onSeasonSelect = { viewModel.selectSeason(it) },
                                     onEpisodeClick = { ep ->
-                                        onPlayClick("tv", tv.id, tv.title, ep.seasonNumber, ep.episodeNumber, tv.posterPath, ep.stillPath ?: tv.backdropPath)
+                                        onPlayClick("tv", tv.id, tv.title, ep.seasonNumber, ep.episodeNumber, tv.posterPath, ep.stillPath ?: tv.backdropPath, tv.logoPath, tv.tagline)
                                     },
                                     firstItemFocusRequester = episodesFocusRequester,
                                     onNavigateLeftToRail = {
