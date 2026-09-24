@@ -49,11 +49,22 @@ android {
 
     buildTypes {
         release {
+            // Deliberately left unminified.
+            //
+            // R8 would shrink the APK but does nothing for scroll smoothness,
+            // and this app's Retrofit + kotlinx-serialization surface is exactly
+            // the kind of reflective code that breaks silently under shrinking.
+            // The scroll win from a release build comes from it being
+            // non-debuggable and from ART applying the Compose baseline
+            // profiles, both of which happen without minification.
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Signed with the debug key so a release-quality build is
+            // side-loadable onto a TV for testing without key management.
+            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             isDebuggable = true
@@ -116,8 +127,19 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
 
+    // Installs the Compose baseline profiles bundled with the AndroidX
+    // libraries, so ART has the hot scroll/composition paths compiled ahead of
+    // time instead of interpreting them until the JIT catches up. This is the
+    // single largest scroll-jank reduction available on low-end TV chipsets,
+    // and it only takes effect in non-debuggable builds.
+    implementation(libs.androidx.profileinstaller)
+
     // Image loading with TV caching
     implementation(libs.coil.compose)
+    // A large share of TMDB title logos are published as SVG. Without a vector
+    // decoder those requests simply fail, which is why many titles fell back to
+    // rendering their name as plain text instead of their logo.
+    implementation(libs.coil.svg)
 
     // Palette extraction for hero-artwork-derived accent colors
     implementation(libs.androidx.palette.ktx)

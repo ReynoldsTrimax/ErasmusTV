@@ -24,6 +24,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -119,9 +121,14 @@ fun ContinueWatchingCard(
     cardModifier: Modifier = Modifier,
     cardWidth: Dp = ErasmusDimens.LandscapeCardWidth
 ) {
-    val artworkUrl = remember(item.backdropPath, item.posterPath) {
-        if (!item.backdropPath.isNullOrBlank()) AppConfig.backdropUrl(item.backdropPath)
-        else AppConfig.posterUrl(item.posterPath)
+    // Resume entries persist whatever artwork path was current when the title was
+    // last played, and those paths expire upstream. Falling back to the poster on
+    // a failed load keeps the card from turning into an empty rectangle.
+    var backdropFailed by remember(item.backdropPath) { mutableStateOf(false) }
+    val artworkUrl = remember(item.backdropPath, item.posterPath, backdropFailed) {
+        val backdrop = AppConfig.backdropUrl(item.backdropPath)
+        if (!backdropFailed && backdrop != null) backdrop
+        else AppConfig.posterUrl(item.posterPath) ?: backdrop
     }
     val imageRequest = rememberCardImageRequest(artworkUrl)
     val isReducedMotion = rememberReducedMotion()
@@ -186,6 +193,7 @@ fun ContinueWatchingCard(
                 model = imageRequest,
                 isFocused = isFocused,
                 shape = ErasmusShapes.CardLarge,
+                onError = { backdropFailed = true },
                 modifier = Modifier.fillMaxSize()
             ) {
                 // Short scrim: only enough to keep the progress rail readable.

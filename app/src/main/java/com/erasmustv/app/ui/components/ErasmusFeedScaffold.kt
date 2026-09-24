@@ -187,6 +187,13 @@ fun ErasmusFeedScaffold(
     // ------------------------------------------------------------------
     val consumeLeftEdge: () -> Boolean = { true }
 
+    // Scroll-derived flags are held as State and read only inside the item that
+    // needs them, never in this scope. A read here would subscribe the whole
+    // scaffold — zone registration, shelf filtering, nav bar — to scrolling.
+    val isFeedAtTop = remember(listState) {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 }
+    }
+
     val focusNav: () -> Boolean = {
         try {
             navFocusRequester.requestFocus()
@@ -251,6 +258,8 @@ fun ErasmusFeedScaffold(
         HeroFrostedBackdrop(
             artworkUrl = heroImageUrl,
             ambientColor = ambientColor,
+            // Poster art as the safety net if the backdrop path is dead.
+            fallbackArtworkUrl = AppConfig.posterUrl(displayHero?.posterPath),
             modifier = Modifier.fillMaxSize()
         )
 
@@ -294,7 +303,14 @@ fun ErasmusFeedScaffold(
                             // Only auto-advance while the hero is the thing on
                             // screen; a carousel rotating out of view is motion
                             // spent on nobody.
-                            isAutoAdvanceEnabled = listState.firstVisibleItemIndex == 0
+                            //
+                            // Read through a derived state, and read *here* rather
+                            // than in the scaffold's body: a raw
+                            // `listState.firstVisibleItemIndex` read at scaffold
+                            // level subscribed the entire page to scroll changes,
+                            // so crossing a shelf boundary recomposed the whole
+                            // feed — zone map, nav bar and all — mid-scroll.
+                            isAutoAdvanceEnabled = isFeedAtTop.value
                         )
                         // Deliberately tight: the hero's bottom fade and the
                         // ambient wash carry the transition, so the first shelf
@@ -356,7 +372,6 @@ fun ErasmusFeedScaffold(
             onNavigate = onNavigate,
             onProfileClick = onProfileClick,
             navFocusRequester = navFocusRequester,
-            isCompact = listState.firstVisibleItemIndex > 0,
             onFocusChanged = { focused -> isNavFocused = focused },
             // DOWN out of the nav returns to the zone the user actually left,
             // not a fixed row.

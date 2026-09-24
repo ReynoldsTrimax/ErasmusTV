@@ -16,15 +16,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -68,6 +75,8 @@ fun ErasmusCardArtwork(
     contentScale: ContentScale = ContentScale.Crop,
     /** Faint veil over resting artwork; 0f disables the clarity shift. */
     restingVeilAlpha: Float = 0.14f,
+    /** Raised when the artwork fails to load, so callers can fall back. */
+    onError: (() -> Unit)? = null,
     overlay: @Composable BoxScope.() -> Unit = {}
 ) {
     val isReducedMotion = rememberReducedMotion()
@@ -95,7 +104,18 @@ fun ErasmusCardArtwork(
 
     val density = LocalDensity.current
     val hairlinePx = remember(density) { with(density) { 1.dp.toPx() } }
-    val outline = remember(shape) { shape }
+    val hairlineStroke = remember(hairlinePx) { Stroke(width = hairlinePx) }
+    // The outline is resolved from the *actual* shape and cached per size.
+    //
+    // Calling `shape.createOutline(size)` inside the draw lambda allocated a
+    // fresh Outline (and, for a rounded shape, a Path) for every visible card on
+    // every draw pass — dozens of short-lived objects per frame while a rail
+    // scrolls, and those GC pauses read as stutter on a mid-range TV. Caching
+    // keeps the saving without assuming a radius: this composable is called with
+    // Card (14dp) for posters and CardLarge (18dp) for Continue Watching and
+    // episode stills, so a hardcoded radius would leave the hairline disagreeing
+    // with the clip on those cards.
+    val outlineCache = remember(shape) { CardOutlineCache(shape) }
 
     Box(
         modifier = modifier
@@ -106,6 +126,7 @@ fun ErasmusCardArtwork(
             model = model,
             contentDescription = null,
             contentScale = contentScale,
+            onError = { onError?.invoke() },
             modifier = Modifier
                 .fillMaxSize()
                 .drawWithContent {
@@ -122,18 +143,41 @@ fun ErasmusCardArtwork(
                     // the only edge treatment — never two stacked borders.
                     val edge = edgeAlpha.value
                     if (edge > 0.001f) {
-                        val stroke = Stroke(width = hairlinePx)
-                        val path = outline.createOutline(size, layoutDirection, this)
                         drawOutline(
-                            outline = path,
+                            outline = outlineCache.outlineFor(size, layoutDirection, this),
                             color = BorderHairline.copy(alpha = BorderHairline.alpha * edge),
-                            style = stroke
+                            style = hairlineStroke
                         )
                     }
                 }
         )
 
         overlay()
+    }
+}
+
+/**
+ * Holds one card's resolved [Outline] between draw passes.
+ *
+ * A card's size is stable — focus scales it through a `graphicsLayer`, which
+ * does not re-measure — so in practice the outline is built once and reused for
+ * the lifetime of the card.
+ */
+private class CardOutlineCache(private val shape: Shape) {
+    private var lastSize: Size? = null
+    private var lastDirection: LayoutDirection? = null
+    private var cached: Outline? = null
+
+    fun outlineFor(size: Size, direction: LayoutDirection, density: Density): Outline {
+        val existing = cached
+        if (existing != null && lastSize == size && lastDirection == direction) {
+            return existing
+        }
+        return shape.createOutline(size, direction, density).also {
+            cached = it
+            lastSize = size
+            lastDirection = direction
+        }
     }
 }
 
@@ -189,52 +233,47 @@ fun ErasmusCardTitle(
  *
  * Kept deliberately quiet — metadata exists to disambiguate two similar
  * posters, not to form a second content block competing with the artwork.
+ *
+ * Built as **one** text node with colour spans rather than a `Row` of four or
+ * five separate `Text`s. Text measurement is among the most expensive things a
+ * weak TV CPU does, and the row-of-Texts version paid for up to five layouts
+ * per card — around forty per shelf — every time a shelf scrolled into view.
+ * The annotated string is remembered per item, so scrolling back to a card
+ * re-measures nothing.
  */
 @Composable
 fun ErasmusCardMetadata(
     item: MediaItem,
     modifier: Modifier = Modifier
 ) {
-    val metaStyle = ErasmusTvTypography.CardMeta
+    val hasRating = item.voteAverage != null && item.voteAverage > 0
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.fillMaxWidth()
-    ) {
-        val hasRating = item.voteAverage != null && item.voteAverage > 0
-        if (hasRating) {
-            Text(
-                text = "★ ${item.ratingFormatted}",
-                style = metaStyle,
-                color = RatingGold.copy(alpha = 0.82f),
-                maxLines = 1
-            )
-        }
-
-        item.year?.let { year ->
+    val annotated = remember(item.id, item.ratingFormatted, item.year, item.isTv, hasRating) {
+        buildAnnotatedString {
+            val separator = SpanStyle(color = TextMuted)
             if (hasRating) {
-                Text(text = " · ", style = metaStyle, color = TextMuted)
+                withStyle(SpanStyle(color = RatingGold.copy(alpha = 0.82f))) {
+                    append("★ ${item.ratingFormatted}")
+                }
             }
-            Text(
-                text = year,
-                style = metaStyle,
-                color = TextSecondary,
-                maxLines = 1
-            )
+            item.year?.let { year ->
+                if (hasRating) withStyle(separator) { append(" · ") }
+                withStyle(SpanStyle(color = TextSecondary)) { append(year) }
+            }
+            if (hasRating || item.year != null) {
+                withStyle(separator) { append(" · ") }
+            }
+            withStyle(separator) { append(if (item.isTv) "Series" else "Movie") }
         }
-
-        if (hasRating || item.year != null) {
-            Text(text = " · ", style = metaStyle, color = TextMuted)
-        }
-
-        Text(
-            text = if (item.isTv) "Series" else "Movie",
-            style = metaStyle,
-            color = TextMuted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
+
+    Text(
+        text = annotated,
+        style = ErasmusTvTypography.CardMeta,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier.fillMaxWidth()
+    )
 }
 
 /**

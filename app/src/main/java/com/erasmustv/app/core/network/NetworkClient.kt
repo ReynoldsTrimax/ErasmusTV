@@ -1,5 +1,6 @@
 package com.erasmustv.app.core.network
 
+import com.erasmustv.app.BuildConfig
 import com.erasmustv.app.core.config.AppConfig
 import com.erasmustv.app.data.local.SessionManager
 import kotlinx.coroutines.runBlocking
@@ -24,17 +25,21 @@ object NetworkClient {
     private val jsonMediaType = "application/json".toMediaType()
 
     fun createOkHttpClient(sessionManager: SessionManager? = null): OkHttpClient {
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-        }
-
         val builder = OkHttpClient.Builder()
             .dns(ErasmusDns)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
-            .addInterceptor(logging)
             .addInterceptor(HeaderInterceptor(sessionManager))
+
+        // Request logging in debug builds only. This client is also Coil's image
+        // client, so in a shipped build it was logging a line per poster fetch
+        // while a rail scrolled.
+        if (BuildConfig.DEBUG) {
+            builder.addInterceptor(
+                HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
+            )
+        }
 
         try {
             val trustAllCerts = arrayOf<javax.net.ssl.TrustManager>(

@@ -107,24 +107,31 @@ private const val HERO_CONTENT_TRANSITION_MS = 420
 /** Left-to-right readability ramp so hero copy stays legible over artwork. */
 private val HeroReadabilityGradient = Brush.horizontalGradient(
     colorStops = arrayOf(
-        0.00f to PitchBlack.copy(alpha = 0.92f),
-        0.16f to PitchBlack.copy(alpha = 0.80f),
-        0.34f to PitchBlack.copy(alpha = 0.56f),
-        0.52f to PitchBlack.copy(alpha = 0.30f),
-        0.72f to PitchBlack.copy(alpha = 0.10f),
+        0.00f to PitchBlack.copy(alpha = 0.58f),
+        0.16f to PitchBlack.copy(alpha = 0.42f),
+        0.34f to PitchBlack.copy(alpha = 0.22f),
+        0.52f to PitchBlack.copy(alpha = 0.07f),
+        0.68f to PitchBlack.copy(alpha = 0.02f),
         1.00f to Color.Transparent
     )
 )
 
-/** Gentle top-down darkening: shades the nav area and grounds the lower third. */
+/**
+ * Gentle top-down darkening: grounds the lower third.
+ *
+ * The top band is now barely there. It used to sit at 0.55 alpha to shade the
+ * navigation area, but the floating nav is an opaque pill that carries its own
+ * contrast — so the band was darkening artwork to protect something that did not
+ * need protecting, and it read as a grey wash across the top of every hero.
+ */
 private val HeroVerticalShade = Brush.verticalGradient(
     colorStops = arrayOf(
-        0.00f to PitchBlack.copy(alpha = 0.55f),
-        0.14f to PitchBlack.copy(alpha = 0.22f),
+        0.00f to PitchBlack.copy(alpha = 0.14f),
+        0.14f to PitchBlack.copy(alpha = 0.05f),
         0.34f to Color.Transparent,
-        0.68f to PitchBlack.copy(alpha = 0.26f),
-        0.88f to PitchBlack.copy(alpha = 0.52f),
-        1.00f to PitchBlack.copy(alpha = 0.68f)
+        0.68f to PitchBlack.copy(alpha = 0.16f),
+        0.88f to PitchBlack.copy(alpha = 0.36f),
+        1.00f to PitchBlack.copy(alpha = 0.50f)
     )
 )
 
@@ -187,22 +194,21 @@ private fun heroFrostBridgeMask(heroFraction: Float): Brush = Brush.verticalGrad
  */
 private fun heroFrostBridgeShade(heroFraction: Float): Brush = Brush.verticalGradient(
     colorStops = arrayOf(
-        0.00f to PitchBlack.copy(alpha = 0.34f),
-        (heroFraction * 0.86f) to PitchBlack.copy(alpha = 0.44f),
-        heroFraction to PitchBlack.copy(alpha = 0.58f),
-        1.00f to PitchBlack.copy(alpha = 0.48f)
+        0.00f to PitchBlack.copy(alpha = 0.24f),
+        (heroFraction * 0.86f) to PitchBlack.copy(alpha = 0.32f),
+        heroFraction to PitchBlack.copy(alpha = 0.44f),
+        1.00f to PitchBlack.copy(alpha = 0.44f)
     )
 )
 
-/** Soft edge vignette; corners recede without an obvious dark frame. */
-private val HeroEdgeVignette = Brush.horizontalGradient(
-    colorStops = arrayOf(
-        0.00f to PitchBlack.copy(alpha = 0.30f),
-        0.10f to Color.Transparent,
-        0.90f to Color.Transparent,
-        1.00f to PitchBlack.copy(alpha = 0.34f)
-    )
-)
+/**
+ * The edge vignette is gone.
+ *
+ * It darkened the left and right edges at ~0.3 alpha so the corners would
+ * recede. On a real 16:9 panel that landed as a visible dark frame down the
+ * right-hand side of the artwork, which is the opposite of receding, so the
+ * artwork now reaches the bezel at full brightness.
+ */
 
 private val ElectricBlue = Color(0xFF1D90F5)
 
@@ -388,7 +394,6 @@ fun HeroBillboard(
                         .fillMaxSize()
                         .background(heroFrostBridgeShade(heroFraction))
                 )
-                Box(modifier = Modifier.fillMaxSize().background(HeroEdgeVignette))
             }
         )
 
@@ -455,8 +460,6 @@ fun HeroBillboard(
             Box(modifier = Modifier.fillMaxSize().background(HeroReadabilityGradient))
             // Top/bottom cinematic shading
             Box(modifier = Modifier.fillMaxSize().background(HeroVerticalShade))
-            // Soft edge vignette
-            Box(modifier = Modifier.fillMaxSize().background(HeroEdgeVignette))
         }
 
         // ------------------------------------------------------------------

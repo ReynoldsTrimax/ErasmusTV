@@ -53,15 +53,17 @@ class TvShowsViewModel(
                 val topRated = topRatedDeferred.await()
                 val genres = genresDeferred.await()
 
-                val hero = popular.firstOrNull()?.let {
-                    val logo = mediaRepository.getMediaLogo(it.mediaType, it.id).getOrNull()
-                    it.copy(logoPath = logo)
-                }
+                // Every slide of the hero carousel gets its logo, not just the
+                // first. The billboard rotates through five titles, so enriching
+                // only `popular.first()` left four slides out of five rendering
+                // their name as plain text.
+                val popularWithLogos = mediaRepository.withLogos(popular, limit = 5)
+                val hero = popularWithLogos.firstOrNull()
 
                 _uiState.value = TvShowsUiState.Success(
                     TvShowsData(
                         heroShow = hero,
-                        popular = popular,
+                        popular = popularWithLogos,
                         topRated = topRated,
                         genres = genres,
                         activeProfile = activeProfile

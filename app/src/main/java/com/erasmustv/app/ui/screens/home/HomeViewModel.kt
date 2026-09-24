@@ -9,6 +9,7 @@ import com.erasmustv.app.data.model.WatchProfile
 import com.erasmustv.app.data.repository.MediaRepository
 import com.erasmustv.app.data.repository.StreamRepository
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -113,6 +114,30 @@ class HomeViewModel(
                 val popularTv = popularTvDeferred.await()
                 val topRated = topRatedDeferred.await()
 
+                // Title-bearing artwork for the resume rail, resolved for every
+                // item *concurrently* before the hydration loop below.
+                //
+                // Doing it inside the loop would mean up to twenty sequential
+                // round trips in front of the Home feed rendering. One parallel
+                // batch costs roughly as long as the slowest single request.
+                val titledBackdrops: Map<String, String> = coroutineScope {
+                    rawContinueWatching
+                        .distinctBy { "${it.mediaType}:${it.tmdbId}" }
+                        .map { item ->
+                            async {
+                                val path = mediaRepository
+                                    .getTitledBackdrop(item.mediaType, item.tmdbId)
+                                    .getOrNull()
+                                "${item.mediaType}:${item.tmdbId}" to path
+                            }
+                        }
+                        .mapNotNull { deferred ->
+                            val (key, path) = deferred.await()
+                            if (path.isNullOrBlank()) null else key to path
+                        }
+                        .toMap()
+                }
+
                 // Hydrate Continue Watching artwork & logos
                 val continueWatching = rawContinueWatching.map { item ->
                     var backdrop = item.backdropPath
@@ -145,6 +170,17 @@ class HomeViewModel(
 
                     if (logo.isNullOrBlank()) {
                         logo = mediaRepository.getMediaLogo(item.mediaType, item.tmdbId).getOrNull()
+                    }
+
+                    // Prefer a backdrop that already carries the title treatment.
+                    //
+                    // TMDB tags a backdrop with a language exactly when the image
+                    // contains text, and leaves the tag null for clean artwork. So
+                    // the tagged variant is the studio's own published thumbnail
+                    // *with its logo in it* — nothing is composited or stamped on
+                    // top. Titles with no such artwork keep their plain backdrop.
+                    titledBackdrops["${item.mediaType}:${item.tmdbId}"]?.let {
+                        backdrop = it
                     }
 
                     if (backdrop != item.backdropPath || poster != item.posterPath || logo != item.logoPath) {

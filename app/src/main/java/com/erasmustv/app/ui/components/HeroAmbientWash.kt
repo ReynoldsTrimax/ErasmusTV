@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,9 +77,20 @@ fun HeroFrostedBackdrop(
     artworkUrl: String?,
     ambientColor: Color,
     modifier: Modifier = Modifier,
-    heroHeight: Dp = ErasmusDimens.HeroHeight
+    heroHeight: Dp = ErasmusDimens.HeroHeight,
+    fallbackArtworkUrl: String? = null
 ) {
-    val request = rememberFrostRequest(artworkUrl, SAMPLE_PX)
+    // Artwork paths rot: TMDB 404s an old image path once the artwork behind it
+    // is replaced, and a dead URL here left the entire page black. The hero's
+    // sharp artwork already falls back to the poster on error; this layer now
+    // does the same, so the page can never lose its background to one stale path.
+    var useFallback by remember(artworkUrl, fallbackArtworkUrl) { mutableStateOf(false) }
+    val effectiveUrl = if (useFallback && !fallbackArtworkUrl.isNullOrBlank()) {
+        fallbackArtworkUrl
+    } else {
+        artworkUrl
+    }
+    val request = rememberFrostRequest(effectiveUrl, SAMPLE_PX)
 
     Box(modifier = modifier.fillMaxSize()) {
         if (request != null) {
@@ -88,7 +102,10 @@ fun HeroFrostedBackdrop(
                 request = request,
                 blurRadius = BLUR_HEAVY,
                 mask = null,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                onError = {
+                    if (!useFallback && !fallbackArtworkUrl.isNullOrBlank()) useFallback = true
+                }
             )
         }
 
@@ -97,6 +114,13 @@ fun HeroFrostedBackdrop(
         // content. It only has to keep rows legible over the frost at *any*
         // scroll position, and wash the hero's hue over the page so the colour
         // reads as deliberate atmosphere rather than a muddy photo.
+        //
+        // The gradients are built inside the draw scope, against the real
+        // measured height. An optimisation pass moved them out to avoid the
+        // per-draw allocation, but that meant guessing the hero's height
+        // fraction on the first frame; this layer is static, so it redraws
+        // almost never and the allocation costs nothing worth having a
+        // one-frame difference in the backdrop for.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -145,10 +169,17 @@ internal fun FrostedArtworkLayer(
     blurRadius: Dp,
     mask: Brush?,
     modifier: Modifier = Modifier,
+    onError: (() -> Unit)? = null,
     overlays: @Composable BoxScope.() -> Unit = {}
 ) {
     Box(
         modifier = modifier
+            // Left unconditional. Offscreen compositing is only strictly needed
+            // when the mask below has to multiply the composite, but this layer
+            // is the frost pipeline and the frost is being kept byte-for-byte as
+            // designed — an offscreen buffer also clips its contents, so removing
+            // it is only *probably* neutral, and "probably" is not good enough
+            // for the app's most visible surface.
             .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .then(
                 if (mask != null) {
@@ -166,11 +197,14 @@ internal fun FrostedArtworkLayer(
             contentDescription = null,
             contentScale = ContentScale.Crop,
             alignment = Alignment.TopCenter,
+            onError = { onError?.invoke() },
             modifier = Modifier
                 .fillMaxSize()
                 .then(
                     // Modifier.blur is a no-op below API 31; the decode-size
-                    // downsample is what guarantees frost on every device.
+                    // downsample is what guarantees frost on every API level,
+                    // and on 31+ this radius is what turns the downsample's
+                    // colour blocks into one continuous field.
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         Modifier.blur(blurRadius)
                     } else {
@@ -195,6 +229,9 @@ internal fun rememberFrostRequest(artworkUrl: String?, samplePx: Int): ImageRequ
         else ImageRequest.Builder(context)
             .data(artworkUrl)
             .size(samplePx)
+            // Deliberately full-colour. A 16-bit config saves memory but bands
+            // badly on a surface this heavily stretched and blurred, which is
+            // precisely where smooth colour gradation is the whole point.
             .crossfade(true)
             .build()
     }
@@ -237,7 +274,16 @@ private const val SAMPLE_PX = 56
 /** Decode width of the hero's mid-blur bridge — frosted, but not yet obliterated. */
 private const val BRIDGE_SAMPLE_PX = 190
 
-/** Radius of the page-filling frost on API 31+. */
+/**
+ * Radius of the page-filling frost on API 31+.
+ *
+ * Restored to its original heavy radius. An earlier optimisation pass set this
+ * to zero on the theory that a 56px sample stretched across the panel is already
+ * blurred past the point a GPU blur contributes — that theory was wrong in
+ * practice: the stretch produces large, hard-edged colour blocks, and it is this
+ * blur that dissolves them into a continuous field. The frost is load-bearing
+ * for the design, so it stays and the performance work is done elsewhere.
+ */
 private val BLUR_HEAVY = 96.dp
 
 /** Mid radius for the hero's bridge band. */

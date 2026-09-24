@@ -35,7 +35,14 @@ class ErasmusTvApplication : Application(), ImageLoaderFactory {
             }
             .crossfade(true)
             .respectCacheHeaders(false)
-            .logger(DebugLogger())
+            // TMDB serves many title logos as SVG; without this decoder those
+            // requests fail and the UI falls back to plain text.
+            .components { add(coil.decode.SvgDecoder.Factory()) }
+            // Logging is wired up only in debug builds. The logger formats a
+            // message for *every* image request and Coil's disk/memory cache
+            // hits are requests too, so on a scrolling poster wall this was
+            // string-building work on the main thread in shipped builds.
+            .apply { if (BuildConfig.DEBUG) logger(DebugLogger()) }
             .okHttpClient { com.erasmustv.app.core.network.NetworkClient.createOkHttpClient() }
             .build()
     }
