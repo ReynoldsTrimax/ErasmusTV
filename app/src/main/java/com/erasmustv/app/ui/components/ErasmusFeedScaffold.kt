@@ -175,6 +175,18 @@ fun ErasmusFeedScaffold(
         coordinator.register(RailZone(shelvesStartRow + index, handleStore.handleFor(shelf.key)))
     }
 
+    // ------------------------------------------------------------------
+    // LEFT at the left edge of a shelf is a wall, not a shortcut into the nav.
+    //
+    // It used to hand focus to the floating navigation, which meant walking left
+    // through a shelf and pressing once more teleported focus out of the content
+    // and up into the chrome — a jump the viewer did not ask for and cannot undo
+    // with the opposite key. The nav is reached deliberately, with UP from the
+    // top row or with BACK. Returning true consumes the press so focus simply
+    // stays on the first card.
+    // ------------------------------------------------------------------
+    val consumeLeftEdge: () -> Boolean = { true }
+
     val focusNav: () -> Boolean = {
         try {
             navFocusRequester.requestFocus()
@@ -296,7 +308,7 @@ fun ErasmusFeedScaffold(
                         shelf.content(
                             handleStore.handleFor(shelf.key),
                             coordinator,
-                            focusNav
+                            consumeLeftEdge
                         )
                         Spacer(modifier = Modifier.height(shelf.trailingSpacing))
                     }
@@ -318,7 +330,7 @@ fun ErasmusFeedScaffold(
                             coordinator = coordinator,
                             onViewAllClick = onViewAll,
                             cardWidth = shelf.cardWidth,
-                            onLeftEdge = focusNav
+                            onLeftEdge = consumeLeftEdge
                         )
                     } else {
                         MediaSectionRow(
@@ -330,7 +342,7 @@ fun ErasmusFeedScaffold(
                             onViewAllClick = onViewAll,
                             cardWidth = shelf.cardWidth,
                             showNewBadge = shelf.showNewBadge,
-                            onLeftEdge = focusNav
+                            onLeftEdge = consumeLeftEdge
                         )
                     }
                     Spacer(modifier = Modifier.height(ErasmusDimens.RailSpacing))

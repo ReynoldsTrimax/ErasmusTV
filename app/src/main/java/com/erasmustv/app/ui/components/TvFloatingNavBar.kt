@@ -99,8 +99,7 @@ val FLOATING_NAV_PRIMARY = listOf(
     FloatingNavDestination(NavRoutes.HOME, "Home"),
     FloatingNavDestination(NavRoutes.TV, "TV Shows"),
     FloatingNavDestination(NavRoutes.MOVIES, "Movies"),
-    FloatingNavDestination(NavRoutes.ANIME, "Anime"),
-    FloatingNavDestination(NavRoutes.STUDIOS, "Studios")
+    FloatingNavDestination(NavRoutes.ANIME, "Anime")
 )
 
 /** Secondary actions — rendered icon-only to keep the pill uncluttered. */

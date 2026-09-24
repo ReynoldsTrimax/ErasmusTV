@@ -47,21 +47,6 @@ object ErasmusDimens {
     val GridItemSpacing = 20.dp
     val GridRowSpacing = 28.dp
 
-    // --- Studio tiles ---
-    val StudioTileSize = 104.dp
-    val StudioTileMinWidth = 150.dp
-
-    /**
-     * Studio tile height. Sized so a 3x3 grid of the nine studios, plus the
-     * page heading and safe margins, fills a 540dp-tall viewport without either
-     * leaving a dead band at the bottom or pushing the last row off-screen.
-     */
-    val StudioTileHeight = 118.dp
-
-    /** Wide label tiles on the Categories page (Browse, Studios, Languages). */
-    val CategoryTileWidth = 190.dp
-    val CategoryTileHeight = 92.dp
-
     // --- Content rail rhythm ---
     /** Left gutter for rail titles and the first card in a rail. */
     val RailStartGutter = 64.dp

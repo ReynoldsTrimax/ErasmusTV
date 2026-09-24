@@ -330,12 +330,11 @@ class ErasmusTvUnitTest {
 
         // Primary destinations are rendered as text labels in the pill.
         val primary = com.erasmustv.app.ui.components.FLOATING_NAV_PRIMARY
-        assertEquals(5, primary.size)
+        assertEquals(4, primary.size)
         assertEquals(routes.HOME, primary[0].route)
         assertEquals(routes.TV, primary[1].route)
         assertEquals(routes.MOVIES, primary[2].route)
         assertEquals(routes.ANIME, primary[3].route)
-        assertEquals(routes.STUDIOS, primary[4].route)
         assertTrue("Primary destinations must show text labels", primary.all { it.showLabel })
 
         // Secondary actions are icon-only so the pill doesn't overcrowd.
@@ -969,7 +968,7 @@ class ErasmusTvUnitTest {
     @Test
     fun testCardSystemUsesRoundedGeometryWithinSpec() {
         // The whole card language depends on these staying in the 14-18dp band,
-        // and on studio tiles staying in the 18-24dp band.
+        // and on tiles staying in the 18-24dp band.
         assertEquals(14f, com.erasmustv.app.core.theme.ErasmusRadius.CardMedium.value, 0.001f)
         assertEquals(18f, com.erasmustv.app.core.theme.ErasmusRadius.CardLarge.value, 0.001f)
         assertEquals(20f, com.erasmustv.app.core.theme.ErasmusRadius.Tile.value, 0.001f)
@@ -979,7 +978,7 @@ class ErasmusTvUnitTest {
             com.erasmustv.app.core.theme.ErasmusRadius.CardMedium.value in 14f..18f
         )
         assertTrue(
-            "studio tile radius must sit in the 18-24dp tile band",
+            "tile radius must sit in the 18-24dp tile band",
             com.erasmustv.app.core.theme.ErasmusRadius.Tile.value in 18f..24f
         )
     }

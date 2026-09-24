@@ -28,7 +28,6 @@ val SurfaceCard = SurfaceCardRest         // Content card surface
 val SurfaceElevated = SurfaceCardFocused  // Focused / elevated card surface
 val SurfaceSecondary = Color(0xFF202021) // Secondary surface & buttons
 val SurfaceCardBorder = Color(0x1AFFFFFF) // Subtle card border
-val SurfaceStudioCard = ErasmusSurfaceRaised // Studio tile base
 
 // --- Focus & Border Tokens -------------------------------------------------
 // Focus communicates via a *restrained* outline + glow, never a heavy ring.
@@ -66,17 +65,6 @@ val TextPrimary = ErasmusTextPrimary      // Crisp warm white
 val TextSecondary = ErasmusTextSecondary  // Muted silver for metadata & subtitles
 val TextMuted = ErasmusTextTertiary       // Subtle tertiary text
 val BadgeBorder = Color(0x33FFFFFF)
-
-// Studio Palette References (neutral studio slates)
-val StudioDisneyBlue = Color(0xFF0063E5)
-val StudioHboPurple = Color(0xFF9933FF)
-val StudioNetflixRed = Color(0xFFE50914)
-val StudioHuluGreen = Color(0xFF1CE783)
-val StudioPrimeBlue = Color(0xFF00A8E1)
-val StudioAppleWhite = Color(0xFFFFFFFF)
-val StudioHotstarCyan = Color(0xFF00D2D2)
-val StudioPeacockYellow = Color(0xFFFFB800)
-val StudioParamountBlue = Color(0xFF0064FF)
 
 // Profile Avatar Gradients
 val AvatarSlate = listOf(Color(0xFF334155), Color(0xFF0F172A))

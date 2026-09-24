@@ -9,10 +9,6 @@ object NavRoutes {
     const val MOVIES = "movies"
     const val TV = "tv"
     const val ANIME = "anime"
-    const val CATEGORIES = "categories"
-    const val STUDIOS = "studios"
-    const val SPORTS = "sports"
-    const val SPARKS = "sparks"
     const val SEARCH = "search"
     const val WATCHLIST = "watchlist"
 

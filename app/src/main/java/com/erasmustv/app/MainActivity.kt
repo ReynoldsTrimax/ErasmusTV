@@ -58,7 +58,6 @@ private val LAUNCH_SAFE_ROUTES = setOf(
     NavRoutes.MOVIES,
     NavRoutes.TV,
     NavRoutes.ANIME,
-    NavRoutes.STUDIOS,
     NavRoutes.SEARCH,
     NavRoutes.WATCHLIST
 )

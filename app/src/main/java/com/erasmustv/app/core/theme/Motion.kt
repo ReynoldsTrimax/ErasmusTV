@@ -64,7 +64,6 @@ object TvMotion {
     val FocusScaleSubtle = 1.025f
     val FocusScaleCard = 1.04f
     val FocusScaleButton = 1.05f
-    val FocusScaleStudio = 1.045f
     val FocusScaleNav = 1.03f
 
     // ── Spring parameters (damping ratio + response) ───────────────────────

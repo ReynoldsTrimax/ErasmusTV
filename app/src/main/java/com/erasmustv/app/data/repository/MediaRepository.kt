@@ -395,27 +395,6 @@ class MediaRepository(
         tmdbApi.getTvGenres(apiKey).genres
     }
 
-    suspend fun getStudioContent(providerId: Int, page: Int = 1): Result<Pair<List<MediaItem>, List<MediaItem>>> = runCatching {
-        val provStr = providerId.toString()
-        val movies = tmdbApi.discoverMovie(
-            apiKey = apiKey,
-            withWatchProviders = provStr,
-            watchRegion = "US",
-            sortBy = "popularity.desc",
-            page = page
-        ).results.map { it.copy(mediaType = "movie") }
-
-        val tv = tmdbApi.discoverTv(
-            apiKey = apiKey,
-            withWatchProviders = provStr,
-            watchRegion = "US",
-            sortBy = "popularity.desc",
-            page = page
-        ).results.map { it.copy(mediaType = "tv") }
-
-        Pair(movies, tv)
-    }
-
     suspend fun discoverByGenre(
         movieGenreId: Int?,
         tvGenreId: Int?,

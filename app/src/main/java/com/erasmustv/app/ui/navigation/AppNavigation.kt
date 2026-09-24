@@ -39,10 +39,6 @@ import com.erasmustv.app.ui.screens.search.SearchScreen
 import com.erasmustv.app.ui.screens.search.SearchViewModel
 import com.erasmustv.app.ui.screens.tv.TvShowsScreen
 import com.erasmustv.app.ui.screens.tv.TvShowsViewModel
-import com.erasmustv.app.ui.screens.studios.StudiosScreen
-import com.erasmustv.app.ui.screens.studios.StudiosViewModel
-import com.erasmustv.app.ui.screens.categories.CategoriesScreen
-import com.erasmustv.app.ui.screens.categories.CategoriesViewModel
 import com.erasmustv.app.ui.screens.anime.AnimeScreen
 import com.erasmustv.app.ui.screens.anime.AnimeViewModel
 import com.erasmustv.app.ui.screens.watchlist.WatchlistScreen
@@ -124,45 +120,44 @@ fun AppNavigation(
     }
     val isReducedMotion = com.erasmustv.app.core.theme.rememberReducedMotion()
 
+    // ------------------------------------------------------------------
+    // Tab switches do not cross-fade.
+    //
+    // Every browse screen mounts its own floating nav pill, so a cross-fade
+    // between two of them fades the *navigation* out and back in along with the
+    // page — the bar visibly blinks on every tab switch while the incoming
+    // screen is still showing skeletons. Because the pill is pixel-identical and
+    // identically positioned on both sides of the swap, cutting instead of
+    // fading makes it read as a single persistent bar with only the content
+    // underneath it reloading, which is the intended effect.
+    //
+    // Detail and player entries keep their fade: those replace the whole frame,
+    // nav pill included, so there is no shared chrome to protect.
+    // ------------------------------------------------------------------
+    val overlayFadeIn: androidx.compose.animation.EnterTransition =
+        if (isReducedMotion) androidx.compose.animation.EnterTransition.None
+        else androidx.compose.animation.fadeIn(
+            animationSpec = androidx.compose.animation.core.tween(
+                durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
+                easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+            )
+        )
+    val overlayFadeOut: androidx.compose.animation.ExitTransition =
+        if (isReducedMotion) androidx.compose.animation.ExitTransition.None
+        else androidx.compose.animation.fadeOut(
+            animationSpec = androidx.compose.animation.core.tween(
+                durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
+                easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+            )
+        )
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
-        enterTransition = {
-            if (isReducedMotion) androidx.compose.animation.EnterTransition.None
-            else androidx.compose.animation.fadeIn(
-                animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
-                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
-                )
-            )
-        },
-        exitTransition = {
-            if (isReducedMotion) androidx.compose.animation.ExitTransition.None
-            else androidx.compose.animation.fadeOut(
-                animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
-                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
-                )
-            )
-        },
-        popEnterTransition = {
-            if (isReducedMotion) androidx.compose.animation.EnterTransition.None
-            else androidx.compose.animation.fadeIn(
-                animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
-                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
-                )
-            )
-        },
-        popExitTransition = {
-            if (isReducedMotion) androidx.compose.animation.ExitTransition.None
-            else androidx.compose.animation.fadeOut(
-                animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
-                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
-                )
-            )
-        }
+        enterTransition = { androidx.compose.animation.EnterTransition.None },
+        exitTransition = { androidx.compose.animation.ExitTransition.None },
+        popEnterTransition = { androidx.compose.animation.EnterTransition.None },
+        popExitTransition = { androidx.compose.animation.ExitTransition.None }
     ) {
         // Login
         composable(NavRoutes.LOGIN) {
@@ -334,45 +329,12 @@ fun AppNavigation(
             )
         }
 
-        // Categories Screen (Replaces Studios, with Studios inside)
-        composable(NavRoutes.CATEGORIES) {
-            val vm = remember {
-                CategoriesViewModel(
-                    container.mediaRepository,
-                    container.profileManager
-                )
-            }
-            CategoriesScreen(
-                viewModel = vm,
-                // Routed through safeNavigate like every other screen, so it
-                // cannot destroy sibling tabs' saved state or stack duplicates.
-                onNavigate = safeNavigate,
-                onMediaClick = { item ->
-                    navController.navigate(NavRoutes.details(item.mediaType, item.id))
-                },
-                onProfileClick = openProfiles
-            )
-        }
-
-        // Studios Screen (Dedicated Hub & Catalog)
-        composable(NavRoutes.STUDIOS) {
-            val vm = remember {
-                StudiosViewModel(
-                    container.mediaRepository,
-                    container.profileManager
-                )
-            }
-            StudiosScreen(
-                viewModel = vm,
-                onNavigate = safeNavigate,
-                onMediaClick = { item ->
-                    navController.navigate(NavRoutes.details(item.mediaType, item.id))
-                },
-                onProfileClick = openProfiles
-            )
-        }
         composable(
             route = NavRoutes.DETAILS,
+            enterTransition = { overlayFadeIn },
+            exitTransition = { overlayFadeOut },
+            popEnterTransition = { overlayFadeIn },
+            popExitTransition = { overlayFadeOut },
             arguments = listOf(
                 navArgument("mediaType") { type = NavType.StringType },
                 navArgument("id") { type = NavType.StringType }
@@ -438,6 +400,10 @@ fun AppNavigation(
         // Native Video Player
         composable(
             route = NavRoutes.PLAYER,
+            enterTransition = { overlayFadeIn },
+            exitTransition = { overlayFadeOut },
+            popEnterTransition = { overlayFadeIn },
+            popExitTransition = { overlayFadeOut },
             arguments = listOf(
                 navArgument("mediaType") { type = NavType.StringType },
                 navArgument("id") { type = NavType.StringType },
