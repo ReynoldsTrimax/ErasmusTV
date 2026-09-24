@@ -22,11 +22,14 @@ class SubtitleResolver(
 ) {
     companion object {
         private const val TAG = "SubtitleResolver"
-        private val LANG_NAMES = mapOf(
+        val LANG_NAMES = mapOf(
             "en" to "English",
             "eng" to "English",
             "es" to "Spanish",
             "spa" to "Spanish",
+            "spn" to "Spanish",
+            "spl" to "Spanish (Latin America)",
+            "es-la" to "Spanish (Latin America)",
             "fr" to "French",
             "fre" to "French",
             "fra" to "French",
@@ -37,6 +40,8 @@ class SubtitleResolver(
             "ita" to "Italian",
             "pt" to "Portuguese",
             "por" to "Portuguese",
+            "pt-br" to "Portuguese (BR)",
+            "pb" to "Portuguese (BR)",
             "pob" to "Portuguese (BR)",
             "ru" to "Russian",
             "rus" to "Russian",
@@ -62,8 +67,136 @@ class SubtitleResolver(
             "swe" to "Swedish",
             "el" to "Greek",
             "ell" to "Greek",
-            "gre" to "Greek"
+            "gre" to "Greek",
+            "da" to "Danish",
+            "dan" to "Danish",
+            "fi" to "Finnish",
+            "fin" to "Finnish",
+            "no" to "Norwegian",
+            "nor" to "Norwegian",
+            "cs" to "Czech",
+            "cze" to "Czech",
+            "ces" to "Czech",
+            "hu" to "Hungarian",
+            "hun" to "Hungarian",
+            "is" to "Icelandic",
+            "ice" to "Icelandic",
+            "isl" to "Icelandic",
+            "ro" to "Romanian",
+            "rum" to "Romanian",
+            "ron" to "Romanian",
+            "hr" to "Croatian",
+            "hrv" to "Croatian",
+            "sr" to "Serbian",
+            "srp" to "Serbian",
+            "sl" to "Slovenian",
+            "slv" to "Slovenian",
+            "sk" to "Slovak",
+            "slk" to "Slovak",
+            "slo" to "Slovak",
+            "bg" to "Bulgarian",
+            "bul" to "Bulgarian",
+            "he" to "Hebrew",
+            "heb" to "Hebrew",
+            "et" to "Estonian",
+            "est" to "Estonian",
+            "id" to "Indonesian",
+            "ind" to "Indonesian",
+            "th" to "Thai",
+            "tha" to "Thai",
+            "vi" to "Vietnamese",
+            "vie" to "Vietnamese",
+            "ms" to "Malay",
+            "may" to "Malay",
+            "msa" to "Malay",
+            "uk" to "Ukrainian",
+            "ukr" to "Ukrainian",
+            "fa" to "Persian",
+            "fas" to "Persian",
+            "per" to "Persian",
+            "bn" to "Bengali",
+            "ben" to "Bengali",
+            "tl" to "Tagalog",
+            "tgl" to "Tagalog",
+            "tag" to "Tagalog",
+            "fil" to "Filipino",
+            "sq" to "Albanian",
+            "sqi" to "Albanian",
+            "alb" to "Albanian",
+            "mk" to "Macedonian",
+            "mkd" to "Macedonian",
+            "mac" to "Macedonian",
+            "bs" to "Bosnian",
+            "bos" to "Bosnian"
         )
+
+        fun normalizeLangCode(code: String): String {
+            return when (val lower = code.lowercase().trim()) {
+                "eng" -> "en"
+                "spa", "spn" -> "es"
+                "spl" -> "es-la"
+                "fre", "fra" -> "fr"
+                "ger", "deu" -> "de"
+                "ita" -> "it"
+                "por" -> "pt"
+                "pb", "pob" -> "pt-br"
+                "rus" -> "ru"
+                "jpn" -> "ja"
+                "kor" -> "ko"
+                "chi", "zho" -> "zh"
+                "hin" -> "hi"
+                "ara" -> "ar"
+                "tur" -> "tr"
+                "dut", "nld" -> "nl"
+                "pol" -> "pl"
+                "swe" -> "sv"
+                "ell", "gre" -> "el"
+                "dan" -> "da"
+                "fin" -> "fi"
+                "nor" -> "no"
+                "cze", "ces" -> "cs"
+                "hun" -> "hu"
+                "ice", "isl" -> "is"
+                "rum", "ron" -> "ro"
+                "hrv" -> "hr"
+                "srp" -> "sr"
+                "slv" -> "sl"
+                "slk", "slo" -> "sk"
+                "bul" -> "bg"
+                "heb" -> "he"
+                "est" -> "et"
+                "ind" -> "id"
+                "tha" -> "th"
+                "vie" -> "vi"
+                "msa", "may" -> "ms"
+                "ukr" -> "uk"
+                "fas", "per" -> "fa"
+                "ben" -> "bn"
+                "tgl", "fil", "tag" -> "tl"
+                "sqi", "alb" -> "sq"
+                "mkd", "mac" -> "mk"
+                "bos" -> "bs"
+                else -> lower
+            }
+        }
+
+        fun getLanguageDisplayName(normLang: String): String {
+            val key = normLang.lowercase().trim()
+            LANG_NAMES[key]?.let { return it }
+            try {
+                val locale = if (key.contains("-")) {
+                    val parts = key.split("-")
+                    java.util.Locale(parts[0], parts[1].uppercase())
+                } else {
+                    java.util.Locale(key)
+                }
+                val name = locale.getDisplayLanguage(java.util.Locale.ENGLISH)
+                if (name.isNotBlank() && !name.equals(key, ignoreCase = true)) {
+                    return name
+                }
+            } catch (_: Exception) {}
+            return key.uppercase()
+        }
     }
 
     private val imdbIdCache = ConcurrentHashMap<String, String>()
@@ -128,15 +261,16 @@ class SubtitleResolver(
                             val item = arr.optJSONObject(i) ?: continue
                             val subUrl = item.optString("url")
                             if (subUrl.isNotBlank()) {
-                                val lang = item.optString("language").lowercase()
+                                val rawLang = item.optString("language")
+                                val normLang = normalizeLangCode(rawLang)
                                 val display = item.optString("display").takeIf { it.isNotBlank() }
-                                    ?: LANG_NAMES[lang] ?: lang.uppercase()
+                                    ?: getLanguageDisplayName(normLang)
                                 val mime = when {
                                     subUrl.contains(".vtt", ignoreCase = true) -> "text/vtt"
                                     subUrl.contains(".ass", ignoreCase = true) || subUrl.contains(".ssa", ignoreCase = true) || subUrl.contains("wyzie", ignoreCase = true) -> "text/x-ssa"
                                     else -> "application/x-subrip"
                                 }
-                                results.add(SubtitleTrack(label = display, language = lang, url = subUrl, mimeType = mime))
+                                results.add(SubtitleTrack(label = display, language = normLang, url = subUrl, mimeType = mime))
                             }
                         }
                     }
@@ -178,13 +312,14 @@ class SubtitleResolver(
                                 val item = subs.optJSONObject(i) ?: continue
                                 val subUrl = item.optString("url")
                                 if (subUrl.isNotBlank()) {
-                                    val lang = item.optString("lang").lowercase()
+                                    val rawLang = item.optString("lang")
+                                    val normLang = normalizeLangCode(rawLang)
                                     val fileName = item.optString("subtitleFileName")
                                     val isSdh = fileName.contains("SDH", ignoreCase = true) ||
                                             fileName.contains(".HI.", ignoreCase = true) ||
                                             fileName.contains("hearing", ignoreCase = true) ||
                                             fileName.contains("[CC]", ignoreCase = true)
-                                    val baseDisplay = LANG_NAMES[lang] ?: lang.uppercase()
+                                    val baseDisplay = getLanguageDisplayName(normLang)
                                     val display = if (isSdh) "$baseDisplay [CC]" else baseDisplay
                                     val mime = when {
                                         fileName.endsWith(".vtt", ignoreCase = true) || subUrl.contains(".vtt", ignoreCase = true) -> "text/vtt"
@@ -192,7 +327,7 @@ class SubtitleResolver(
                                                 subUrl.contains(".ass", ignoreCase = true) || subUrl.contains(".ssa", ignoreCase = true) -> "text/x-ssa"
                                         else -> "application/x-subrip"
                                     }
-                                    results.add(SubtitleTrack(label = display, language = lang, url = subUrl, mimeType = mime))
+                                    results.add(SubtitleTrack(label = display, language = normLang, url = subUrl, mimeType = mime))
                                 }
                             }
                         }
@@ -241,46 +376,38 @@ class SubtitleResolver(
             allRaw = wyzieFb.await() + stremioFb.await()
         }
 
-        // Deduplicate and rank tracks cleanly
+        // Deduplicate strictly by URL to retain all distinct subtitle tracks
         val seenUrls = mutableSetOf<String>()
-        val langCounts = mutableMapOf<String, Int>()
-        val filtered = mutableListOf<SubtitleTrack>()
-
+        val uniqueTracks = mutableListOf<SubtitleTrack>()
         for (sub in allRaw) {
-            if (!seenUrls.add(sub.url)) continue
-            val normLang = when (sub.language.lowercase()) {
-                "eng" -> "en"
-                "spa" -> "es"
-                "fre", "fra" -> "fr"
-                "ger", "deu" -> "de"
-                "ita" -> "it"
-                "por", "pob" -> "pt"
-                "rus" -> "ru"
-                "jpn" -> "ja"
-                "kor" -> "ko"
-                "chi", "zho" -> "zh"
-                "hin" -> "hi"
-                "ara" -> "ar"
-                "tur" -> "tr"
-                "dut", "nld" -> "nl"
-                "pol" -> "pl"
-                "swe" -> "sv"
-                "ell", "gre" -> "el"
-                else -> sub.language.lowercase()
-            }
-
-            // Keep up to 2 distinct tracks for English (e.g. Standard and CC), and 1 best track for other languages
-            val maxAllowed = if (normLang == "en") 2 else 1
-            val count = langCounts.getOrDefault(normLang, 0)
-            if (count < maxAllowed) {
-                langCounts[normLang] = count + 1
-                filtered.add(sub)
+            if (sub.url.isNotBlank() && seenUrls.add(sub.url)) {
+                uniqueTracks.add(sub)
             }
         }
 
-        // Sort: English first, then alphabetical by label
-        filtered.sortedWith(compareBy<SubtitleTrack> {
-            if (it.language.startsWith("en", ignoreCase = true)) 0 else 1
-        }.thenBy { it.label })
+        // Disambiguate duplicate labels so users can distinguish each track (e.g. Spanish, Spanish #2, English, English [CC], English #2)
+        val labelCounts = mutableMapOf<String, Int>()
+        val disambiguated = mutableListOf<SubtitleTrack>()
+        for (sub in uniqueTracks) {
+            val base = sub.label.trim()
+            val count = labelCounts.getOrDefault(base, 0) + 1
+            labelCounts[base] = count
+            val finalLabel = if (count > 1) {
+                if (base.contains("#")) "$base-$count" else "$base #$count"
+            } else {
+                base
+            }
+            disambiguated.add(sub.copy(label = finalLabel))
+        }
+
+        // Sort: English first (Standard then CC), then alphabetical by label
+        disambiguated.sortedWith(
+            compareBy<SubtitleTrack> {
+                val isEn = it.language.startsWith("en", ignoreCase = true) || it.label.contains("English", ignoreCase = true)
+                if (!isEn) 2
+                else if (it.label.contains("[CC]", ignoreCase = true)) 1
+                else 0
+            }.thenBy { it.label }
+        )
     }
 }

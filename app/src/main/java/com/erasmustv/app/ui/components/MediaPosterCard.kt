@@ -1,50 +1,47 @@
 package com.erasmustv.app.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
-import com.erasmustv.app.core.theme.PitchBlack
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.erasmustv.app.core.config.AppConfig
+import com.erasmustv.app.core.theme.ErasmusDimens
+import com.erasmustv.app.core.theme.ErasmusShapes
 import com.erasmustv.app.core.theme.ErasmusTvTypography
 import com.erasmustv.app.core.theme.FocusWhite
-import com.erasmustv.app.core.theme.RatingGold
-import com.erasmustv.app.core.theme.SurfaceCard
-import com.erasmustv.app.core.theme.TextMuted
+import com.erasmustv.app.core.theme.PitchBlack
 import com.erasmustv.app.core.theme.TextPrimary
-import com.erasmustv.app.core.theme.TextSecondary
+import com.erasmustv.app.core.theme.TvMotion
 import com.erasmustv.app.data.model.MediaItem
 
-import androidx.compose.ui.semantics.Role
-
 /**
- * Movie & TV Poster Card.
- * Artwork-dominated presentation with clean 2:3 ratio, sharp square geometry,
- * subtle surface borders, and understated metadata beneath the poster.
+ * ERASMUS CARD TYPE 2 — the vertical poster card.
+ *
+ * This is the card used by *everything* except Continue Watching: trending,
+ * Top 10, genre shelves, search results, recommendations, watch list, studio
+ * catalogues. Its 2:3 artwork is the dominant element; the title and metadata
+ * beneath it are intentionally quiet supporting detail.
+ *
+ * @param cardWidth artwork width; height follows from the fixed 2:3 ratio.
+ *   Pass [Dp.Unspecified] inside a grid to let the card fill its cell instead.
+ * @param rank surfaced to accessibility only — the visible numeral for Top 10
+ *   rails is drawn by [RankedSectionRow], not stamped onto the artwork.
+ * @param badge optional short overline such as `NEW`. Left null for most rails.
  */
 @Composable
 fun MediaPosterCard(
@@ -52,155 +49,94 @@ fun MediaPosterCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     cardModifier: Modifier = Modifier,
-    cardWidth: Int = 138,
+    cardWidth: Dp = ErasmusDimens.PosterCardWidth,
     rank: Int? = null,
-    badge: String? = null
+    badge: String? = null,
+    showMetadata: Boolean = true
 ) {
-    val context = LocalContext.current
-    val imageRequest = remember(item.posterPath) {
-        ImageRequest.Builder(context)
-            .data(AppConfig.posterUrl(item.posterPath))
-            .crossfade(200)
-            .build()
-    }
+    val imageRequest = rememberCardImageRequest(AppConfig.posterUrl(item.posterPath))
 
     val a11yDescription = remember(item, rank, badge) {
         buildString {
-            if (rank != null) {
-                append("Number $rank, ")
-            }
-            if (badge != null) {
-                append("$badge, ")
-            }
+            if (rank != null) append("Number $rank, ")
+            if (badge != null) append("$badge, ")
             append(item.title)
             append(if (item.isTv) ", TV Series" else ", Movie")
             item.year?.let { append(", $it") }
             if (item.voteAverage != null && item.voteAverage > 0) {
-                append(", rated ${item.ratingFormatted} stars")
+                append(", rated ${item.ratingFormatted} out of 10")
             }
         }
     }
 
-    Column(
-        modifier = modifier.width(cardWidth.dp)
-    ) {
+    // Rails give the card an explicit width; grids let the cell decide.
+    val widthModifier = if (cardWidth == Dp.Unspecified) {
+        Modifier.fillMaxWidth()
+    } else {
+        Modifier.width(cardWidth)
+    }
+
+    Column(modifier = modifier.then(widthModifier)) {
         TvFocusableCard(
             onClick = onClick,
             modifier = cardModifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f),
-            shape = RectangleShape,
-            focusedScale = com.erasmustv.app.core.theme.TvMotion.FocusScaleCard,
+            shape = ErasmusShapes.Card,
+            focusedScale = TvMotion.FocusScaleCard,
             focusedBorderColor = FocusWhite,
             focusedBorderWidth = 1.5.dp,
             contentDescription = a11yDescription,
             role = Role.Button
         ) { isFocused ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RectangleShape)
-                    .background(
-                        androidx.compose.ui.graphics.Brush.verticalGradient(
-                            listOf(
-                                if (isFocused) Color(0xFF1E1E28) else Color(0xFF141418),
-                                if (isFocused) Color(0xFF131318) else Color(0xFF0C0C0F)
-                            )
-                        )
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = if (isFocused) Color.Transparent else com.erasmustv.app.core.theme.SurfaceCardBorder,
-                        shape = RectangleShape
-                    )
+            ErasmusCardArtwork(
+                model = imageRequest,
+                isFocused = isFocused,
+                shape = ErasmusShapes.Card,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                AsyncImage(
-                    model = imageRequest,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // Restrained corner badge (e.g., NEW, TOP 10)
                 if (!badge.isNullOrBlank()) {
-                    Box(
+                    PosterBadge(
+                        text = badge,
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .padding(6.dp)
-                            .background(PitchBlack.copy(alpha = 0.85f), RectangleShape)
-                            .border(1.dp, Color(0x33FFFFFF), RectangleShape)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = badge,
-                            style = ErasmusTvTypography.Badge.copy(
-                                fontSize = 9.5.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.5.sp
-                            ),
-                            color = if (badge == "TOP 10") RatingGold else Color.White
-                        )
-                    }
+                            .padding(7.dp)
+                    )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(7.dp))
-
-        // Title Line
-        Text(
-            text = item.title,
-            style = ErasmusTvTypography.CardTitle,
-            color = TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-
-        Spacer(modifier = Modifier.height(2.dp))
-
-        // Metadata Line: ★ 6.7 · 2026 · Movie
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            if (item.voteAverage != null && item.voteAverage > 0) {
-                Text(
-                    text = "★ ${item.ratingFormatted}",
-                    style = ErasmusTvTypography.Badge.copy(
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    color = RatingGold,
-                    maxLines = 1
-                )
-                Text(
-                    text = " · ",
-                    style = ErasmusTvTypography.Badge.copy(fontSize = 12.sp),
-                    color = TextMuted
-                )
-            }
-
-            item.year?.let { y ->
-                Text(
-                    text = y,
-                    style = ErasmusTvTypography.Badge.copy(fontSize = 12.sp),
-                    color = TextSecondary,
-                    maxLines = 1
-                )
-                Text(
-                    text = " · ",
-                    style = ErasmusTvTypography.Badge.copy(fontSize = 12.sp),
-                    color = TextMuted
-                )
-            }
-
-            Text(
-                text = if (item.isTv) "Series" else "Movie",
-                style = ErasmusTvTypography.Badge.copy(fontSize = 12.sp),
-                color = TextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+        if (showMetadata) {
+            Spacer(modifier = Modifier.height(ErasmusDimens.CardMetadataGap))
+            ErasmusCardTitle(title = item.title)
+            Spacer(modifier = Modifier.height(3.dp))
+            ErasmusCardMetadata(item = item)
         }
+    }
+}
+
+/**
+ * A short overline marker (`NEW`) on poster artwork. Small, rounded, and
+ * near-black so it labels the poster without becoming a graphic element.
+ */
+@Composable
+private fun PosterBadge(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(PitchBlack.copy(alpha = 0.72f), ErasmusShapes.CardSmall)
+            .padding(horizontal = 6.dp, vertical = 2.5.dp)
+    ) {
+        Text(
+            text = text,
+            style = ErasmusTvTypography.Badge.copy(
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.8.sp
+            ),
+            color = TextPrimary.copy(alpha = 0.92f)
+        )
     }
 }

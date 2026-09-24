@@ -11,6 +11,8 @@ import com.erasmustv.app.data.model.WatchProvider
 import com.erasmustv.app.data.remote.OmdbApiService
 import com.erasmustv.app.data.remote.OmdbResponse
 import com.erasmustv.app.data.remote.TmdbApiService
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import java.util.Locale
 
 class MediaRepository(
@@ -19,7 +21,22 @@ class MediaRepository(
 ) {
     private val apiKey = AppConfig.TMDB_API_KEY
     private val omdbApiKey = AppConfig.OMDB_API_KEY.ifBlank { "trilogy" }
-    private val logoCache = java.util.concurrent.ConcurrentHashMap<String, String?>()
+    // Artwork lookup caches.
+    //
+    // Values are non-null with `""` standing for "looked this up, there is
+    // nothing". `ConcurrentHashMap` throws on a null value, so the previous
+    // `<String, String?>` maps threw inside their enclosing `runCatching` every
+    // time a title had no logo — a miss was never cached, and every hero slide
+    // re-requested the same absent artwork on every single visit.
+    private val logoCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val titledBackdropCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val taglineCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** Reads a sentinel-backed cache: absent → null, `""` → known-absent → null. */
+    private fun cached(
+        cache: java.util.concurrent.ConcurrentHashMap<String, String>,
+        key: String
+    ): String? = cache[key]?.takeIf { it.isNotBlank() }
 
     suspend fun resolveRatings(
         voteAverage: Double?,
@@ -99,19 +116,177 @@ class MediaRepository(
         return listOf(tmdbRating, imdbRating, rtRating, metaRating)
     }
 
+    /**
+     * Resolves the title's own logo artwork (the "title treatment").
+     *
+     * Two passes, because one is not enough:
+     *
+     *  1. `en,null` — an English logo, or a language-neutral one.
+     *  2. **Every** language TMDB holds. Anime and other non-English titles
+     *     frequently carry no English logo at all, only the original Japanese
+     *     (or French, Korean…) one. That original logo is the real thing and is
+     *     exactly what should be shown; falling back to plain text instead was
+     *     why so many anime and older shows rendered as a bare string.
+     *
+     * Raster files are preferred over `.svg` within an equally-ranked group:
+     * both render (an SVG decoder is registered), but a PNG costs a fraction of
+     * the work to decode on a TV chipset.
+     */
     suspend fun getMediaLogo(mediaType: String, id: String): Result<String?> = runCatching {
         val mType = if (mediaType.equals("tv", ignoreCase = true)) "tv" else "movie"
         val cacheKey = "$mType:$id"
         if (logoCache.containsKey(cacheKey)) {
-            return@runCatching logoCache[cacheKey]
+            return@runCatching cached(logoCache, cacheKey)
         }
-        val response = tmdbApi.getMediaImages(mType, id, apiKey, "en,null")
-        val enLogos = response.logos.filter { it.iso6391 == "en" }
-        val bestLogo = (enLogos.ifEmpty { response.logos })
-            .maxByOrNull { (it.voteAverage ?: 0.0) * 10 + (it.voteCount ?: 0) }
-            ?.filePath
-        logoCache[cacheKey] = bestLogo
+
+        var logos = tmdbApi.getMediaImages(mType, id, apiKey, "en,null").logos
+        if (logos.isEmpty()) {
+            // Omitting the language filter entirely is what returns the
+            // original-language logo.
+            logos = runCatching {
+                tmdbApi.getMediaImages(mType, id, apiKey, null).logos
+            }.getOrDefault(emptyList())
+        }
+
+        val bestLogo = pickBestLogo(logos)
+        logoCache[cacheKey] = bestLogo.orEmpty()
         bestLogo
+    }
+
+    /**
+     * Ranks logo candidates: English first, then language-neutral, then any
+     * original-language artwork. Within a group, raster before vector, then by
+     * community score.
+     */
+    private fun pickBestLogo(logos: List<com.erasmustv.app.data.remote.TmdbLogoItem>): String? {
+        if (logos.isEmpty()) return null
+
+        fun rank(items: List<com.erasmustv.app.data.remote.TmdbLogoItem>) =
+            items.sortedWith(
+                compareByDescending<com.erasmustv.app.data.remote.TmdbLogoItem> {
+                    !it.filePath.endsWith(".svg", ignoreCase = true)
+                }.thenByDescending { (it.voteAverage ?: 0.0) * 10 + (it.voteCount ?: 0) }
+            )
+
+        val english = logos.filter { it.iso6391 == "en" }
+        val neutral = logos.filter { it.iso6391 == null }
+        val rest = logos.filter { it.iso6391 != null && it.iso6391 != "en" }
+
+        return rank(english).firstOrNull()?.filePath
+            ?: rank(neutral).firstOrNull()?.filePath
+            ?: rank(rest).firstOrNull()?.filePath
+    }
+
+    /**
+     * A backdrop that already has the title treatment printed on it, for the
+     * landscape Continue Watching cards.
+     *
+     * TMDB tags a backdrop with a language exactly when it contains text, and
+     * leaves `iso_639_1` null for the clean, textless artwork used behind heroes.
+     * So "find a thumbnail that has the logo in it" is a matter of asking for the
+     * language-tagged backdrops rather than compositing anything: the logo is
+     * part of the original image as the studio published it.
+     *
+     * Returns null when a title has no such artwork, and the caller keeps the
+     * plain backdrop — never a synthetic overlay.
+     */
+    suspend fun getTitledBackdrop(mediaType: String, id: String): Result<String?> = runCatching {
+        val mType = if (mediaType.equals("tv", ignoreCase = true)) "tv" else "movie"
+        val cacheKey = "$mType:$id"
+        if (titledBackdropCache.containsKey(cacheKey)) {
+            return@runCatching cached(titledBackdropCache, cacheKey)
+        }
+
+        val backdrops = tmdbApi.getMediaImages(mType, id, apiKey, "en").backdrops
+        val best = backdrops
+            .filter { it.iso6391 != null }
+            .sortedWith(
+                compareByDescending<com.erasmustv.app.data.remote.TmdbImageItem> {
+                    (it.voteAverage ?: 0.0) * 10 + (it.voteCount ?: 0)
+                }.thenByDescending { it.width ?: 0 }
+            )
+            .firstOrNull()
+            ?.filePath
+
+        titledBackdropCache[cacheKey] = best.orEmpty()
+        best
+    }
+
+    /**
+     * Replaces an item's artwork with whatever TMDB currently serves.
+     *
+     * Necessary because hand-written artwork paths rot. TMDB reissues image file
+     * paths when artwork is replaced, and the old path then 404s — which is why
+     * the curated anime carousel rendered on a black background: every one of its
+     * six hardcoded backdrops had been superseded upstream, so the hero had
+     * nothing to draw. Anything hardcoded here is treated as a *last resort*,
+     * used only if the live lookup fails outright.
+     *
+     * The logo comes back from the same request (details already appends the
+     * images response), so this doubles as logo enrichment and [withLogos] then
+     * has nothing left to fetch for these items.
+     */
+    suspend fun refreshArtwork(items: List<MediaItem>): List<MediaItem> {
+        if (items.isEmpty()) return items
+        return coroutineScope {
+            items.map { item ->
+                async {
+                    runCatching {
+                        if (item.mediaType.equals("tv", ignoreCase = true) || item.isTv) {
+                            val live = getTvDetails(item.id).getOrNull() ?: return@runCatching item
+                            item.copy(
+                                posterPath = live.posterPath ?: item.posterPath,
+                                backdropPath = live.backdropPath ?: item.backdropPath,
+                                logoPath = live.logoPath ?: item.logoPath
+                            )
+                        } else {
+                            val live = getMovieDetails(item.id).getOrNull() ?: return@runCatching item
+                            item.copy(
+                                posterPath = live.posterPath ?: item.posterPath,
+                                backdropPath = live.backdropPath ?: item.backdropPath,
+                                logoPath = live.logoPath ?: item.logoPath
+                            )
+                        }
+                    }.getOrDefault(item)
+                }
+            }.map { it.await() }
+        }
+    }
+
+    /**
+     * Fills in logos for the first [limit] items of a feed, concurrently.
+     *
+     * The hero is a carousel of five, but only its first slide was ever given a
+     * logo — every other slide fell back to plain text. Enrichment is done in
+     * parallel because five sequential round trips before a page can render is
+     * exactly the kind of wait that makes a TV app feel broken.
+     */
+    suspend fun withLogos(items: List<MediaItem>, limit: Int = 5): List<MediaItem> {
+        if (items.isEmpty()) return items
+        return coroutineScope {
+            val enriched = items.take(limit).map { item ->
+                async {
+                    if (!item.logoPath.isNullOrBlank()) item
+                    else item.copy(logoPath = getMediaLogo(item.mediaType, item.id).getOrNull())
+                }
+            }.map { it.await() }
+            enriched + items.drop(limit)
+        }
+    }
+
+    suspend fun getMediaTagline(mediaType: String, id: String): Result<String?> = runCatching {
+        val mType = if (mediaType.equals("tv", ignoreCase = true)) "tv" else "movie"
+        val cacheKey = "$mType:$id"
+        if (taglineCache.containsKey(cacheKey)) {
+            return@runCatching cached(taglineCache, cacheKey)
+        }
+        val tagline = if (mType == "tv") {
+            getTvDetails(id).getOrNull()?.tagline
+        } else {
+            getMovieDetails(id).getOrNull()?.tagline
+        }
+        taglineCache[cacheKey] = tagline.orEmpty()
+        tagline
     }
 
     suspend fun getTrending(): Result<List<MediaItem>> = runCatching {
@@ -265,16 +440,16 @@ class MediaRepository(
 
     suspend fun getMovieDetails(id: String): Result<MovieDetails> = runCatching {
         val raw = tmdbApi.getMovieDetails(id, apiKey)
-        val bestLogo = raw.images?.logos?.let { logos ->
-            val enLogos = logos.filter { it.iso6391 == "en" }
-            (enLogos.ifEmpty { logos })
-                .maxByOrNull { (it.voteAverage ?: 0.0) * 10 + (it.voteCount ?: 0) }
-                ?.filePath
-        }
+        // Same ranking as the standalone lookup, so a title's logo does not
+        // change depending on which screen asked for it.
+        val bestLogo = raw.images?.logos?.let { pickBestLogo(it) }
         if (bestLogo != null) {
             logoCache["movie:${raw.id}"] = bestLogo
         }
-        val logo = bestLogo ?: logoCache["movie:${raw.id}"]
+        val logo = bestLogo ?: cached(logoCache, "movie:${raw.id}")
+        if (!raw.tagline.isNullOrBlank()) {
+            taglineCache["movie:${raw.id}"] = raw.tagline
+        }
 
         val ratings = resolveRatings(
             voteAverage = raw.voteAverage,
@@ -310,16 +485,14 @@ class MediaRepository(
 
     suspend fun getTvDetails(id: String): Result<TvDetails> = runCatching {
         val raw = tmdbApi.getTvDetails(id, apiKey)
-        val bestLogo = raw.images?.logos?.let { logos ->
-            val enLogos = logos.filter { it.iso6391 == "en" }
-            (enLogos.ifEmpty { logos })
-                .maxByOrNull { (it.voteAverage ?: 0.0) * 10 + (it.voteCount ?: 0) }
-                ?.filePath
-        }
+        val bestLogo = raw.images?.logos?.let { pickBestLogo(it) }
         if (bestLogo != null) {
             logoCache["tv:${raw.id}"] = bestLogo
         }
-        val logo = bestLogo ?: logoCache["tv:${raw.id}"]
+        val logo = bestLogo ?: cached(logoCache, "tv:${raw.id}")
+        if (!raw.tagline.isNullOrBlank()) {
+            taglineCache["tv:${raw.id}"] = raw.tagline
+        }
 
         val imdbId = raw.externalIds?.imdbId
         val ratings = resolveRatings(
@@ -371,27 +544,6 @@ class MediaRepository(
 
     suspend fun getTvGenres(): Result<List<Genre>> = runCatching {
         tmdbApi.getTvGenres(apiKey).genres
-    }
-
-    suspend fun getStudioContent(providerId: Int, page: Int = 1): Result<Pair<List<MediaItem>, List<MediaItem>>> = runCatching {
-        val provStr = providerId.toString()
-        val movies = tmdbApi.discoverMovie(
-            apiKey = apiKey,
-            withWatchProviders = provStr,
-            watchRegion = "US",
-            sortBy = "popularity.desc",
-            page = page
-        ).results.map { it.copy(mediaType = "movie") }
-
-        val tv = tmdbApi.discoverTv(
-            apiKey = apiKey,
-            withWatchProviders = provStr,
-            watchRegion = "US",
-            sortBy = "popularity.desc",
-            page = page
-        ).results.map { it.copy(mediaType = "tv") }
-
-        Pair(movies, tv)
     }
 
     suspend fun discoverByGenre(

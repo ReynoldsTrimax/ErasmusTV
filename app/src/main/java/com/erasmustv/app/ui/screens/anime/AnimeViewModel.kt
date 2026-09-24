@@ -137,18 +137,41 @@ class AnimeViewModel(
             val shonen = shonenResult.getOrDefault(emptyList()).ifEmpty { SEED_FEATURED_ANIME }
             val movies = moviesResult.getOrDefault(emptyList())
 
-            // Attack on Titan as the premier hero matching bingr.one/anime
-            val heroItem = trending.find { it.id == "1429" || it.title.contains("Titan", ignoreCase = true) }
-                ?: SEED_ATTACK_ON_TITAN
+            // ----------------------------------------------------------------
+            // Featured carousel, sourced live from TMDB.
+            //
+            // It used to be six hardcoded titles with hardcoded artwork paths,
+            // every one of which had rotted upstream. Taking the head of the
+            // trending list instead means the page follows what is actually
+            // popular and can never again point at artwork that no longer exists.
+            //
+            // The rating floor exists because raw "popular Japanese animation"
+            // includes thin, barely-rated entries that have no business being a
+            // full-screen billboard; a backdrop is required for the same reason.
+            // ----------------------------------------------------------------
+            val featuredCandidates = trending
+                .filter {
+                    !it.backdropPath.isNullOrBlank() &&
+                        (it.voteAverage ?: 0.0) >= 7.5 &&
+                        !it.overview.isNullOrBlank()
+                }
+                .take(5)
 
-            val featuredList = listOf(
-                SEED_ATTACK_ON_TITAN,
-                SEED_DEMON_SLAYER,
-                SEED_JUJUTSU_KAISEN,
-                SEED_BLEACH,
-                SEED_DEATH_NOTE,
-                SEED_CHAINSAW_MAN
-            )
+            val featuredList = if (featuredCandidates.isNotEmpty()) {
+                // Trending entries already carry live artwork from the list
+                // endpoint, so only logos need fetching.
+                mediaRepository.withLogos(featuredCandidates, limit = featuredCandidates.size)
+            } else {
+                // Offline or an upstream failure: fall back to the curated seeds,
+                // refreshing their artwork since their hardcoded paths are dead.
+                val seeds = SEED_FEATURED_ANIME.take(5)
+                mediaRepository.withLogos(
+                    mediaRepository.refreshArtwork(seeds),
+                    limit = seeds.size
+                )
+            }
+
+            val heroItem = featuredList.firstOrNull() ?: SEED_ATTACK_ON_TITAN
 
             _uiState.value = AnimeUiState.Success(
                 AnimeFeedData(

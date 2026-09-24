@@ -2,7 +2,6 @@ package com.erasmustv.app.ui.screens.player
 
 import android.view.KeyEvent
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,6 +42,8 @@ import com.erasmustv.app.core.theme.FocusWhite
 import com.erasmustv.app.core.theme.SurfaceElevated
 import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
+import com.erasmustv.app.core.theme.TvSpring
+import com.erasmustv.app.core.theme.floatSpec
 
 @Composable
 fun TvPlayerTopBar(
@@ -318,13 +319,11 @@ fun TvPlayerButton(
         }
     }
 
-    // High visual fidelity magnification on TV focus without boxy borders or background morphism
+    // Focus magnification on the snappiest spring in the vocabulary: during
+    // playback this is the only thing on screen telling you where you are.
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.20f else 1.0f,
-        animationSpec = tween(
-            durationMillis = 120,
-            easing = androidx.compose.animation.core.FastOutSlowInEasing
-        ),
+        animationSpec = TvSpring.FocusFast.floatSpec(),
         label = "buttonScale"
     )
 

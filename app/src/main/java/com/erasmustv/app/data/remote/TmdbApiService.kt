@@ -79,7 +79,10 @@ interface TmdbApiService {
         @Path("media_type") mediaType: String,
         @Path("id") id: String,
         @Query("api_key") apiKey: String,
-        @Query("include_image_language") imageLanguage: String = "en,null"
+        // Nullable so the filter can be omitted entirely: TMDB then returns
+        // artwork in every language it holds, which is the only way to reach a
+        // title's original-language logo when no English one exists.
+        @Query("include_image_language") imageLanguage: String? = "en,null"
     ): TmdbImagesResponse
 
     @GET("trending/{media_type}/{time_window}")

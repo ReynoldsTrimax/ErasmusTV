@@ -95,7 +95,22 @@ class AuthRepository(
             return tryRefresh(refreshToken)
         }
 
-        // Token is not expired according to timestamp. Verify with Supabase.
+        // Token is still valid by its own expiry (with a 60s safety buffer), and
+        // the expired case is already handled by the refresh branch above. Firing
+        // a network getUser() here would hit Supabase Auth on every cold start for
+        // no functional gain: the JWT is self-validating and RLS re-verifies it on
+        // the next data call anyway. Trust the cached identity so a normal launch
+        // costs zero Supabase egress.
+        val cachedUserId = sessionManager.getUserId()
+        if (!cachedUserId.isNullOrBlank()) {
+            return SessionCheckResult.Authenticated(
+                user = AuthUser(id = cachedUserId, email = sessionManager.getUserEmail()),
+                accessToken = accessToken
+            )
+        }
+
+        // No cached identity yet (first launch right after install/restore): make a
+        // single verification call to populate it, then it is cached thereafter.
         return try {
             val user = supabaseApi.getUser()
             SessionCheckResult.Authenticated(user = user, accessToken = accessToken)

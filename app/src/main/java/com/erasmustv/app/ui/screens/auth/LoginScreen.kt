@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.erasmustv.app.core.theme.BorderHairline
 import com.erasmustv.app.core.theme.ElectricBlue
+import com.erasmustv.app.core.theme.ErasmusShapes
+import com.erasmustv.app.core.theme.ErasmusSpacing
 import com.erasmustv.app.core.theme.ErasmusTvTypography
 import com.erasmustv.app.core.theme.ErrorRed
 import com.erasmustv.app.core.theme.FocusWhite
@@ -70,6 +72,8 @@ import com.erasmustv.app.core.theme.SurfaceDark
 import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
+import com.erasmustv.app.ui.components.ErasmusActionButton
+import com.erasmustv.app.ui.components.ErasmusButtonStyle
 import com.erasmustv.app.ui.components.TvFocusableCard
 
 @Composable
@@ -192,7 +196,7 @@ fun LoginScreen(
                         .background(ElectricBlue)
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(ErasmusSpacing.Large))
 
                 Text(
                     text = "Cinema Engineered\nfor Television.",
@@ -219,7 +223,7 @@ fun LoginScreen(
 
                 // Feature Highlights
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.Medium),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     FeaturePill(text = "4K HDR")
@@ -232,8 +236,8 @@ fun LoginScreen(
             Box(
                 modifier = Modifier
                     .width(450.dp)
-                    .background(SurfaceDark, RectangleShape)
-                    .border(1.dp, BorderHairline, RectangleShape)
+                    .background(SurfaceDark, ErasmusShapes.CardLarge)
+                    .border(1.dp, BorderHairline, ErasmusShapes.CardLarge)
                     .padding(horizontal = 30.dp, vertical = 20.dp)
             ) {
                 Column(
@@ -267,17 +271,17 @@ fun LoginScreen(
                             )
                         )
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(ErasmusSpacing.XSmall))
 
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(44.dp)
-                                .background(if (isEmailFocused) Color(0x14FFFFFF) else PitchBlack, RectangleShape)
+                                .background(if (isEmailFocused) Color(0x14FFFFFF) else PitchBlack, ErasmusShapes.Input)
                                 .border(
                                     width = if (isEmailFocused) 1.5.dp else 1.dp,
                                     color = if (isEmailFocused) FocusWhite else BorderHairline,
-                                    shape = RectangleShape
+                                    shape = ErasmusShapes.Input
                                 )
                                 .padding(horizontal = 14.dp),
                             contentAlignment = Alignment.CenterStart
@@ -351,17 +355,17 @@ fun LoginScreen(
                             )
                         )
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(ErasmusSpacing.XSmall))
 
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(44.dp)
-                                .background(if (isPasswordFocused) Color(0x14FFFFFF) else PitchBlack, RectangleShape)
+                                .background(if (isPasswordFocused) Color(0x14FFFFFF) else PitchBlack, ErasmusShapes.Input)
                                 .border(
                                     width = if (isPasswordFocused) 1.5.dp else 1.dp,
                                     color = if (isPasswordFocused) FocusWhite else BorderHairline,
-                                    shape = RectangleShape
+                                    shape = ErasmusShapes.Input
                                 )
                                 .padding(horizontal = 14.dp),
                             contentAlignment = Alignment.CenterStart
@@ -430,15 +434,15 @@ fun LoginScreen(
 
                     // User-facing Error Banner
                     if (uiState is LoginUiState.Error) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(ErasmusSpacing.Small))
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(ErrorRed.copy(alpha = 0.12f), RectangleShape)
-                                .border(1.dp, ErrorRed.copy(alpha = 0.4f), RectangleShape)
+                                .background(ErrorRed.copy(alpha = 0.12f), ErasmusShapes.CardSmall)
+                                .border(1.dp, ErrorRed.copy(alpha = 0.4f), ErasmusShapes.CardSmall)
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.Small)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Info,
@@ -462,7 +466,7 @@ fun LoginScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(40.dp)
-                                .background(SurfaceDark, RectangleShape),
+                                .background(SurfaceDark, ErasmusShapes.Button),
                             horizontalArrangement = Arrangement.Center,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -478,50 +482,23 @@ fun LoginScreen(
                             )
                         }
                     } else {
-                        TvFocusableCard(
+                        ErasmusActionButton(
+                            text = "Sign In",
                             onClick = { viewModel.login(onLoginSuccess) },
-                            focusedScale = 1.025f,
-                            focusedBorderWidth = 1.5.dp,
-                            focusedBorderColor = FocusWhite,
-                            shape = RectangleShape,
+                            style = ErasmusButtonStyle.Primary,
+                            height = 40.dp,
+                            onNavigateUp = { passwordRequester.requestFocus() },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(signInRequester)
-                                .onKeyEvent { keyEvent ->
-                                    if (keyEvent.type == KeyEventType.KeyDown) {
-                                        when (keyEvent.key) {
-                                            Key.DirectionUp -> {
-                                                passwordRequester.requestFocus()
-                                                true
-                                            }
-                                            else -> false
-                                        }
-                                    } else false
-                                }
-                        ) { isFocused ->
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(
-                                        if (isFocused) Color.White else Color(0xFFE0E0E0),
-                                        RectangleShape
-                                    )
-                                    .padding(vertical = 10.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "Sign In",
-                                    style = ErasmusTvTypography.ButtonText.copy(fontSize = 13.sp),
-                                    color = PitchBlack,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
+                        )
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(ErasmusSpacing.Small))
 
                     // Sign in with Google Option
+                    // Kept bespoke: the Google "G" badge is a composable glyph, not an
+                    // ImageVector, so it cannot be passed to ErasmusActionButton(icon=).
                     TvFocusableCard(
                         onClick = {
                             try {
@@ -531,7 +508,8 @@ fun LoginScreen(
                         focusedScale = 1.025f,
                         focusedBorderWidth = 1.5.dp,
                         focusedBorderColor = FocusWhite,
-                        shape = RectangleShape,
+                        shape = ErasmusShapes.Button,
+                        contentDescription = "Sign in with Google",
                         modifier = Modifier.fillMaxWidth()
                     ) { isFocused ->
                         Row(
@@ -539,12 +517,12 @@ fun LoginScreen(
                                 .fillMaxWidth()
                                 .background(
                                     if (isFocused) Color.White.copy(alpha = 0.15f) else SurfaceDark,
-                                    RectangleShape
+                                    ErasmusShapes.Button
                                 )
                                 .border(
                                     width = 1.dp,
                                     color = if (isFocused) Color.Transparent else BorderHairline,
-                                    shape = RectangleShape
+                                    shape = ErasmusShapes.Button
                                 )
                                 .padding(vertical = 9.dp),
                             horizontalArrangement = Arrangement.Center,
@@ -560,39 +538,16 @@ fun LoginScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(ErasmusSpacing.Small))
 
                     // Continue as Guest Option
-                    TvFocusableCard(
+                    ErasmusActionButton(
+                        text = "Continue as Guest",
                         onClick = { viewModel.continueAsGuest(onLoginSuccess) },
-                        focusedScale = 1.025f,
-                        focusedBorderWidth = 1.5.dp,
-                        focusedBorderColor = FocusWhite,
-                        shape = RectangleShape,
+                        style = ErasmusButtonStyle.Secondary,
+                        height = 40.dp,
                         modifier = Modifier.fillMaxWidth()
-                    ) { isFocused ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(
-                                    if (isFocused) Color.White.copy(alpha = 0.12f) else PitchBlack,
-                                    RectangleShape
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isFocused) Color.Transparent else BorderHairline,
-                                    shape = RectangleShape
-                                )
-                                .padding(vertical = 9.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "Continue as Guest",
-                                style = ErasmusTvTypography.ButtonText.copy(fontSize = 13.sp),
-                                color = if (isFocused) Color.White else TextMuted
-                            )
-                        }
-                    }
+                    )
                 }
             }
         }
@@ -604,7 +559,7 @@ private fun GoogleIconBadge() {
     Box(
         modifier = Modifier
             .size(20.dp)
-            .background(Color.White, RectangleShape),
+            .background(Color.White, CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -622,8 +577,8 @@ private fun GoogleIconBadge() {
 private fun FeaturePill(text: String) {
     Box(
         modifier = Modifier
-            .background(SurfaceDark, RectangleShape)
-            .border(1.dp, BorderHairline, RectangleShape)
+            .background(SurfaceDark, ErasmusShapes.Button)
+            .border(1.dp, BorderHairline, ErasmusShapes.Button)
             .padding(horizontal = 14.dp, vertical = 6.dp)
     ) {
         Text(

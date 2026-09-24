@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
@@ -29,6 +28,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.erasmustv.app.core.theme.BorderHairline
+import com.erasmustv.app.core.theme.ErasmusShapes
+import com.erasmustv.app.core.theme.ErasmusSpacing
 import com.erasmustv.app.core.theme.ErasmusTvTypography
 import com.erasmustv.app.core.theme.FocusWhite
 import com.erasmustv.app.core.theme.PitchBlack
@@ -46,13 +47,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import com.erasmustv.app.ui.components.ErasmusActionButton
+import com.erasmustv.app.ui.components.ErasmusButtonStyle
 import com.erasmustv.app.ui.components.TvFocusableCard
 
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.graphics.Color
@@ -140,7 +142,7 @@ fun ProfilePickerScreen(
                         style = ErasmusTvTypography.BillboardTitle.copy(fontSize = 30.sp),
                         color = TextPrimary
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(ErasmusSpacing.Small))
                     Text(
                         text = "Select a profile to start streaming",
                         style = ErasmusTvTypography.Body.copy(fontSize = 13.sp),
@@ -159,14 +161,14 @@ fun ProfilePickerScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(110.dp)
-                                        .background(SurfaceElevated)
-                                        .border(1.dp, BorderHairline)
+                                        .background(SurfaceElevated, ErasmusShapes.Tile)
+                                        .border(1.dp, BorderHairline, ErasmusShapes.Tile)
                                 )
                                 Box(
                                     modifier = Modifier
                                         .width(70.dp)
                                         .height(14.dp)
-                                        .background(SurfaceElevated)
+                                        .background(SurfaceElevated, ErasmusShapes.CardSmall)
                                 )
                             }
                         }
@@ -196,67 +198,32 @@ fun ProfilePickerScreen(
                         style = ErasmusTvTypography.BillboardTitle.copy(fontSize = 24.sp),
                         color = TextPrimary
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(ErasmusSpacing.Small))
                     Text(
                         text = state.message,
                         style = ErasmusTvTypography.Body.copy(fontSize = 13.sp),
                         color = TextSecondary
                     )
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(ErasmusSpacing.XLarge))
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.Medium),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TvFocusableCard(
+                        ErasmusActionButton(
+                            text = "Retry",
                             onClick = { viewModel.loadProfiles() },
-                            shape = RectangleShape,
-                            focusedScale = 1.025f,
-                            focusedBorderWidth = 1.5.dp,
-                            focusedBorderColor = FocusWhite,
+                            style = ErasmusButtonStyle.Primary,
+                            height = 40.dp,
                             modifier = Modifier.focusRequester(errorRetryRequester)
-                        ) { isFocused ->
-                            Box(
-                                modifier = Modifier
-                                    .background(if (isFocused) SurfaceCard else SurfacePill, RectangleShape)
-                                    .border(1.dp, if (isFocused) Color.Transparent else BorderHairline, RectangleShape)
-                                    .padding(horizontal = 24.dp, vertical = 10.dp)
-                            ) {
-                                Text(
-                                    text = "Retry",
-                                    style = ErasmusTvTypography.ButtonText,
-                                    color = if (isFocused) FocusWhite else TextPrimary
-                                )
-                            }
-                        }
+                        )
 
-                        TvFocusableCard(
+                        ErasmusActionButton(
+                            text = if (isGuest) "Exit Guest" else "Sign Out",
                             onClick = { showSignOutDialog = true },
-                            shape = RectangleShape,
-                            focusedScale = 1.025f,
-                            focusedBorderWidth = 1.5.dp,
-                            focusedBorderColor = FocusWhite
-                        ) { isFocused ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier
-                                    .background(if (isFocused) SurfaceCard else SurfacePill, RectangleShape)
-                                    .border(1.dp, if (isFocused) Color.Transparent else BorderHairline, RectangleShape)
-                                    .padding(horizontal = 24.dp, vertical = 10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                    contentDescription = if (isGuest) "Exit Guest" else "Sign Out",
-                                    tint = if (isFocused) FocusWhite else TextSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = if (isGuest) "Exit Guest" else "Sign Out",
-                                    style = ErasmusTvTypography.Body.copy(fontSize = 14.sp),
-                                    color = if (isFocused) FocusWhite else TextPrimary
-                                )
-                            }
-                        }
+                            icon = Icons.AutoMirrored.Filled.ExitToApp,
+                            style = ErasmusButtonStyle.Secondary,
+                            height = 40.dp
+                        )
                     }
                 }
             }
@@ -283,7 +250,7 @@ fun ProfilePickerScreen(
                         style = ErasmusTvTypography.BillboardTitle.copy(fontSize = 30.sp),
                         color = TextPrimary
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(ErasmusSpacing.Small))
                     Text(
                         text = if (isManageMode) "Choose a profile to edit or delete" else "Select a profile to start streaming",
                         style = ErasmusTvTypography.Body.copy(fontSize = 13.sp),
@@ -326,83 +293,27 @@ fun ProfilePickerScreen(
                     Spacer(modifier = Modifier.height(44.dp))
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.Medium),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Remote focusable "Manage Profiles" / "Done" button
-                        TvFocusableCard(
+                        ErasmusActionButton(
+                            text = if (isManageMode) "Done" else "Manage Profiles",
                             onClick = { isManageMode = !isManageMode },
-                            shape = RectangleShape,
-                            focusedScale = 1.025f,
-                            focusedBorderWidth = 1.5.dp,
-                            focusedBorderColor = FocusWhite
-                        ) { isFocused ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier
-                                    .background(
-                                        if (isFocused) SurfaceCard else SurfacePill,
-                                        RectangleShape
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = if (isFocused) Color.Transparent else BorderHairline,
-                                        shape = RectangleShape
-                                    )
-                                    .padding(horizontal = 24.dp, vertical = 10.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isManageMode) Icons.Default.Check else Icons.Default.Edit,
-                                    contentDescription = if (isManageMode) "Done" else "Manage Profiles",
-                                    tint = if (isFocused) FocusWhite else TextSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = if (isManageMode) "Done" else "Manage Profiles",
-                                    style = ErasmusTvTypography.Body.copy(fontSize = 14.sp),
-                                    color = if (isFocused) FocusWhite else TextPrimary
-                                )
-                            }
-                        }
+                            icon = if (isManageMode) Icons.Default.Check else Icons.Default.Edit,
+                            style = ErasmusButtonStyle.Secondary,
+                            height = 40.dp
+                        )
 
                         // Remote focusable "Sign Out" button
                         if (!isManageMode) {
-                            TvFocusableCard(
+                            ErasmusActionButton(
+                                text = if (isGuest) "Exit Guest" else "Sign Out",
                                 onClick = { showSignOutDialog = true },
-                                shape = RectangleShape,
-                                focusedScale = 1.025f,
-                                focusedBorderWidth = 1.5.dp,
-                                focusedBorderColor = FocusWhite
-                            ) { isFocused ->
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier
-                                        .background(
-                                            if (isFocused) SurfaceCard else SurfacePill,
-                                            RectangleShape
-                                        )
-                                        .border(
-                                            width = 1.dp,
-                                            color = if (isFocused) Color.Transparent else BorderHairline,
-                                            shape = RectangleShape
-                                        )
-                                        .padding(horizontal = 24.dp, vertical = 10.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                                        contentDescription = if (isGuest) "Exit Guest" else "Sign Out",
-                                        tint = if (isFocused) FocusWhite else TextSecondary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Text(
-                                        text = if (isGuest) "Exit Guest" else "Sign Out",
-                                        style = ErasmusTvTypography.Body.copy(fontSize = 14.sp),
-                                        color = if (isFocused) FocusWhite else TextPrimary
-                                    )
-                                }
-                            }
+                                icon = Icons.AutoMirrored.Filled.ExitToApp,
+                                style = ErasmusButtonStyle.Secondary,
+                                height = 40.dp
+                            )
                         }
                     }
                 }
@@ -440,10 +351,11 @@ private fun ProfileCard(
     ) {
         TvFocusableCard(
             onClick = onClick,
-            shape = RectangleShape,
+            shape = ErasmusShapes.Tile,
             focusedScale = 1.025f,
             focusedBorderWidth = 1.5.dp,
             focusedBorderColor = FocusWhite,
+            contentDescription = if (isManageMode) "Edit profile ${profile.name}" else "Select profile ${profile.name}",
             modifier = modifier
         ) { isFocused ->
             Box(
@@ -454,7 +366,7 @@ private fun ProfileCard(
                     avatarKey = profile.avatarKey,
                     profileName = profile.name,
                     modifier = Modifier.fillMaxSize(),
-                    shape = RectangleShape,
+                    shape = ErasmusShapes.Tile,
                     iconSize = 48.dp
                 )
 
@@ -462,7 +374,7 @@ private fun ProfileCard(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.45f)),
+                            .background(Color.Black.copy(alpha = 0.45f), ErasmusShapes.Tile),
                         contentAlignment = Alignment.Center
                     ) {
                         Box(
@@ -486,7 +398,7 @@ private fun ProfileCard(
 
         Text(
             text = profile.name,
-            style = ErasmusTvTypography.SectionTitle.copy(fontSize = 15.sp),
+            style = ErasmusTvTypography.CardTitle,
             color = if (isSelected) FocusWhite else TextSecondary
         )
         if (isSelected && !isManageMode) {
@@ -513,17 +425,18 @@ private fun AddProfileCard(
     ) {
         TvFocusableCard(
             onClick = onClick,
-            shape = RectangleShape,
+            shape = ErasmusShapes.Tile,
             focusedScale = 1.025f,
             focusedBorderWidth = 1.5.dp,
-            focusedBorderColor = FocusWhite
+            focusedBorderColor = FocusWhite,
+            contentDescription = "Add Profile"
         ) { isFocused ->
             Box(
                 modifier = Modifier
                     .size(110.dp)
                     .background(
                         if (isFocused) SurfaceCard else SurfaceDark,
-                        RectangleShape
+                        ErasmusShapes.Tile
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -538,7 +451,7 @@ private fun AddProfileCard(
 
         Text(
             text = "Add Profile",
-            style = ErasmusTvTypography.SectionTitle.copy(fontSize = 15.sp),
+            style = ErasmusTvTypography.CardTitle,
             color = TextMuted
         )
     }
@@ -569,8 +482,8 @@ private fun SignOutConfirmationDialog(
         Box(
             modifier = Modifier
                 .width(460.dp)
-                .background(SurfaceDark, RoundedCornerShape(12.dp))
-                .border(1.dp, BorderHairline, RoundedCornerShape(12.dp))
+                .background(SurfaceDark, ErasmusShapes.CardLarge)
+                .border(1.dp, BorderHairline, ErasmusShapes.CardLarge)
                 .clickable(enabled = false) {}
                 .focusProperties {
                     onExit = { FocusRequester.Cancel }
@@ -579,7 +492,7 @@ private fun SignOutConfirmationDialog(
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(ErasmusSpacing.Medium)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ExitToApp,
@@ -605,25 +518,29 @@ private fun SignOutConfirmationDialog(
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(ErasmusSpacing.Small))
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.Medium),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Kept bespoke: this row pairs Cancel with a destructive red
+                    // confirm, and ErasmusButtonStyle has no destructive variant —
+                    // porting only Cancel would split one row into two languages.
                     TvFocusableCard(
                         onClick = onDismiss,
-                        shape = RoundedCornerShape(6.dp),
+                        shape = ErasmusShapes.Button,
                         focusedScale = 1.0f,
                         focusedBorderWidth = 1.5.dp,
                         focusedBorderColor = FocusWhite,
+                        contentDescription = "Cancel",
                         modifier = Modifier.focusRequester(cancelFocusRequester)
                     ) { isFocused ->
                         Box(
                             modifier = Modifier
-                                .background(if (isFocused) SurfaceCard else SurfacePill, RoundedCornerShape(6.dp))
-                                .border(1.dp, if (isFocused) Color.Transparent else BorderHairline, RoundedCornerShape(6.dp))
-                                .padding(horizontal = 24.dp, vertical = 10.dp)
+                                .background(if (isFocused) SurfaceCard else SurfacePill, ErasmusShapes.Button)
+                                .border(1.dp, if (isFocused) Color.Transparent else BorderHairline, ErasmusShapes.Button)
+                                .padding(horizontal = ErasmusSpacing.Large, vertical = 10.dp)
                         ) {
                             Text("Cancel", style = ErasmusTvTypography.ButtonText, color = TextPrimary)
                         }
@@ -631,15 +548,16 @@ private fun SignOutConfirmationDialog(
 
                     TvFocusableCard(
                         onClick = onConfirm,
-                        shape = RoundedCornerShape(6.dp),
+                        shape = ErasmusShapes.Button,
                         focusedScale = 1.0f,
                         focusedBorderWidth = 1.5.dp,
-                        focusedBorderColor = FocusWhite
+                        focusedBorderColor = FocusWhite,
+                        contentDescription = if (isGuest) "Exit" else "Sign Out"
                     ) { isFocused ->
                         Box(
                             modifier = Modifier
-                                .background(if (isFocused) Color(0xFFFF453A) else Color(0xCCFF453A), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 24.dp, vertical = 10.dp)
+                                .background(if (isFocused) Color(0xFFFF453A) else Color(0xCCFF453A), ErasmusShapes.Button)
+                                .padding(horizontal = ErasmusSpacing.Large, vertical = 10.dp)
                         ) {
                             Text(
                                 text = if (isGuest) "Exit" else "Sign Out",

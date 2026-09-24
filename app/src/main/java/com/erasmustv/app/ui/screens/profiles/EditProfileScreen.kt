@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -57,6 +56,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import com.erasmustv.app.core.theme.BorderHairline
+import com.erasmustv.app.core.theme.ErasmusShapes
+import com.erasmustv.app.core.theme.ErasmusSpacing
 import com.erasmustv.app.core.theme.ErasmusTvTypography
 import com.erasmustv.app.core.theme.FocusWhite
 import com.erasmustv.app.core.theme.PitchBlack
@@ -83,7 +84,11 @@ fun EditProfileScreen(
     var showDeleteConfirmation by remember { mutableStateOf(false) }
 
     fun commitAndExit() {
-        onSave(profile.copy(name = profileName, avatarKey = currentAvatarKey))
+        // Persist only if something actually changed. Opening the editor and
+        // leaving without edits should not fire a Supabase write + profiles reload.
+        if (profileName != profile.name || currentAvatarKey != profile.avatarKey) {
+            onSave(profile.copy(name = profileName, avatarKey = currentAvatarKey))
+        }
         onBack()
     }
 
@@ -112,20 +117,21 @@ fun EditProfileScreen(
                     // Left Header: Back button + Title & Subtitle + Rename action
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.Medium)
                     ) {
                         TvFocusableCard(
-                            onClick = onBack,
-                            shape = RoundedCornerShape(8.dp),
+                            onClick = { commitAndExit() },
+                            shape = CircleShape,
                             focusedScale = 1.0f,
                             focusedBorderWidth = 1.5.dp,
                             focusedBorderColor = Color.White,
+                            contentDescription = "Back",
                             modifier = Modifier.size(44.dp)
                         ) { isFocused ->
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(if (isFocused) SurfaceCard else SurfaceDark, RoundedCornerShape(8.dp)),
+                                    .background(if (isFocused) SurfaceCard else SurfaceDark, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -144,23 +150,24 @@ fun EditProfileScreen(
                             ) {
                                 Text(
                                     text = "Edit Profile",
-                                    style = ErasmusTvTypography.HeroTitleLarge.copy(fontSize = 28.sp),
+                                    style = ErasmusTvTypography.PageTitle,
                                     color = TextPrimary
                                 )
 
                                 TvFocusableCard(
                                     onClick = { showRenameDialog = true },
-                                    shape = RoundedCornerShape(6.dp),
+                                    shape = ErasmusShapes.Button,
                                     focusedScale = 1.0f,
                                     focusedBorderWidth = 1.5.dp,
-                                    focusedBorderColor = Color.White
+                                    focusedBorderColor = Color.White,
+                                    contentDescription = "Rename"
                                 ) { isFocused ->
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         modifier = Modifier
-                                            .background(if (isFocused) SurfaceCard else SurfaceDark, RoundedCornerShape(6.dp))
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                            .background(if (isFocused) SurfaceCard else SurfaceDark, ErasmusShapes.Button)
+                                            .padding(horizontal = ErasmusSpacing.MediumSmall, vertical = 6.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Edit,
@@ -192,7 +199,7 @@ fun EditProfileScreen(
                     ) {
                         Text(
                             text = profileName,
-                            style = ErasmusTvTypography.HeroTitleLarge.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
+                            style = ErasmusTvTypography.SectionTitle,
                             color = TextPrimary
                         )
 
@@ -204,7 +211,7 @@ fun EditProfileScreen(
                                 avatarKey = currentAvatarKey,
                                 profileName = profileName,
                                 modifier = Modifier.fillMaxSize(),
-                                shape = RoundedCornerShape(6.dp),
+                                shape = ErasmusShapes.Card,
                                 iconSize = 28.dp
                             )
                         }
@@ -237,20 +244,25 @@ fun EditProfileScreen(
 
                             TvFocusableCard(
                                 onClick = {
+                                    // Preview only — the choice is persisted once on
+                                    // exit via commitAndExit(). Previously every tap
+                                    // fired a Supabase PATCH + a full profiles GET,
+                                    // so browsing avatars sent a burst of redundant
+                                    // writes/reads for selections the user discarded.
                                     currentAvatarKey = avatar.fileName
-                                    onSave(profile.copy(name = profileName, avatarKey = avatar.fileName))
                                 },
-                                shape = RoundedCornerShape(6.dp),
+                                shape = ErasmusShapes.Card,
                                 focusedScale = 1.0f,
                                 focusedBorderColor = FocusWhite,
                                 focusedBorderWidth = 1.5.dp,
                                 unfocusedBorderColor = Color.Transparent,
+                                contentDescription = avatar.name,
                                 modifier = Modifier.size(96.dp)
                             ) { isFocused ->
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .background(if (isFocused) SurfaceCard else SurfaceDark, RoundedCornerShape(6.dp))
+                                        .background(if (isFocused) SurfaceCard else SurfaceDark, ErasmusShapes.Card)
                                 ) {
                                     AsyncImage(
                                         model = avatar.assetUrl,
@@ -258,7 +270,7 @@ fun EditProfileScreen(
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .clip(RoundedCornerShape(6.dp)),
+                                            .clip(ErasmusShapes.Card),
                                         onError = { state ->
                                             android.util.Log.e("AvatarError", "Failed to load ${avatar.fileName}: ${state.result.throwable.message}", state.result.throwable)
                                         },
@@ -302,10 +314,11 @@ fun EditProfileScreen(
                 ) {
                     TvFocusableCard(
                         onClick = { showDeleteConfirmation = true },
-                        shape = RoundedCornerShape(6.dp),
+                        shape = ErasmusShapes.Button,
                         focusedScale = 1.0f,
                         focusedBorderWidth = 1.5.dp,
-                        focusedBorderColor = Color(0xFFFF453A)
+                        focusedBorderColor = Color(0xFFFF453A),
+                        contentDescription = "Delete Profile"
                     ) { isFocused ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -313,9 +326,9 @@ fun EditProfileScreen(
                             modifier = Modifier
                                 .background(
                                     if (isFocused) Color(0x44FF453A) else Color(0x18FF453A),
-                                    RoundedCornerShape(6.dp)
+                                    ErasmusShapes.Button
                                 )
-                                .padding(horizontal = 26.dp, vertical = 12.dp)
+                                .padding(horizontal = 26.dp, vertical = ErasmusSpacing.MediumSmall)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Delete,
@@ -339,8 +352,10 @@ fun EditProfileScreen(
             RenameProfileDialog(
                 initialName = profileName,
                 onSave = { newName ->
+                    // Preview only — persisted once on exit via commitAndExit(),
+                    // so renaming no longer fires its own Supabase PATCH + reload
+                    // on top of the exit save.
                     profileName = newName
-                    onSave(profile.copy(name = newName, avatarKey = currentAvatarKey))
                     showRenameDialog = false
                 },
                 onDismiss = { showRenameDialog = false }
@@ -380,7 +395,7 @@ private fun RenameProfileDialog(
         Box(
             modifier = Modifier
                 .width(460.dp)
-                .background(Color(0xFF161616), RoundedCornerShape(12.dp))
+                .background(Color(0xFF161616), ErasmusShapes.CardLarge)
                 .padding(28.dp)
         ) {
             Column(
@@ -429,19 +444,24 @@ private fun RenameProfileDialog(
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary,
                         cursorColor = FocusWhite
-                    )
+                    ),
+                    shape = ErasmusShapes.Input
                 )
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.Medium),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Kept bespoke: both buttons carry their own DirectionUp
+                    // handling plus a focus requester driving the text field
+                    // above them, and Save inverts fill/label on focus.
                     TvFocusableCard(
                         onClick = onDismiss,
-                        shape = RoundedCornerShape(6.dp),
+                        shape = ErasmusShapes.Button,
                         focusedScale = 1.0f,
                         focusedBorderWidth = 1.5.dp,
                         focusedBorderColor = Color.White,
+                        contentDescription = "Cancel",
                         modifier = Modifier
                             .focusRequester(cancelFocusRequester)
                             .onKeyEvent { keyEvent ->
@@ -453,8 +473,8 @@ private fun RenameProfileDialog(
                     ) { isFocused ->
                         Box(
                             modifier = Modifier
-                                .background(if (isFocused) SurfaceCard else SurfaceDark, RoundedCornerShape(6.dp))
-                                .padding(horizontal = 24.dp, vertical = 10.dp)
+                                .background(if (isFocused) SurfaceCard else SurfaceDark, ErasmusShapes.Button)
+                                .padding(horizontal = ErasmusSpacing.Large, vertical = 10.dp)
                         ) {
                             Text("Cancel", style = ErasmusTvTypography.ButtonText, color = TextPrimary)
                         }
@@ -466,10 +486,11 @@ private fun RenameProfileDialog(
                                 onSave(name.trim())
                             }
                         },
-                        shape = RoundedCornerShape(6.dp),
+                        shape = ErasmusShapes.Button,
                         focusedScale = 1.0f,
                         focusedBorderWidth = 1.5.dp,
                         focusedBorderColor = Color.White,
+                        contentDescription = "Save",
                         modifier = Modifier
                             .focusRequester(saveFocusRequester)
                             .onKeyEvent { keyEvent ->
@@ -481,8 +502,8 @@ private fun RenameProfileDialog(
                     ) { isFocused ->
                         Box(
                             modifier = Modifier
-                                .background(if (isFocused) FocusWhite else Color(0xFF262626), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 24.dp, vertical = 10.dp)
+                                .background(if (isFocused) FocusWhite else Color(0xFF262626), ErasmusShapes.Button)
+                                .padding(horizontal = ErasmusSpacing.Large, vertical = 10.dp)
                         ) {
                             Text(
                                 text = "Save",
@@ -513,12 +534,12 @@ private fun DeleteProfileConfirmationDialog(
         Box(
             modifier = Modifier
                 .width(460.dp)
-                .background(Color(0xFF141414), RoundedCornerShape(12.dp))
+                .background(Color(0xFF141414), ErasmusShapes.CardLarge)
                 .padding(28.dp)
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(ErasmusSpacing.Medium)
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
@@ -540,24 +561,27 @@ private fun DeleteProfileConfirmationDialog(
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(ErasmusSpacing.Small))
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.Medium),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Kept bespoke: paired with a destructive red confirm, which
+                    // has no ErasmusButtonStyle equivalent.
                     TvFocusableCard(
                         onClick = onDismiss,
-                        shape = RoundedCornerShape(6.dp),
+                        shape = ErasmusShapes.Button,
                         focusedScale = 1.0f,
                         focusedBorderWidth = 1.5.dp,
                         focusedBorderColor = Color.White,
+                        contentDescription = "Cancel",
                         modifier = Modifier.focusRequester(cancelFocusRequester)
                     ) { isFocused ->
                         Box(
                             modifier = Modifier
-                                .background(if (isFocused) SurfaceCard else SurfaceDark, RoundedCornerShape(6.dp))
-                                .padding(horizontal = 24.dp, vertical = 10.dp)
+                                .background(if (isFocused) SurfaceCard else SurfaceDark, ErasmusShapes.Button)
+                                .padding(horizontal = ErasmusSpacing.Large, vertical = 10.dp)
                         ) {
                             Text("Cancel", style = ErasmusTvTypography.ButtonText, color = TextPrimary)
                         }
@@ -565,15 +589,16 @@ private fun DeleteProfileConfirmationDialog(
 
                     TvFocusableCard(
                         onClick = onConfirm,
-                        shape = RoundedCornerShape(6.dp),
+                        shape = ErasmusShapes.Button,
                         focusedScale = 1.0f,
                         focusedBorderWidth = 1.5.dp,
-                        focusedBorderColor = Color.White
+                        focusedBorderColor = Color.White,
+                        contentDescription = "Delete"
                     ) { isFocused ->
                         Box(
                             modifier = Modifier
-                                .background(if (isFocused) Color(0xFFFF453A) else Color(0xCCFF453A), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 24.dp, vertical = 10.dp)
+                                .background(if (isFocused) Color(0xFFFF453A) else Color(0xCCFF453A), ErasmusShapes.Button)
+                                .padding(horizontal = ErasmusSpacing.Large, vertical = 10.dp)
                         ) {
                             Text("Delete", style = ErasmusTvTypography.ButtonText, color = Color.White)
                         }

@@ -11,6 +11,7 @@ import androidx.navigation.navArgument
 import com.erasmustv.app.data.local.PlaybackProgressStore
 import com.erasmustv.app.data.local.ProfileManager
 import com.erasmustv.app.data.local.SessionManager
+import com.erasmustv.app.data.remote.BingrStreamResolver
 import com.erasmustv.app.data.remote.CinejoyStreamResolver
 import com.erasmustv.app.data.remote.ErasmusStreamApiService
 import com.erasmustv.app.data.remote.OmdbApiService
@@ -38,10 +39,6 @@ import com.erasmustv.app.ui.screens.search.SearchScreen
 import com.erasmustv.app.ui.screens.search.SearchViewModel
 import com.erasmustv.app.ui.screens.tv.TvShowsScreen
 import com.erasmustv.app.ui.screens.tv.TvShowsViewModel
-import com.erasmustv.app.ui.screens.studios.StudiosScreen
-import com.erasmustv.app.ui.screens.studios.StudiosViewModel
-import com.erasmustv.app.ui.screens.categories.CategoriesScreen
-import com.erasmustv.app.ui.screens.categories.CategoriesViewModel
 import com.erasmustv.app.ui.screens.anime.AnimeScreen
 import com.erasmustv.app.ui.screens.anime.AnimeViewModel
 import com.erasmustv.app.ui.screens.watchlist.WatchlistScreen
@@ -57,12 +54,13 @@ class AppContainer(
     val subtitleResolver: SubtitleResolver,
     val streamApi: ErasmusStreamApiService? = null,
     val omdbApi: OmdbApiService? = null,
-    val okHttpClient: okhttp3.OkHttpClient? = null
+    val okHttpClient: okhttp3.OkHttpClient? = null,
+    val bingrResolver: BingrStreamResolver = BingrStreamResolver()
 ) {
     val authRepository = AuthRepository(supabaseApi, sessionManager)
     val profileRepository = ProfileRepository(supabaseApi, profileManager, sessionManager)
     val mediaRepository = MediaRepository(tmdbApi, omdbApi)
-    val streamRepository = StreamRepository(cinejoyResolver, subtitleResolver, progressStore)
+    val streamRepository = StreamRepository(cinejoyResolver, bingrResolver, subtitleResolver, progressStore)
     val watchlistRepository = WatchlistRepository(supabaseApi, sessionManager)
 }
 
@@ -72,63 +70,94 @@ fun AppNavigation(
     container: AppContainer,
     startDestination: String = NavRoutes.PROFILES
 ) {
+    // ------------------------------------------------------------------
+    // Top-level navigation.
+    //
+    // `saveState` + `restoreState` are what make every screen's focus memory and
+    // scroll position survive a tab switch: without them Navigation Compose
+    // discards the destination's saved state, and the screen comes back as if
+    // visited for the first time.
+    //
+    // The pop is anchored on Home, but only when Home is genuinely on the back
+    // stack. `popUpTo` a route that is not present is a silent no-op, and with it
+    // `saveState`/`restoreState` never engage and every tab switch leaks an
+    // entry — so the fallback below does the plain single-top navigate rather
+    // than pretending the pop worked.
+    // ------------------------------------------------------------------
     val safeNavigate: (String) -> Unit = remember(navController) {
         { route: String ->
             try {
                 val currentRoute = navController.currentBackStackEntry?.destination?.route
                 if (currentRoute != route) {
+                    val homeIsOnStack = navController.currentBackStack.value.any {
+                        it.destination.route == NavRoutes.HOME
+                    }
                     navController.navigate(route) {
-                        popUpTo(NavRoutes.HOME) {
-                            saveState = true
+                        if (homeIsOnStack) {
+                            popUpTo(NavRoutes.HOME) { saveState = true }
+                            restoreState = true
                         }
                         launchSingleTop = true
-                        restoreState = true
                     }
                 }
             } catch (_: Exception) {}
         }
     }
+
+    /**
+     * Opens the profile picker without stacking duplicates.
+     *
+     * Every screen's profile avatar called a bare `navigate(PROFILES)`, so
+     * pressing it twice pushed two identical entries and BACK had to be pressed
+     * twice to escape one of them.
+     */
+    val openProfiles: () -> Unit = remember(navController) {
+        {
+            try {
+                navController.navigate(NavRoutes.PROFILES) { launchSingleTop = true }
+            } catch (_: Exception) {}
+        }
+    }
     val isReducedMotion = com.erasmustv.app.core.theme.rememberReducedMotion()
+
+    // ------------------------------------------------------------------
+    // Tab switches do not cross-fade.
+    //
+    // Every browse screen mounts its own floating nav pill, so a cross-fade
+    // between two of them fades the *navigation* out and back in along with the
+    // page — the bar visibly blinks on every tab switch while the incoming
+    // screen is still showing skeletons. Because the pill is pixel-identical and
+    // identically positioned on both sides of the swap, cutting instead of
+    // fading makes it read as a single persistent bar with only the content
+    // underneath it reloading, which is the intended effect.
+    //
+    // Detail and player entries keep their fade: those replace the whole frame,
+    // nav pill included, so there is no shared chrome to protect.
+    // ------------------------------------------------------------------
+    val overlayFadeIn: androidx.compose.animation.EnterTransition =
+        if (isReducedMotion) androidx.compose.animation.EnterTransition.None
+        else androidx.compose.animation.fadeIn(
+            animationSpec = androidx.compose.animation.core.tween(
+                durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
+                easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+            )
+        )
+    val overlayFadeOut: androidx.compose.animation.ExitTransition =
+        if (isReducedMotion) androidx.compose.animation.ExitTransition.None
+        else androidx.compose.animation.fadeOut(
+            animationSpec = androidx.compose.animation.core.tween(
+                durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
+                easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
+            )
+        )
 
     NavHost(
         navController = navController,
         startDestination = startDestination,
-        enterTransition = {
-            if (isReducedMotion) androidx.compose.animation.EnterTransition.None
-            else androidx.compose.animation.fadeIn(
-                animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_ENTER,
-                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
-                )
-            )
-        },
-        exitTransition = {
-            if (isReducedMotion) androidx.compose.animation.ExitTransition.None
-            else androidx.compose.animation.fadeOut(
-                animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_FAST,
-                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
-                )
-            )
-        },
-        popEnterTransition = {
-            if (isReducedMotion) androidx.compose.animation.EnterTransition.None
-            else androidx.compose.animation.fadeIn(
-                animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_ENTER,
-                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
-                )
-            )
-        },
-        popExitTransition = {
-            if (isReducedMotion) androidx.compose.animation.ExitTransition.None
-            else androidx.compose.animation.fadeOut(
-                animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_FAST,
-                    easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
-                )
-            )
-        }
+        enterTransition = { androidx.compose.animation.EnterTransition.None },
+        exitTransition = { androidx.compose.animation.ExitTransition.None },
+        popEnterTransition = { androidx.compose.animation.EnterTransition.None },
+        popExitTransition = { androidx.compose.animation.ExitTransition.None }
     ) {
         // Login
         composable(NavRoutes.LOGIN) {
@@ -153,6 +182,11 @@ fun AppNavigation(
                 onProfileSelected = {
                     navController.navigate(NavRoutes.HOME) {
                         popUpTo(NavRoutes.PROFILES) { inclusive = true }
+                        // Without this, selecting a profile while Home is already
+                        // on the stack pushed a *second* Home entry with empty
+                        // saveable state: focus memory and scroll position both
+                        // started blank, and BACK no longer exited the app.
+                        launchSingleTop = true
                     }
                 },
                 onSignOut = {
@@ -181,7 +215,9 @@ fun AppNavigation(
                             item.id,
                             item.title,
                             posterPath = item.posterPath,
-                            backdropPath = item.backdropPath
+                            backdropPath = item.backdropPath,
+                            logoPath = item.logoPath,
+                            tagline = item.tagline
                         )
                     )
                 },
@@ -194,13 +230,13 @@ fun AppNavigation(
                             cw.season,
                             cw.episode,
                             posterPath = cw.posterPath,
-                            backdropPath = cw.backdropPath
+                            backdropPath = cw.backdropPath,
+                            logoPath = cw.logoPath,
+                            tagline = cw.tagline
                         )
                     )
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 
@@ -222,13 +258,13 @@ fun AppNavigation(
                             item.id,
                             item.title,
                             posterPath = item.posterPath,
-                            backdropPath = item.backdropPath
+                            backdropPath = item.backdropPath,
+                            logoPath = item.logoPath,
+                            tagline = item.tagline
                         )
                     )
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 
@@ -252,13 +288,13 @@ fun AppNavigation(
                             1,
                             1,
                             posterPath = item.posterPath,
-                            backdropPath = item.backdropPath
+                            backdropPath = item.backdropPath,
+                            logoPath = item.logoPath,
+                            tagline = item.tagline
                         )
                     )
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 
@@ -283,61 +319,22 @@ fun AppNavigation(
                             item.id,
                             item.title,
                             posterPath = item.posterPath,
-                            backdropPath = item.backdropPath
+                            backdropPath = item.backdropPath,
+                            logoPath = item.logoPath,
+                            tagline = item.tagline
                         )
                     )
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 
-        // Categories Screen (Replaces Studios, with Studios inside)
-        composable(NavRoutes.CATEGORIES) {
-            val vm = remember {
-                CategoriesViewModel(
-                    container.mediaRepository,
-                    container.profileManager
-                )
-            }
-            CategoriesScreen(
-                viewModel = vm,
-                onNavigate = { route ->
-                    try {
-                        navController.navigate(route)
-                    } catch (_: Exception) {}
-                },
-                onMediaClick = { item ->
-                    navController.navigate(NavRoutes.details(item.mediaType, item.id))
-                },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
-            )
-        }
-
-        // Studios Screen (Dedicated Hub & Catalog)
-        composable(NavRoutes.STUDIOS) {
-            val vm = remember {
-                StudiosViewModel(
-                    container.mediaRepository,
-                    container.profileManager
-                )
-            }
-            StudiosScreen(
-                viewModel = vm,
-                onNavigate = safeNavigate,
-                onMediaClick = { item ->
-                    navController.navigate(NavRoutes.details(item.mediaType, item.id))
-                },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
-            )
-        }
         composable(
             route = NavRoutes.DETAILS,
+            enterTransition = { overlayFadeIn },
+            exitTransition = { overlayFadeOut },
+            popEnterTransition = { overlayFadeIn },
+            popExitTransition = { overlayFadeOut },
             arguments = listOf(
                 navArgument("mediaType") { type = NavType.StringType },
                 navArgument("id") { type = NavType.StringType }
@@ -359,14 +356,14 @@ fun AppNavigation(
             MediaDetailScreen(
                 viewModel = vm,
                 onBackClick = { navController.popBackStack() },
-                onPlayClick = { mType, mId, mTitle, s, e, poster, backdrop ->
-                    navController.navigate(NavRoutes.player(mType, mId, mTitle, s, e, poster, backdrop))
+                onPlayClick = { mType, mId, mTitle, s, e, poster, backdrop, logo, tagline ->
+                    navController.navigate(NavRoutes.player(mType, mId, mTitle, s, e, poster, backdrop, logo, tagline))
                 },
                 onSimilarClick = { item ->
                     navController.navigate(NavRoutes.details(item.mediaType, item.id))
                 },
                 onNavigate = safeNavigate,
-                onProfileClick = { navController.navigate(NavRoutes.PROFILES) }
+                onProfileClick = openProfiles
             )
         }
 
@@ -381,9 +378,7 @@ fun AppNavigation(
                 onMediaClick = { item ->
                     navController.navigate(NavRoutes.details(item.mediaType, item.id))
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 
@@ -398,15 +393,17 @@ fun AppNavigation(
                 onMediaClick = { item ->
                     navController.navigate(NavRoutes.details(item.mediaType, item.id))
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 
         // Native Video Player
         composable(
             route = NavRoutes.PLAYER,
+            enterTransition = { overlayFadeIn },
+            exitTransition = { overlayFadeOut },
+            popEnterTransition = { overlayFadeIn },
+            popExitTransition = { overlayFadeOut },
             arguments = listOf(
                 navArgument("mediaType") { type = NavType.StringType },
                 navArgument("id") { type = NavType.StringType },
@@ -426,6 +423,14 @@ fun AppNavigation(
                 navArgument("backdropPath") {
                     type = NavType.StringType
                     defaultValue = ""
+                },
+                navArgument("logoPath") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                },
+                navArgument("tagline") {
+                    type = NavType.StringType
+                    defaultValue = ""
                 }
             )
         ) { backStackEntry ->
@@ -436,10 +441,14 @@ fun AppNavigation(
             val episode = backStackEntry.arguments?.getInt("episode")
             val rawPoster = backStackEntry.arguments?.getString("posterPath")
             val rawBackdrop = backStackEntry.arguments?.getString("backdropPath")
+            val rawLogo = backStackEntry.arguments?.getString("logoPath")
+            val rawTagline = backStackEntry.arguments?.getString("tagline")
             val posterPath = if (rawPoster.isNullOrBlank()) null else rawPoster
             val backdropPath = if (rawBackdrop.isNullOrBlank()) null else rawBackdrop
+            val logoPath = if (rawLogo.isNullOrBlank()) null else rawLogo
+            val tagline = if (rawTagline.isNullOrBlank()) null else rawTagline
 
-            val vm = remember(mediaType, id, season, episode, posterPath, backdropPath) {
+            val vm = remember(mediaType, id, season, episode, posterPath, backdropPath, logoPath, tagline) {
                 TvPlayerViewModel(
                     mediaType = mediaType,
                     tmdbId = id,
@@ -448,6 +457,8 @@ fun AppNavigation(
                     episode = episode,
                     posterPath = posterPath,
                     backdropPath = backdropPath,
+                    logoPath = logoPath,
+                    tagline = tagline,
                     streamRepository = container.streamRepository,
                     profileManager = container.profileManager,
                     mediaRepository = container.mediaRepository,

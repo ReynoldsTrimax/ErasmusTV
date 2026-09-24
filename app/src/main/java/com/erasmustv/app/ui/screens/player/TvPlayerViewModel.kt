@@ -3,11 +3,13 @@ package com.erasmustv.app.ui.screens.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.erasmustv.app.data.local.ProfileManager
+import com.erasmustv.app.data.model.DirectServer
 import com.erasmustv.app.data.model.PlaybackProgress
 import com.erasmustv.app.data.model.STREAM_SERVERS
 import com.erasmustv.app.data.model.StreamServer
 import com.erasmustv.app.data.model.SubtitleTrack
 import com.erasmustv.app.data.model.TvEpisode
+import com.erasmustv.app.data.model.TvLoadingJokes
 import com.erasmustv.app.data.model.TvSeason
 import com.erasmustv.app.data.repository.MediaRepository
 import com.erasmustv.app.data.repository.StreamRepository
@@ -23,7 +25,9 @@ sealed interface PlayerStreamState {
         val serverName: String,
         val startPositionMs: Long,
         val referer: String,
-        val captions: List<SubtitleTrack>
+        val captions: List<SubtitleTrack>,
+        val fallbackServers: List<DirectServer> = emptyList(),
+        val currentServerIndex: Int = 0
     ) : PlayerStreamState
     data class Error(val message: String) : PlayerStreamState
 }
@@ -37,6 +41,7 @@ class TvPlayerViewModel(
     val posterPath: String? = null,
     val backdropPath: String? = null,
     val logoPath: String? = null,
+    val tagline: String? = null,
     private val streamRepository: StreamRepository,
     private val profileManager: ProfileManager,
     private val mediaRepository: MediaRepository? = null,
@@ -44,6 +49,8 @@ class TvPlayerViewModel(
 ) : ViewModel() {
 
     private var cachedProfileId: String = "default-profile"
+    private var cachedImdbId: String? = null
+    private var cachedYear: String? = null
 
     private val _currentSeason = MutableStateFlow(season ?: 1)
     val currentSeason: StateFlow<Int> = _currentSeason.asStateFlow()
@@ -84,6 +91,15 @@ class TvPlayerViewModel(
         .build()
 
 
+    private val _currentLoadingJoke = MutableStateFlow(TvLoadingJokes.getRandomJoke(mediaType))
+    val currentLoadingJoke: StateFlow<String> = _currentLoadingJoke.asStateFlow()
+
+    private val _mediaLogo = MutableStateFlow<String?>(logoPath?.takeIf { it.isNotBlank() })
+    val mediaLogo: StateFlow<String?> = _mediaLogo.asStateFlow()
+
+    private val _mediaTagline = MutableStateFlow<String?>(tagline?.takeIf { it.isNotBlank() })
+    val mediaTagline: StateFlow<String?> = _mediaTagline.asStateFlow()
+
     private val _streamState = MutableStateFlow<PlayerStreamState>(PlayerStreamState.Resolving)
     val streamState: StateFlow<PlayerStreamState> = _streamState.asStateFlow()
 
@@ -92,9 +108,29 @@ class TvPlayerViewModel(
 
     val availableServers: List<StreamServer> = STREAM_SERVERS
 
+    fun refreshLoadingJoke() {
+        _currentLoadingJoke.value = TvLoadingJokes.getRandomJoke(mediaType)
+    }
+
     init {
         viewModelScope.launch {
             cachedProfileId = profileManager.getActiveProfile()?.id ?: "default-profile"
+        }
+        if (_mediaLogo.value.isNullOrBlank() && mediaRepository != null) {
+            viewModelScope.launch {
+                val fetched = mediaRepository.getMediaLogo(mediaType, tmdbId).getOrNull()
+                if (!fetched.isNullOrBlank()) {
+                    _mediaLogo.value = fetched
+                }
+            }
+        }
+        if (_mediaTagline.value.isNullOrBlank() && mediaRepository != null) {
+            viewModelScope.launch {
+                val fetched = mediaRepository.getMediaTagline(mediaType, tmdbId).getOrNull()
+                if (!fetched.isNullOrBlank()) {
+                    _mediaTagline.value = fetched
+                }
+            }
         }
         resolveStream("lisbon")
         if (mediaType.equals("tv", ignoreCase = true)) {
@@ -130,6 +166,7 @@ class TvPlayerViewModel(
         _currentSeason.value = seasonNumber
         _currentEpisode.value = episodeNumber
         _currentEpisodeTitle.value = episodeTitle
+        refreshLoadingJoke()
         loadEpisodesForSeason(seasonNumber)
         resolveStream(_currentServerId.value)
     }
@@ -137,6 +174,19 @@ class TvPlayerViewModel(
     fun selectServer(serverId: String) {
         _currentServerId.value = serverId
         resolveStream(serverId)
+    }
+
+    fun selectSubServer(index: Int) {
+        val ready = _streamState.value as? PlayerStreamState.Ready ?: return
+        if (index in ready.fallbackServers.indices && index != ready.currentServerIndex) {
+            val target = ready.fallbackServers[index]
+            android.util.Log.i("TvPlayerViewModel", "Manually switching to sub-server stream [${target.name}]: ${target.url}")
+            _streamState.value = ready.copy(
+                streamUrl = target.url,
+                serverName = target.name,
+                currentServerIndex = index
+            )
+        }
     }
 
     fun retry() {
@@ -157,13 +207,35 @@ class TvPlayerViewModel(
             )
             val startPositionMs = resumeSeconds * 1000L
 
+            var resolvedImdbId = cachedImdbId
+            var resolvedYear = cachedYear
+            if ((resolvedImdbId == null || resolvedYear == null) && mediaRepository != null) {
+                try {
+                    if (mediaType.equals("tv", ignoreCase = true)) {
+                        mediaRepository.getTvDetails(tmdbId).getOrNull()?.let { tv ->
+                            resolvedImdbId = tv.imdbId
+                            resolvedYear = tv.year
+                        }
+                    } else {
+                        mediaRepository.getMovieDetails(tmdbId).getOrNull()?.let { movie ->
+                            resolvedImdbId = movie.imdbId
+                            resolvedYear = movie.year
+                        }
+                    }
+                    cachedImdbId = resolvedImdbId
+                    cachedYear = resolvedYear
+                } catch (_: Exception) {}
+            }
+
             streamRepository.extractStream(
                 mediaType = mediaType,
                 tmdbId = tmdbId,
                 server = serverId,
                 title = title,
                 season = targetSeason,
-                episode = targetEpisode
+                episode = targetEpisode,
+                year = resolvedYear,
+                imdbId = resolvedImdbId
             ).fold(
                 onSuccess = { result ->
                     val server = result.servers.firstOrNull()
@@ -176,7 +248,9 @@ class TvPlayerViewModel(
                             serverName = server.name,
                             startPositionMs = startPositionMs,
                             referer = result.referer ?: "",
-                            captions = subTracks
+                            captions = subTracks,
+                            fallbackServers = result.servers,
+                            currentServerIndex = 0
                         )
                         // Select primary English caption track by default
                         val primaryTrack = subTracks.firstOrNull {
@@ -221,6 +295,7 @@ class TvPlayerViewModel(
                     track.url.contains("vidfast", ignoreCase = true) || track.url.contains("wyzie", ignoreCase = true) -> "https://vidfast.vc/"
                     track.url.contains("cinejoy", ignoreCase = true) -> "https://cinejoy.to/"
                     track.url.contains("strem.io", ignoreCase = true) -> "https://opensubtitles-v3.strem.io/"
+                    track.url.contains("bingr", ignoreCase = true) -> "https://bingr.one/"
                     else -> null
                 }
                 val reqBuilder = okhttp3.Request.Builder()
@@ -288,8 +363,27 @@ class TvPlayerViewModel(
         }
     }
 
+    fun switchToNextFallbackServer(reason: String): Boolean {
+        val ready = _streamState.value as? PlayerStreamState.Ready ?: return false
+        val nextIndex = ready.currentServerIndex + 1
+        if (nextIndex < ready.fallbackServers.size) {
+            val nextServer = ready.fallbackServers[nextIndex]
+            android.util.Log.i("TvPlayerViewModel", "Failing over to backup stream [${nextServer.name}]: ${nextServer.url} (Reason: $reason)")
+            _streamState.value = ready.copy(
+                streamUrl = nextServer.url,
+                serverName = nextServer.name,
+                currentServerIndex = nextIndex
+            )
+            return true
+        }
+        return false
+    }
+
     fun onPlaybackError(message: String) {
-        _streamState.value = PlayerStreamState.Error(message)
+        val didSwitch = switchToNextFallbackServer(message)
+        if (!didSwitch) {
+            _streamState.value = PlayerStreamState.Error(message)
+        }
     }
 
     fun getEpisodeProgressRatio(season: Int, episode: Int): Float {
