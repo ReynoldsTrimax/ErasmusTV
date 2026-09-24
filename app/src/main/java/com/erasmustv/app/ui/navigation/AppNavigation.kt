@@ -74,19 +74,51 @@ fun AppNavigation(
     container: AppContainer,
     startDestination: String = NavRoutes.PROFILES
 ) {
+    // ------------------------------------------------------------------
+    // Top-level navigation.
+    //
+    // `saveState` + `restoreState` are what make every screen's focus memory and
+    // scroll position survive a tab switch: without them Navigation Compose
+    // discards the destination's saved state, and the screen comes back as if
+    // visited for the first time.
+    //
+    // The pop is anchored on Home, but only when Home is genuinely on the back
+    // stack. `popUpTo` a route that is not present is a silent no-op, and with it
+    // `saveState`/`restoreState` never engage and every tab switch leaks an
+    // entry — so the fallback below does the plain single-top navigate rather
+    // than pretending the pop worked.
+    // ------------------------------------------------------------------
     val safeNavigate: (String) -> Unit = remember(navController) {
         { route: String ->
             try {
                 val currentRoute = navController.currentBackStackEntry?.destination?.route
                 if (currentRoute != route) {
+                    val homeIsOnStack = navController.currentBackStack.value.any {
+                        it.destination.route == NavRoutes.HOME
+                    }
                     navController.navigate(route) {
-                        popUpTo(NavRoutes.HOME) {
-                            saveState = true
+                        if (homeIsOnStack) {
+                            popUpTo(NavRoutes.HOME) { saveState = true }
+                            restoreState = true
                         }
                         launchSingleTop = true
-                        restoreState = true
                     }
                 }
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Opens the profile picker without stacking duplicates.
+     *
+     * Every screen's profile avatar called a bare `navigate(PROFILES)`, so
+     * pressing it twice pushed two identical entries and BACK had to be pressed
+     * twice to escape one of them.
+     */
+    val openProfiles: () -> Unit = remember(navController) {
+        {
+            try {
+                navController.navigate(NavRoutes.PROFILES) { launchSingleTop = true }
             } catch (_: Exception) {}
         }
     }
@@ -99,7 +131,7 @@ fun AppNavigation(
             if (isReducedMotion) androidx.compose.animation.EnterTransition.None
             else androidx.compose.animation.fadeIn(
                 animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_ENTER,
+                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
                     easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
                 )
             )
@@ -108,7 +140,7 @@ fun AppNavigation(
             if (isReducedMotion) androidx.compose.animation.ExitTransition.None
             else androidx.compose.animation.fadeOut(
                 animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_FAST,
+                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
                     easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
                 )
             )
@@ -117,7 +149,7 @@ fun AppNavigation(
             if (isReducedMotion) androidx.compose.animation.EnterTransition.None
             else androidx.compose.animation.fadeIn(
                 animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_ENTER,
+                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
                     easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
                 )
             )
@@ -126,7 +158,7 @@ fun AppNavigation(
             if (isReducedMotion) androidx.compose.animation.ExitTransition.None
             else androidx.compose.animation.fadeOut(
                 animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_FAST,
+                    durationMillis = com.erasmustv.app.core.theme.TvMotion.DURATION_MEDIUM,
                     easing = com.erasmustv.app.core.theme.TvMotion.EasingSilk
                 )
             )
@@ -155,6 +187,11 @@ fun AppNavigation(
                 onProfileSelected = {
                     navController.navigate(NavRoutes.HOME) {
                         popUpTo(NavRoutes.PROFILES) { inclusive = true }
+                        // Without this, selecting a profile while Home is already
+                        // on the stack pushed a *second* Home entry with empty
+                        // saveable state: focus memory and scroll position both
+                        // started blank, and BACK no longer exited the app.
+                        launchSingleTop = true
                     }
                 },
                 onSignOut = {
@@ -204,9 +241,7 @@ fun AppNavigation(
                         )
                     )
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 
@@ -234,9 +269,7 @@ fun AppNavigation(
                         )
                     )
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 
@@ -266,9 +299,7 @@ fun AppNavigation(
                         )
                     )
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 
@@ -299,9 +330,7 @@ fun AppNavigation(
                         )
                     )
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 
@@ -315,17 +344,13 @@ fun AppNavigation(
             }
             CategoriesScreen(
                 viewModel = vm,
-                onNavigate = { route ->
-                    try {
-                        navController.navigate(route)
-                    } catch (_: Exception) {}
-                },
+                // Routed through safeNavigate like every other screen, so it
+                // cannot destroy sibling tabs' saved state or stack duplicates.
+                onNavigate = safeNavigate,
                 onMediaClick = { item ->
                     navController.navigate(NavRoutes.details(item.mediaType, item.id))
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 
@@ -343,9 +368,7 @@ fun AppNavigation(
                 onMediaClick = { item ->
                     navController.navigate(NavRoutes.details(item.mediaType, item.id))
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
         composable(
@@ -378,7 +401,7 @@ fun AppNavigation(
                     navController.navigate(NavRoutes.details(item.mediaType, item.id))
                 },
                 onNavigate = safeNavigate,
-                onProfileClick = { navController.navigate(NavRoutes.PROFILES) }
+                onProfileClick = openProfiles
             )
         }
 
@@ -393,9 +416,7 @@ fun AppNavigation(
                 onMediaClick = { item ->
                     navController.navigate(NavRoutes.details(item.mediaType, item.id))
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 
@@ -410,9 +431,7 @@ fun AppNavigation(
                 onMediaClick = { item ->
                     navController.navigate(NavRoutes.details(item.mediaType, item.id))
                 },
-                onProfileClick = {
-                    navController.navigate(NavRoutes.PROFILES)
-                }
+                onProfileClick = openProfiles
             )
         }
 

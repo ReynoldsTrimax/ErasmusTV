@@ -5,8 +5,6 @@ package com.erasmustv.app.ui.screens.player
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -65,6 +63,8 @@ import com.erasmustv.app.core.theme.SurfaceDark
 import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
+import com.erasmustv.app.core.theme.TvSpring
+import com.erasmustv.app.core.theme.offsetSpec
 import com.erasmustv.app.data.model.TvEpisode
 import com.erasmustv.app.data.model.TvSeason
 import kotlinx.coroutines.delay
@@ -112,12 +112,15 @@ fun TvPlayerEpisodeSwitcher(
 
     AnimatedVisibility(
         visible = visible,
+        // In from the right edge, out to the right edge, on the same spring
+        // (damping 0.8 / response 0.30s) in both directions — the panel
+        // returns along the path it arrived on, and can be dismissed mid-entry.
         enter = fadeIn() + slideInHorizontally(
-            animationSpec = tween(220, easing = FastOutSlowInEasing),
+            animationSpec = TvSpring.Sheet.offsetSpec(),
             initialOffsetX = { it }
         ),
         exit = fadeOut() + slideOutHorizontally(
-            animationSpec = tween(180, easing = FastOutSlowInEasing),
+            animationSpec = TvSpring.Sheet.offsetSpec(),
             targetOffsetX = { it }
         ),
         modifier = modifier

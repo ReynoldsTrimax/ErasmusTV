@@ -21,8 +21,10 @@ private val ErasmusDarkColorScheme = darkColorScheme(
 
 @Composable
 fun ErasmusTvTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = ErasmusDarkColorScheme,
-        content = content
-    )
+    CompositionLocalProvider(LocalAccentColor provides AccentNeutral) {
+        MaterialTheme(
+            colorScheme = ErasmusDarkColorScheme,
+            content = content
+        )
+    }
 }

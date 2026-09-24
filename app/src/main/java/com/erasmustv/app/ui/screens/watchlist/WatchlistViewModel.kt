@@ -25,9 +25,10 @@ class WatchlistViewModel(
     private val _uiState = MutableStateFlow<WatchlistUiState>(WatchlistUiState.Loading)
     val uiState: StateFlow<WatchlistUiState> = _uiState.asStateFlow()
 
-    init {
-        loadWatchlist()
-    }
+    // NOTE: the initial load is driven by WatchlistScreen's LaunchedEffect(Unit),
+    // which also re-reads on every screen entry (so a title removed from a detail
+    // page disappears on return). Loading here in init as well would fire a second,
+    // redundant Supabase getWatchlist on first open — so it is intentionally omitted.
 
     fun loadWatchlist() {
         viewModelScope.launch {

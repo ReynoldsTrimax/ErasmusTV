@@ -57,6 +57,8 @@ import com.erasmustv.app.core.theme.SurfaceElevated
 import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
+import com.erasmustv.app.core.theme.TvSpring
+import com.erasmustv.app.core.theme.offsetSpec
 import com.erasmustv.app.data.model.DirectServer
 import com.erasmustv.app.data.model.StreamServer
 import kotlinx.coroutines.delay
@@ -92,8 +94,12 @@ fun TvPlayerSubmenu(
 ) {
     AnimatedVisibility(
         visible = activeMenu != PlayerActiveMenu.None && activeMenu != PlayerActiveMenu.Episodes,
-        enter = fadeIn() + slideInHorizontally { it / 2 },
-        exit = fadeOut() + slideOutHorizontally { it / 2 },
+        enter = fadeIn() + slideInHorizontally(
+            animationSpec = TvSpring.Sheet.offsetSpec()
+        ) { it / 2 },
+        exit = fadeOut() + slideOutHorizontally(
+            animationSpec = TvSpring.Sheet.offsetSpec()
+        ) { it / 2 },
         modifier = modifier
     ) {
         // Semi-translucent dark backdrop for contrast behind drawer

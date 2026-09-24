@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -45,7 +46,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -78,30 +78,129 @@ import com.erasmustv.app.data.model.MediaItem
 import kotlinx.coroutines.delay
 
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
+import com.erasmustv.app.core.theme.ErasmusDimens
+import com.erasmustv.app.core.theme.ErasmusRadius
 import com.erasmustv.app.core.theme.TvMotion
 import com.erasmustv.app.core.theme.rememberReducedMotion
 
-// Smooth multi-stop cinematic gradients dissolving seamlessly into PitchBlack
-private val HeroHorizontalGradient = Brush.horizontalGradient(
-    colors = listOf(
-        PitchBlack.copy(alpha = 0.94f),
-        PitchBlack.copy(alpha = 0.82f),
-        PitchBlack.copy(alpha = 0.52f),
-        PitchBlack.copy(alpha = 0.18f),
-        Color.Transparent
-    ),
-    startX = 0f,
-    endX = 1300f
+/**
+ * Hero artwork/content transition duration. Deliberately at the calm end of
+ * the 300-700ms range: the hero should feel expensive, never flashy.
+ */
+private const val HERO_ARTWORK_TRANSITION_MS = TvMotion.DURATION_HERO_CROSSFADE
+private const val HERO_CONTENT_TRANSITION_MS = 420
+
+// ---------------------------------------------------------------------------
+// Cinematic hero gradients.
+//
+// Note these deliberately never terminate in opaque PitchBlack. The hero's
+// artwork composite is alpha-masked at its lower edge so the screen-level
+// ambient wash (HeroAmbientWash) shows through from behind; ending any of
+// these in solid black would reintroduce the hard hero/content seam this
+// design exists to remove.
+// ---------------------------------------------------------------------------
+
+/** Left-to-right readability ramp so hero copy stays legible over artwork. */
+private val HeroReadabilityGradient = Brush.horizontalGradient(
+    colorStops = arrayOf(
+        0.00f to PitchBlack.copy(alpha = 0.92f),
+        0.16f to PitchBlack.copy(alpha = 0.80f),
+        0.34f to PitchBlack.copy(alpha = 0.56f),
+        0.52f to PitchBlack.copy(alpha = 0.30f),
+        0.72f to PitchBlack.copy(alpha = 0.10f),
+        1.00f to Color.Transparent
+    )
 )
 
-private val HeroVerticalGradient = Brush.verticalGradient(
-    colors = listOf(
-        Color.Transparent,
-        Color.Transparent,
-        PitchBlack.copy(alpha = 0.20f),
-        PitchBlack.copy(alpha = 0.55f),
-        PitchBlack.copy(alpha = 0.88f),
-        PitchBlack
+/** Gentle top-down darkening: shades the nav area and grounds the lower third. */
+private val HeroVerticalShade = Brush.verticalGradient(
+    colorStops = arrayOf(
+        0.00f to PitchBlack.copy(alpha = 0.55f),
+        0.14f to PitchBlack.copy(alpha = 0.22f),
+        0.34f to Color.Transparent,
+        0.68f to PitchBlack.copy(alpha = 0.26f),
+        0.88f to PitchBlack.copy(alpha = 0.52f),
+        1.00f to PitchBlack.copy(alpha = 0.68f)
+    )
+)
+
+/**
+ * Alpha mask applied to the artwork composite via [BlendMode.DstIn]: keeps the
+ * image opaque down past the hero copy and action buttons, then feathers it out
+ * over the last stretch so the frosted layers behind become the visible surface.
+ * This is the first stage of the hero's blur ramp — see [HeroFrostBridge] for
+ * the mid stage and `HeroFrostedBackdrop` for the destination.
+ */
+private val HeroBottomFadeMask = Brush.verticalGradient(
+    colorStops = arrayOf(
+        0.00f to Color.Black,
+        // Hold the artwork fully sharp past the title, synopsis and buttons, so
+        // everything the eye actually reads sits on crisp artwork, never frost.
+        0.84f to Color.Black,
+        0.90f to Color.Black.copy(alpha = 0.58f),
+        0.95f to Color.Black.copy(alpha = 0.26f),
+        1.00f to Color.Transparent
+    )
+)
+
+/**
+ * How far the hero's mid-blur bridge extends past the hero's bottom edge.
+ *
+ * The sharp artwork can only start feathering below the action buttons, which
+ * leaves under 60dp of hero to ramp in — too short to read as anything but a
+ * step. Letting the mid-blur stage continue past the hero boundary stretches the
+ * ramp to roughly 170dp, so the blur climbs through the gap above the first
+ * shelf rather than snapping at the hero's edge.
+ */
+private val HeroFrostBleed = 110.dp
+
+/**
+ * Alpha mask for the hero's mid-blur bridge, in fractions of the bridge's own
+ * (taller than the hero) height. [heroFraction] is where the hero's bottom edge
+ * falls inside it.
+ *
+ * Absent while the sharp artwork is still solid, full strength by the hero's
+ * edge, then easing away through the bleed so the heavy page frost takes over
+ * without a seam.
+ */
+private fun heroFrostBridgeMask(heroFraction: Float): Brush = Brush.verticalGradient(
+    colorStops = arrayOf(
+        0.00f to Color.Transparent,
+        heroFraction * 0.83f to Color.Transparent,
+        heroFraction * 0.92f to Color.Black.copy(alpha = 0.62f),
+        heroFraction to Color.Black,
+        (heroFraction + (1f - heroFraction) * 0.36f) to Color.Black.copy(alpha = 0.72f),
+        (heroFraction + (1f - heroFraction) * 0.70f) to Color.Black.copy(alpha = 0.32f),
+        1.00f to Color.Transparent
+    )
+)
+
+/**
+ * Shading for the bridge band. Picks up roughly where [HeroVerticalShade] has
+ * reached by the point the sharp artwork starts to fade, deepens slightly at the
+ * hero's edge, then relaxes toward the scrim level of the page-filling frost —
+ * so the three blur stages read as one continuous surface, not three images.
+ */
+private fun heroFrostBridgeShade(heroFraction: Float): Brush = Brush.verticalGradient(
+    colorStops = arrayOf(
+        0.00f to PitchBlack.copy(alpha = 0.34f),
+        (heroFraction * 0.86f) to PitchBlack.copy(alpha = 0.44f),
+        heroFraction to PitchBlack.copy(alpha = 0.58f),
+        1.00f to PitchBlack.copy(alpha = 0.48f)
+    )
+)
+
+/** Soft edge vignette; corners recede without an obvious dark frame. */
+private val HeroEdgeVignette = Brush.horizontalGradient(
+    colorStops = arrayOf(
+        0.00f to PitchBlack.copy(alpha = 0.30f),
+        0.10f to Color.Transparent,
+        0.90f to Color.Transparent,
+        1.00f to PitchBlack.copy(alpha = 0.34f)
     )
 )
 
@@ -112,6 +211,17 @@ private val ElectricBlue = Color(0xFF1D90F5)
  * Features edge-to-edge full-bleed artwork, top badge chips (FEATURED, MOVIE/SERIES, YEAR, RATING),
  * large authentic title logo, italicized tagline, spacious synopsis, Electric Blue Watch Now pill,
  * frosted Details pill, and carousel slider indicator.
+ *
+ * ## Focus contract
+ *
+ * The hero contributes exactly two focusables — Watch Now and Details — and
+ * nothing else. The artwork, the badge chips, the tagline, and the carousel
+ * indicator are all deliberately non-focusable: a remote should never have to
+ * step through decoration to reach an action.
+ *
+ * @param onFocused invoked when focus enters the hero, so the hosting screen's
+ *   focus engine can record the hero as the active zone and send focus back here
+ *   when the user drops out of the navigation.
  */
 @Composable
 fun HeroBillboard(
@@ -122,8 +232,10 @@ fun HeroBillboard(
     heroFocusRequester: FocusRequester? = null,
     featuredItems: List<MediaItem> = emptyList(),
     onFeaturedSelect: ((MediaItem) -> Unit)? = null,
+    onFocused: (() -> Unit)? = null,
     onNavigateLeft: (() -> Unit)? = null,
     onNavigateDown: (() -> Unit)? = null,
+    onNavigateUp: (() -> Unit)? = null,
     isAutoAdvanceEnabled: Boolean = true
 ) {
     val isReducedMotion = rememberReducedMotion()
@@ -133,14 +245,17 @@ fun HeroBillboard(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .height(335.dp)
-                .background(HeroVerticalGradient),
-            contentAlignment = Alignment.CenterStart
+                .height(ErasmusDimens.HeroHeight)
+                .background(HeroVerticalShade),
+            contentAlignment = Alignment.BottomStart
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth(0.58f)
-                    .padding(start = 64.dp, top = 54.dp, bottom = 12.dp)
+                    .widthIn(max = ErasmusDimens.HeroContentMaxWidth)
+                    .padding(
+                        start = ErasmusDimens.HeroContentStartInset,
+                        bottom = 64.dp
+                    )
             ) {
                 // FEATURED SPOTLIGHT Clean Inline Label
                 Text(
@@ -179,42 +294,52 @@ fun HeroBillboard(
                     color = TextPrimary.copy(alpha = 0.88f)
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                HeroRectangleButton(
-                    text = "Browse Catalog",
-                    icon = Icons.Default.PlayArrow,
-                    isPrimary = true,
-                    onClick = {},
-                    onNavigateLeft = onNavigateLeft,
-                    onNavigateDown = onNavigateDown,
-                    modifier = heroFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
-                )
+                // Deliberately no action button here.
+                //
+                // The previous placeholder was a focusable "Browse Catalog"
+                // control wired to `onClick = {}` — a focus target that swallows
+                // OK and does nothing, which from six feet away reads as the
+                // remote having failed. With nothing focusable in an empty hero
+                // the screen's focus engine simply skips this zone and lands on
+                // the first shelf that does have content.
             }
         }
         return
     }
 
     val context = LocalContext.current
-    val backdropKey = displayItem.backdropPath ?: displayItem.posterPath
-    val imageRequest = remember(backdropKey) {
-        ImageRequest.Builder(context)
-            .data(AppConfig.backdropUrl(backdropKey))
-            .memoryCacheKey(backdropKey)
-            .diskCacheKey(backdropKey)
-            .crossfade(350)
-            .build()
+
+    // Artwork resilience: some catalog/seed entries carry a stale backdrop path
+    // that 404s upstream. Rather than render an empty hero, fall back to the
+    // poster once the backdrop is known to have failed.
+    var backdropFailed by remember(displayItem.id) { mutableStateOf(false) }
+    val backdropKey = remember(displayItem.id, backdropFailed) {
+        val backdrop = displayItem.backdropPath
+        val poster = displayItem.posterPath
+        when {
+            !backdropFailed && !backdrop.isNullOrBlank() -> backdrop
+            !poster.isNullOrBlank() -> poster
+            else -> backdrop
+        }
     }
 
     val featuredList = remember(featuredItems) { featuredItems.take(8) }
     var isPrimaryFocused by remember { mutableStateOf(false) }
     var isSecondaryFocused by remember { mutableStateOf(false) }
-    val isAnyFocused = isPrimaryFocused || isSecondaryFocused
 
-    // Auto-advance carousel every 8 seconds when user is idle and hero is visible
-    LaunchedEffect(displayItem.id, isAnyFocused, featuredList, isAutoAdvanceEnabled) {
-        if (isAutoAdvanceEnabled && featuredList.size > 1 && onFeaturedSelect != null && !isAnyFocused) {
-            delay(8000L)
+    var heroHasFocus by remember { mutableStateOf(false) }
+
+    // Auto-advance the featured carousel every ~5.5s while the hero is visible.
+    //
+    // Crucially this does NOT pause while the hero buttons hold focus. Initial
+    // focus lands on Watch Now, so gating on focus (as before) meant the
+    // carousel was permanently frozen — it never cycled at all. It only stops
+    // when the hero scrolls out of view. The displayed title and the buttons'
+    // click targets both read from the same rotating state, so activating a
+    // button always plays whatever is currently on screen.
+    LaunchedEffect(displayItem.id, featuredList, isAutoAdvanceEnabled) {
+        if (isAutoAdvanceEnabled && featuredList.size > 1 && onFeaturedSelect != null) {
+            delay(5500L)
             val currentIndex = featuredList.indexOfFirst { it.id == displayItem.id }
             val nextIndex = if (currentIndex in 0 until featuredList.size - 1) {
                 currentIndex + 1
@@ -230,70 +355,130 @@ fun HeroBillboard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(335.dp) // Reduced height by ~15% for cinematic density (Recommendation #3)
-    ) {
-        // Full-bleed Backdrop Image extending to screen edges with restrained cinematic crossfade
-        Crossfade(
-            targetState = backdropKey,
-            animationSpec = tween(
-                durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_CAROUSEL,
-                easing = TvMotion.EasingSilk
-            ),
-            label = "hero_backdrop_crossfade",
-            modifier = Modifier.fillMaxSize()
-        ) { key ->
-            val bgRequest = remember(key) {
-                ImageRequest.Builder(context)
-                    .data(AppConfig.backdropUrl(key))
-                    .memoryCacheKey(key)
-                    .diskCacheKey(key)
-                    .crossfade(300)
-                    .build()
+            .height(ErasmusDimens.HeroHeight)
+            .onFocusChanged { state ->
+                heroHasFocus = state.hasFocus
+                if (state.hasFocus) onFocused?.invoke()
             }
-            var isImageLoaded by remember(key) { mutableStateOf(false) }
-            val imageScale by animateFloatAsState(
-                targetValue = if (isImageLoaded && !isReducedMotion) 1.0f else 1.025f,
-                animationSpec = tween(durationMillis = 600, easing = TvMotion.EasingSilk),
-                label = "heroBackdropDrift"
-            )
-            AsyncImage(
-                model = bgRequest,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                onSuccess = { isImageLoaded = true },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = imageScale
-                        scaleY = imageScale
-                    }
-            )
-        }
-
-        // Horizontal vignette from left
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(HeroHorizontalGradient)
-        )
-
-        // Vertical fade to bottom
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(HeroVerticalGradient)
-        )
-
-        // Content Area positioned with comfortable cinematic headroom (Recommendation #3 & #18)
-        Column(
+    ) {
+        // ------------------------------------------------------------------
+        // Blur ramp, stage 2 of 3: a mid-radius frost sitting *under* the sharp
+        // composite and continuing past the hero's bottom edge. It is revealed
+        // exactly as the sharp artwork feathers out, and then dissolves into the
+        // page-filling heavy frost below. Because it scrolls with the hero, the
+        // whole ramp travels with the content — an equivalent ramp on the fixed
+        // backdrop would strand a pale band (and, above it, black) across the
+        // screen the moment the feed moved.
+        // ------------------------------------------------------------------
+        val bridgeHeight = ErasmusDimens.HeroHeight + HeroFrostBleed
+        val heroFraction = ErasmusDimens.HeroHeight.value / bridgeHeight.value
+        HeroFrostBridge(
+            artworkUrl = AppConfig.backdropUrl(backdropKey),
+            mask = remember(heroFraction) { heroFrostBridgeMask(heroFraction) },
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .fillMaxWidth(0.58f)
-                .padding(start = 64.dp, top = 54.dp, bottom = 10.dp)
+                .fillMaxWidth()
+                .height(bridgeHeight),
+            overlays = {
+                // The hero's own shading, reused verbatim so the bridge is the
+                // same surface at a different focus — not a second, brighter image.
+                Box(modifier = Modifier.fillMaxSize().background(HeroReadabilityGradient))
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(heroFrostBridgeShade(heroFraction))
+                )
+                Box(modifier = Modifier.fillMaxSize().background(HeroEdgeVignette))
+            }
+        )
+
+        // ------------------------------------------------------------------
+        // Artwork composite: image + readability/shade/vignette rendered into
+        // one offscreen layer, then alpha-masked at the bottom so the whole
+        // stack (not just the photo) dissolves into the ambient wash behind.
+        // Masking the composite rather than the image alone is what prevents a
+        // residual dark band at the seam.
+        // ------------------------------------------------------------------
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(brush = HeroBottomFadeMask, blendMode = BlendMode.DstIn)
+                }
+        ) {
+            Crossfade(
+                targetState = backdropKey,
+                animationSpec = tween(
+                    durationMillis = if (isReducedMotion) 0 else HERO_ARTWORK_TRANSITION_MS,
+                    easing = TvMotion.EasingSilk
+                ),
+                label = "hero_backdrop_crossfade",
+                modifier = Modifier.fillMaxSize()
+            ) { key ->
+                val bgRequest = remember(key) {
+                    ImageRequest.Builder(context)
+                        .data(AppConfig.backdropUrl(key))
+                        .memoryCacheKey(key)
+                        .diskCacheKey(key)
+                        .crossfade(HERO_ARTWORK_TRANSITION_MS)
+                        .build()
+                }
+                var isImageLoaded by remember(key) { mutableStateOf(false) }
+                // Very slight settle on load; calm, not a zoom effect.
+                val imageScale by animateFloatAsState(
+                    targetValue = if (isImageLoaded && !isReducedMotion) 1.0f else 1.02f,
+                    animationSpec = tween(durationMillis = 700, easing = TvMotion.EasingSilk),
+                    label = "heroBackdropSettle"
+                )
+                AsyncImage(
+                    model = bgRequest,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    onSuccess = { isImageLoaded = true },
+                    onError = {
+                        // Only escalate if the *backdrop* failed; prevents a
+                        // loop when the poster fallback also fails.
+                        if (key == displayItem.backdropPath) backdropFailed = true
+                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = imageScale
+                            scaleY = imageScale
+                        }
+                )
+            }
+
+            // Left-weighted readability ramp
+            Box(modifier = Modifier.fillMaxSize().background(HeroReadabilityGradient))
+            // Top/bottom cinematic shading
+            Box(modifier = Modifier.fillMaxSize().background(HeroVerticalShade))
+            // Soft edge vignette
+            Box(modifier = Modifier.fillMaxSize().background(HeroEdgeVignette))
+        }
+
+        // ------------------------------------------------------------------
+        // Hero copy: left-aligned, sitting in the middle-to-lower third, and
+        // width-capped so the title never sprawls across the screen.
+        // Drawn outside the masked layer so text is never faded.
+        // ------------------------------------------------------------------
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .widthIn(max = ErasmusDimens.HeroContentMaxWidth)
+                .padding(
+                    start = ErasmusDimens.HeroContentStartInset,
+                    bottom = 64.dp
+                )
         ) {
             Crossfade(
                 targetState = displayItem,
-                animationSpec = tween(300, easing = FastOutSlowInEasing),
+                animationSpec = tween(
+                    durationMillis = if (isReducedMotion) 0 else HERO_CONTENT_TRANSITION_MS,
+                    easing = TvMotion.EasingSilk
+                ),
                 label = "hero_content_crossfade"
             ) { currentItem ->
                 var contentVisible by remember(currentItem.id) { mutableStateOf(false) }
@@ -301,13 +486,19 @@ fun HeroBillboard(
                     contentVisible = true
                 }
                 val translateY by animateDpAsState(
-                    targetValue = if (contentVisible) 0.dp else 8.dp,
-                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+                    targetValue = if (contentVisible) 0.dp else 10.dp,
+                    animationSpec = tween(
+                        durationMillis = if (isReducedMotion) 0 else HERO_CONTENT_TRANSITION_MS,
+                        easing = TvMotion.EasingSilk
+                    ),
                     label = "hero_content_slide"
                 )
                 val contentAlpha by animateFloatAsState(
-                    targetValue = if (contentVisible) 1f else 0.4f,
-                    animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+                    targetValue = if (contentVisible) 1f else 0.35f,
+                    animationSpec = tween(
+                        durationMillis = if (isReducedMotion) 0 else HERO_CONTENT_TRANSITION_MS,
+                        easing = TvMotion.EasingSilk
+                    ),
                     label = "hero_content_alpha"
                 )
 
@@ -399,8 +590,11 @@ fun HeroBillboard(
                     if (!currentItem.logoPath.isNullOrBlank() && !isLogoError) {
                         Box(
                             modifier = Modifier
-                                .heightIn(min = 44.dp, max = 68.dp)
-                                .fillMaxWidth(0.92f),
+                                .heightIn(
+                                    min = ErasmusDimens.HeroLogoMinHeight,
+                                    max = ErasmusDimens.HeroLogoMaxHeight
+                                )
+                                .fillMaxWidth(),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             AsyncImage(
@@ -413,18 +607,24 @@ fun HeroBillboard(
                                 contentScale = ContentScale.Fit,
                                 alignment = Alignment.CenterStart,
                                 modifier = Modifier
-                                    .heightIn(min = 44.dp, max = 68.dp)
+                                    .heightIn(
+                                        min = ErasmusDimens.HeroLogoMinHeight,
+                                        max = ErasmusDimens.HeroLogoMaxHeight
+                                    )
                                     .fillMaxWidth(),
                                 onError = { isLogoError = true }
                             )
                         }
                     } else {
+                        // Large but controlled: capped at two lines within the
+                        // width-limited copy column so it can't dominate.
                         Text(
                             text = currentItem.title,
                             style = ErasmusTvTypography.HeroTitleLarge.copy(
-                                fontSize = 28.sp,
-                                lineHeight = 34.sp,
-                                fontWeight = FontWeight.Black
+                                fontSize = 34.sp,
+                                lineHeight = 39.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = (-0.6).sp
                             ),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
@@ -487,6 +687,7 @@ fun HeroBillboard(
                     onNavigateLeft = onNavigateLeft,
                     onNavigateRight = { detailsFocusRequester.requestFocus() },
                     onNavigateDown = onNavigateDown,
+                    onNavigateUp = onNavigateUp,
                     modifier = heroFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
                 )
 
@@ -500,7 +701,8 @@ fun HeroBillboard(
                     onFocusChanged = { isSecondaryFocused = it },
                     onNavigateLeft = { heroFocusRequester?.requestFocus() },
                     onNavigateRight = null,
-                    onNavigateDown = onNavigateDown
+                    onNavigateDown = onNavigateDown,
+                    onNavigateUp = onNavigateUp
                 )
             }
         }
@@ -520,8 +722,9 @@ fun HeroBillboard(
 }
 
 /**
- * Rectangular action button matching TV viewing ergonomics (Recommendation #6).
- * Solid white background for primary button, visually quieter frosted dark for secondary.
+ * Hero actions delegate to the shared [ErasmusActionButton] so the hero's
+ * "Watch Now" and a detail page's "Add to Watch List" are literally the same
+ * control. Only the hero's directional hand-off wiring lives here.
  */
 @Composable
 private fun HeroRectangleButton(
@@ -533,145 +736,25 @@ private fun HeroRectangleButton(
     onFocusChanged: ((Boolean) -> Unit)? = null,
     onNavigateLeft: (() -> Unit)? = null,
     onNavigateRight: (() -> Unit)? = null,
-    onNavigateDown: (() -> Unit)? = null
+    onNavigateDown: (() -> Unit)? = null,
+    onNavigateUp: (() -> Unit)? = null
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-    val isReducedMotion = rememberReducedMotion()
-
-    LaunchedEffect(isFocused) {
-        onFocusChanged?.invoke(isFocused)
-    }
-
-    val buttonScale by animateFloatAsState(
-        targetValue = if (isFocused && !isReducedMotion) TvMotion.FocusScaleButton else 1.0f,
-        animationSpec = tween(
-            durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_FAST,
-            easing = TvMotion.EasingSilk
-        ),
-        label = "heroButtonScale"
+    ErasmusActionButton(
+        text = text,
+        onClick = onClick,
+        modifier = modifier,
+        icon = icon,
+        style = if (isPrimary) ErasmusButtonStyle.Primary else ErasmusButtonStyle.Secondary,
+        shape = CircleShape,
+        onFocusChanged = onFocusChanged,
+        onNavigateLeft = onNavigateLeft,
+        onNavigateRight = onNavigateRight,
+        // UP/DOWN are always consumed at the hero boundary: without this, focus
+        // can drift out of the hero into whatever happens to be geometrically
+        // nearest, which on a TV feels like the remote stopped working.
+        onNavigateUp = onNavigateUp ?: {},
+        onNavigateDown = onNavigateDown ?: {}
     )
-
-    val buttonElevation by animateFloatAsState(
-        targetValue = if (isFocused && !isReducedMotion) 10f else 0f,
-        animationSpec = tween(
-            durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_FAST,
-            easing = TvMotion.EasingSilk
-        ),
-        label = "heroButtonElevation"
-    )
-
-    val targetBgColor = when {
-        isPrimary -> if (isFocused) Color.White else Color(0xEEFFFFFF)
-        else -> if (isFocused) Color(0x38FFFFFF) else Color(0x221E1E24)
-    }
-    val backgroundColor by animateColorAsState(
-        targetValue = targetBgColor,
-        animationSpec = tween(durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_FAST),
-        label = "heroButtonBg"
-    )
-
-    val targetBorderColor = when {
-        isFocused -> Color.White
-        isPrimary -> Color.Transparent
-        else -> Color(0x22FFFFFF)
-    }
-    val borderColor by animateColorAsState(
-        targetValue = targetBorderColor,
-        animationSpec = tween(durationMillis = if (isReducedMotion) 0 else TvMotion.DURATION_FAST),
-        label = "heroButtonBorder"
-    )
-
-    val contentColor = when {
-        isPrimary -> PitchBlack
-        else -> Color.White
-    }
-
-    Box(
-        modifier = modifier
-            .semantics(mergeDescendants = true) {
-                role = Role.Button
-                contentDescription = text
-            }
-            .height(48.dp) // Crisp TV button height (Recommendation #6)
-            .graphicsLayer {
-                scaleX = buttonScale
-                scaleY = buttonScale
-                this.shadowElevation = buttonElevation
-            }
-            .onKeyEvent { keyEvent ->
-                if (keyEvent.type == KeyEventType.KeyDown) {
-                    when (keyEvent.key) {
-                        Key.DirectionRight -> {
-                            if (onNavigateRight != null) {
-                                onNavigateRight()
-                                true
-                            } else false
-                        }
-                        Key.DirectionLeft -> {
-                            if (onNavigateLeft != null) {
-                                onNavigateLeft()
-                                true
-                            } else false
-                        }
-                        Key.DirectionDown -> {
-                            if (onNavigateDown != null) {
-                                onNavigateDown()
-                            }
-                            true
-                        }
-                        Key.DirectionUp -> {
-                            // Top boundary of billboard: consume to prevent hopping to the sidebar
-                            true
-                        }
-                        else -> false
-                    }
-                } else if (keyEvent.type == KeyEventType.KeyUp) {
-                    when (keyEvent.key) {
-                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
-                            onClick()
-                            true
-                        }
-                        else -> false
-                    }
-                } else false
-            }
-            .clip(RectangleShape)
-            .background(backgroundColor, RectangleShape)
-            .border(
-                width = if (isFocused) 2.dp else if (!isPrimary) 0.dp else 1.dp,
-                color = borderColor,
-                shape = RectangleShape
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .focusable(interactionSource = interactionSource)
-            .padding(horizontal = 20.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = contentColor,
-                modifier = Modifier.size(17.dp)
-            )
-            Text(
-                text = text,
-                style = ErasmusTvTypography.ButtonText.copy(
-                    fontSize = 13.sp,
-                    fontWeight = if (isPrimary) FontWeight.ExtraBold else FontWeight.SemiBold
-                ),
-                color = contentColor
-            )
-        }
-    }
 }
 
 /**

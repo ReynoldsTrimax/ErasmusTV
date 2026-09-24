@@ -51,6 +51,8 @@ import com.erasmustv.app.core.theme.SurfaceElevated
 import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
+import com.erasmustv.app.core.theme.TvSpring
+import com.erasmustv.app.core.theme.dpSpec
 import kotlin.math.abs
 
 @Composable
@@ -95,7 +97,7 @@ fun TvPlayerTimeline(
             isFocused -> 5.dp
             else -> 4.dp
         },
-        animationSpec = tween(durationMillis = 140),
+        animationSpec = TvSpring.FocusFast.dpSpec(),
         label = "timelineTrackHeight"
     )
 
@@ -105,7 +107,7 @@ fun TvPlayerTimeline(
             isFocused -> 13.dp
             else -> 0.dp
         },
-        animationSpec = tween(durationMillis = 140),
+        animationSpec = TvSpring.FocusFast.dpSpec(),
         label = "timelineThumbSize"
     )
 

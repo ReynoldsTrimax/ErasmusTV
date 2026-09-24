@@ -34,7 +34,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -56,7 +55,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -80,10 +78,19 @@ import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
 import com.erasmustv.app.data.model.MediaItem
+import androidx.compose.foundation.shape.CircleShape
+import com.erasmustv.app.core.theme.ErasmusDimens
+import com.erasmustv.app.core.theme.ErasmusShapes
+import com.erasmustv.app.core.theme.ErasmusSpacing
+import com.erasmustv.app.core.theme.SurfaceCardFocused
+import com.erasmustv.app.core.theme.SurfaceCardRest
+import com.erasmustv.app.core.theme.TvMotion
+import com.erasmustv.app.ui.components.ErasmusChip
+import com.erasmustv.app.ui.components.ErasmusPageHeader
 import com.erasmustv.app.ui.components.MediaPosterCard
-import com.erasmustv.app.ui.components.TvFeedSkeleton
+import com.erasmustv.app.ui.components.TvRailsSkeleton
 import com.erasmustv.app.ui.components.TvFocusableCard
-import com.erasmustv.app.ui.components.TvLeftNavRail
+import com.erasmustv.app.ui.components.TvFloatingNavBar
 import com.erasmustv.app.ui.components.TvNavIcons
 import com.erasmustv.app.ui.components.TvPivotBringIntoViewSpec
 import com.erasmustv.app.ui.navigation.NavRoutes
@@ -105,13 +112,7 @@ fun CategoriesScreen(
     val uiState by viewModel.uiState.collectAsState()
     val activeProfile by viewModel.activeProfile.collectAsState()
     val firstItemFocusRequester = remember { FocusRequester() }
-    var isRailFocused by remember { mutableStateOf(false) }
-
-    val contentShift by animateDpAsState(
-        targetValue = if (isRailFocused) 76.dp else 0.dp,
-        animationSpec = tween(160, easing = FastOutSlowInEasing),
-        label = "categoriesContentShift"
-    )
+    var isNavFocused by remember { mutableStateOf(false) }
 
     BackHandler(enabled = uiState is CategoriesUiState.StudioCatalog) {
         viewModel.backToOverview()
@@ -124,7 +125,7 @@ fun CategoriesScreen(
     ) {
         when (val state = uiState) {
             is CategoriesUiState.Loading -> {
-                TvFeedSkeleton(contentShift = contentShift)
+                TvRailsSkeleton(railCount = 3)
             }
             is CategoriesUiState.Overview -> {
                 CompositionLocalProvider(
@@ -133,21 +134,13 @@ fun CategoriesScreen(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .graphicsLayer {
-                                translationX = contentShift.toPx()
-                            }
-                            .padding(start = 64.dp, top = 24.dp, end = 40.dp),
+                            .padding(start = 48.dp, top = 68.dp, end = 40.dp),
                         verticalArrangement = Arrangement.spacedBy(28.dp),
                         contentPadding = PaddingValues(bottom = 60.dp)
                     ) {
                         // Editorial Screen Header
                         item {
-                            Text(
-                                text = "Categories",
-                                style = ErasmusTvTypography.HeroTitleLarge.copy(fontSize = 28.sp),
-                                color = TextPrimary,
-                                modifier = Modifier.padding(bottom = 6.dp)
-                            )
+                            ErasmusPageHeader(title = "Categories")
                         }
 
                         // Section 1: Browse
@@ -230,10 +223,7 @@ fun CategoriesScreen(
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
-                            .graphicsLayer {
-                                translationX = contentShift.toPx()
-                            }
-                            .padding(start = 64.dp, top = 28.dp, end = 44.dp)
+                            .padding(start = 48.dp, top = 68.dp, end = 44.dp)
                     ) {
                         item {
                             // Header with Back arrow & Studio Title
@@ -244,41 +234,36 @@ fun CategoriesScreen(
                             ) {
                                 TvFocusableCard(
                                     onClick = { viewModel.backToOverview() },
-                                    shape = RectangleShape,
-                                    focusedScale = 1.0f,
+                                    contentDescription = "Back to categories",
+                                    shape = CircleShape,
+                                    focusedScale = TvMotion.FocusScaleButton,
                                     focusedBorderColor = FocusWhite,
                                     focusedBorderWidth = 1.5.dp,
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(40.dp)
                                         .focusRequester(firstItemFocusRequester)
                                 ) { isFocused ->
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
+                                            .clip(CircleShape)
                                             .background(
-                                                if (isFocused) Color(0x33FFFFFF) else SurfaceElevated,
-                                                RectangleShape
-                                            )
-                                            .border(
-                                                1.dp,
-                                                if (isFocused) FocusWhite else BorderHairline,
-                                                RectangleShape
+                                                if (isFocused) Color.White
+                                                else Color.White.copy(alpha = 0.10f),
+                                                CircleShape
                                             ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                            contentDescription = "Back",
-                                            tint = FocusWhite,
-                                            modifier = Modifier.size(18.dp)
+                                            contentDescription = null,
+                                            tint = if (isFocused) PitchBlack else TextPrimary,
+                                            modifier = Modifier.size(17.dp)
                                         )
                                     }
                                 }
 
-                                Text(
-                                    text = state.studio.name,
-                                    style = ErasmusTvTypography.HeroTitleLarge.copy(fontSize = 32.sp)
-                                )
+                                ErasmusPageHeader(title = state.studio.name)
                             }
                         }
 
@@ -298,20 +283,19 @@ fun CategoriesScreen(
 
                                 // Movies / Series Tab Toggle
                                 Row(
-                                    modifier = Modifier
-                                        .background(Color(0x18FFFFFF), RectangleShape)
-                                        .padding(3.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.Small)
                                 ) {
-                                    CategoryFilterTab(
+                                    ErasmusChip(
                                         label = "Movies",
                                         isSelected = state.isShowingMovies,
-                                        onClick = { viewModel.toggleFilter(true) }
+                                        onClick = { viewModel.toggleFilter(true) },
+                                        height = 34.dp
                                     )
-                                    CategoryFilterTab(
+                                    ErasmusChip(
                                         label = "Series",
                                         isSelected = !state.isShowingMovies,
-                                        onClick = { viewModel.toggleFilter(false) }
+                                        onClick = { viewModel.toggleFilter(false) },
+                                        height = 34.dp
                                     )
                                 }
                             }
@@ -328,8 +312,7 @@ fun CategoriesScreen(
                                     items(currentList, key = { "${it.mediaType}:${it.id}" }) { item ->
                                         MediaPosterCard(
                                             item = item,
-                                            onClick = { onMediaClick(item) },
-                                            cardWidth = 140
+                                            onClick = { onMediaClick(item) }
                                         )
                                     }
                                 }
@@ -357,8 +340,7 @@ fun CategoriesScreen(
                                     items(allItems.reversed(), key = { "all:${it.mediaType}:${it.id}" }) { item ->
                                         MediaPosterCard(
                                             item = item,
-                                            onClick = { onMediaClick(item) },
-                                            cardWidth = 140
+                                            onClick = { onMediaClick(item) }
                                         )
                                     }
                                 }
@@ -369,14 +351,14 @@ fun CategoriesScreen(
             }
         }
 
-        // Persistent Left Navigation Rail
-        TvLeftNavRail(
+        // Floating pill navigation, overlaid above content
+        TvFloatingNavBar(
             currentRoute = NavRoutes.CATEGORIES,
             activeProfile = activeProfile,
             onNavigate = onNavigate,
             onProfileClick = onProfileClick,
-            onFocusChanged = { isRailFocused = it },
-            onNavigateRight = {
+            onFocusChanged = { isNavFocused = it },
+            onNavigateIntoContent = {
                 try {
                     firstItemFocusRequester.requestFocus()
                     true
@@ -389,7 +371,7 @@ fun CategoriesScreen(
                     firstItemFocusRequester.requestFocus()
                 } catch (_: Exception) {}
             },
-            modifier = Modifier.align(Alignment.CenterStart)
+            modifier = Modifier.align(Alignment.TopCenter)
         )
     }
 }
@@ -412,31 +394,33 @@ private fun BrowseTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val darkGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF18181B), Color(0xFF27272A))
-    )
-
     TvFocusableCard(
         onClick = onClick,
+        contentDescription = item.title,
         modifier = modifier
-            .width(185.dp)
-            .height(86.dp),
-        shape = RectangleShape,
-        focusedScale = 1.025f,
+            .width(ErasmusDimens.CategoryTileWidth)
+            .height(ErasmusDimens.CategoryTileHeight),
+        shape = ErasmusShapes.Tile,
+        focusedScale = TvMotion.FocusScaleStudio,
         focusedBorderColor = FocusWhite,
         focusedBorderWidth = 1.5.dp
     ) { isFocused ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RectangleShape)
-                .background(darkGradient)
+                .clip(ErasmusShapes.Tile)
+                .background(
+                    Brush.verticalGradient(
+                        if (isFocused) listOf(SurfaceCardFocused, SurfaceCardRest)
+                        else listOf(SurfaceCardRest, PitchBlack)
+                    )
+                )
                 .border(
                     width = 1.dp,
-                    color = if (isFocused) Color.Transparent else BorderSubtle,
-                    shape = RectangleShape
+                    color = if (isFocused) Color.Transparent else Color.White.copy(alpha = 0.08f),
+                    shape = ErasmusShapes.Tile
                 )
-                .padding(horizontal = 18.dp, vertical = 14.dp),
+                .padding(horizontal = ErasmusSpacing.Medium, vertical = ErasmusSpacing.MediumSmall),
             contentAlignment = Alignment.BottomStart
         ) {
             Text(
@@ -460,25 +444,29 @@ private fun StudioTile(
 ) {
     TvFocusableCard(
         onClick = onClick,
+        contentDescription = "${'$'}{studio.name} channel",
         modifier = modifier
-            .width(185.dp)
-            .height(86.dp),
-        shape = RectangleShape,
-        focusedScale = 1.025f,
+            .width(ErasmusDimens.CategoryTileWidth)
+            .height(ErasmusDimens.CategoryTileHeight),
+        shape = ErasmusShapes.Tile,
+        focusedScale = TvMotion.FocusScaleStudio,
         focusedBorderColor = FocusWhite,
         focusedBorderWidth = 1.5.dp
     ) { isFocused ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RectangleShape)
+                .clip(ErasmusShapes.Tile)
                 .background(
-                    if (isFocused) Color(0xFF1E1E24) else SurfaceElevated
+                    Brush.verticalGradient(
+                        if (isFocused) listOf(SurfaceCardFocused, SurfaceCardRest)
+                        else listOf(SurfaceCardRest, PitchBlack)
+                    )
                 )
                 .border(
                     width = 1.dp,
-                    color = if (isFocused) Color.Transparent else BorderSubtle,
-                    shape = RectangleShape
+                    color = if (isFocused) Color.Transparent else Color.White.copy(alpha = 0.08f),
+                    shape = ErasmusShapes.Tile
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -547,34 +535,36 @@ private fun LanguageTile(
     language: LanguageCategoryItem,
     modifier: Modifier = Modifier
 ) {
-    val darkGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF141414), Color(0xFF1F1F23))
-    )
-
     TvFocusableCard(
         onClick = {},
+        contentDescription = language.englishTitle,
         modifier = modifier
-            .width(185.dp)
-            .height(86.dp),
-        shape = RectangleShape,
-        focusedScale = 1.025f,
+            .width(ErasmusDimens.CategoryTileWidth)
+            .height(ErasmusDimens.CategoryTileHeight),
+        shape = ErasmusShapes.Tile,
+        focusedScale = TvMotion.FocusScaleStudio,
         focusedBorderColor = FocusWhite,
         focusedBorderWidth = 1.5.dp
     ) { isFocused ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RectangleShape)
-                .background(darkGradient)
+                .clip(ErasmusShapes.Tile)
+                .background(
+                    Brush.verticalGradient(
+                        if (isFocused) listOf(SurfaceCardFocused, SurfaceCardRest)
+                        else listOf(SurfaceCardRest, PitchBlack)
+                    )
+                )
                 .border(
                     width = 1.dp,
-                    color = if (isFocused) Color.Transparent else BorderSubtle,
-                    shape = RectangleShape
+                    color = if (isFocused) Color.Transparent else Color.White.copy(alpha = 0.08f),
+                    shape = ErasmusShapes.Tile
                 )
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = ErasmusSpacing.Medium, vertical = ErasmusSpacing.MediumSmall)
         ) {
             Column(
-                modifier = Modifier.align(Alignment.CenterStart)
+                modifier = Modifier.align(Alignment.TopCenter)
             ) {
                 Text(
                     text = language.localTitle,
@@ -595,55 +585,5 @@ private fun LanguageTile(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun CategoryFilterTab(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-
-    Box(
-        modifier = Modifier
-            .clip(RectangleShape)
-            .background(
-                when {
-                    isSelected -> FocusWhite
-                    isFocused -> Color(0x33FFFFFF)
-                    else -> Color.Transparent
-                }
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            )
-            .onKeyEvent { keyEvent ->
-                if (keyEvent.type == KeyEventType.KeyUp) {
-                    when (keyEvent.key) {
-                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
-                            onClick()
-                            true
-                        }
-                        else -> false
-                    }
-                } else false
-            }
-            .focusable(interactionSource = interactionSource)
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = label,
-            style = ErasmusTvTypography.Badge.copy(
-                fontSize = 12.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-            ),
-            color = if (isSelected) PitchBlack else if (isFocused) FocusWhite else TextSecondary
-        )
     }
 }

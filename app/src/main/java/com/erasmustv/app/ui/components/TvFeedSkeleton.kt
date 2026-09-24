@@ -1,42 +1,60 @@
 package com.erasmustv.app.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.erasmustv.app.core.theme.BorderHairline
+import com.erasmustv.app.core.theme.ErasmusDimens
+import com.erasmustv.app.core.theme.ErasmusShapes
 import com.erasmustv.app.core.theme.PitchBlack
-import com.erasmustv.app.core.theme.SurfaceElevated
-import com.erasmustv.app.core.theme.rememberShimmerBrush
+import com.erasmustv.app.core.theme.rememberSkeletonBrush
 
 /**
- * Android TV Shimmer Skeleton Placeholder for Feed Screens (Home, Movies, TV, Anime).
- * Renders a full-width hero billboard placeholder followed by horizontal card rows.
- * Uses a luminous diagonal shimmer sweep matching Apple TV & Netflix TV ergonomics.
+ * ERASMUS SKELETON LOADING STATES.
+ *
+ * Skeletons mirror the real layout's geometry — same gutters, same card sizes,
+ * same corner radii — so content arriving causes no visible reflow or jump.
+ * They are intentionally dull: a calm breathing tone rather than a travelling
+ * highlight, because the loading state should not be the most animated thing
+ * the user ever sees.
+ */
+
+/** Rounded placeholder block. Text lines use a pill radius, cards use card radius. */
+@Composable
+private fun SkeletonBlock(
+    brush: Brush,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(4.dp)
+) {
+    Box(modifier = modifier.background(brush, shape))
+}
+
+/**
+ * Feed skeleton for hero-led pages (Home, Movies, TV Shows, Anime).
  */
 @Composable
 fun TvFeedSkeleton(
     modifier: Modifier = Modifier,
     contentShift: Dp = 0.dp
 ) {
-    val shimmerBrush = rememberShimmerBrush()
+    val brush = rememberSkeletonBrush()
 
     Column(
         modifier = modifier
@@ -44,129 +62,106 @@ fun TvFeedSkeleton(
             .background(PitchBlack)
             .graphicsLayer { translationX = contentShift.toPx() }
     ) {
-        // Hero Billboard Skeleton (synchronized to Phase 14 335dp height)
+        // Hero region — matches the real hero height so the first shelf does
+        // not shift downward when content resolves.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(335.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            SurfaceElevated.copy(alpha = 0.55f),
-                            PitchBlack
-                        )
-                    )
+                .height(ErasmusDimens.HeroHeight)
+                .padding(
+                    start = ErasmusDimens.HeroContentStartInset,
+                    top = ErasmusDimens.HeroHeight * 0.42f
                 )
-                .padding(start = 64.dp, top = 54.dp)
         ) {
-            Column(modifier = Modifier.width(520.dp)) {
-                // Category / Tag pill
-                Box(
-                    modifier = Modifier
-                        .size(width = 110.dp, height = 18.dp)
-                        .background(shimmerBrush, RectangleShape)
-                        .border(1.dp, BorderHairline, RectangleShape)
+            Column(modifier = Modifier.width(ErasmusDimens.HeroContentMaxWidth)) {
+                SkeletonBlock(
+                    brush = brush,
+                    modifier = Modifier.size(width = 300.dp, height = 34.dp),
+                    shape = RoundedCornerShape(6.dp)
                 )
-
                 Spacer(modifier = Modifier.height(14.dp))
-
-                // Title bar
-                Box(
-                    modifier = Modifier
-                        .size(width = 340.dp, height = 36.dp)
-                        .background(shimmerBrush, RectangleShape)
-                )
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Metadata tags row
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     repeat(3) {
-                        Box(
-                            modifier = Modifier
-                                .size(width = 56.dp, height = 16.dp)
-                                .background(shimmerBrush, RectangleShape)
+                        SkeletonBlock(
+                            brush = brush,
+                            modifier = Modifier.size(width = 54.dp, height = 14.dp)
                         )
                     }
                 }
-
                 Spacer(modifier = Modifier.height(14.dp))
-
-                // Overview lines
-                Box(
+                SkeletonBlock(
+                    brush = brush,
                     modifier = Modifier
-                        .fillMaxWidth(0.9f)
-                        .height(12.dp)
-                        .background(shimmerBrush, RectangleShape)
+                        .fillMaxWidth(0.94f)
+                        .height(11.dp)
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                Box(
+                Spacer(modifier = Modifier.height(7.dp))
+                SkeletonBlock(
+                    brush = brush,
                     modifier = Modifier
-                        .fillMaxWidth(0.65f)
-                        .height(12.dp)
-                        .background(shimmerBrush, RectangleShape)
+                        .fillMaxWidth(0.66f)
+                        .height(11.dp)
                 )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Button placeholders
+                Spacer(modifier = Modifier.height(22.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .size(width = 120.dp, height = 38.dp)
-                            .background(shimmerBrush, RectangleShape)
-                            .border(1.dp, BorderHairline, RectangleShape)
+                    SkeletonBlock(
+                        brush = brush,
+                        modifier = Modifier.size(
+                            width = 132.dp,
+                            height = ErasmusDimens.HeroButtonHeight
+                        ),
+                        shape = ErasmusShapes.ButtonLarge
                     )
-                    Box(
-                        modifier = Modifier
-                            .size(width = 100.dp, height = 38.dp)
-                            .background(shimmerBrush, RectangleShape)
-                            .border(1.dp, BorderHairline, RectangleShape)
+                    SkeletonBlock(
+                        brush = brush,
+                        modifier = Modifier.size(
+                            width = 108.dp,
+                            height = ErasmusDimens.HeroButtonHeight
+                        ),
+                        shape = ErasmusShapes.ButtonLarge
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // First Horizontal Poster Shelf
-        TvSkeletonShelf(titleWidth = 140.dp, shimmerBrush = shimmerBrush)
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Second Horizontal Poster Shelf
-        TvSkeletonShelf(titleWidth = 110.dp, shimmerBrush = shimmerBrush)
+        Spacer(modifier = Modifier.height(ErasmusDimens.RailSpacing))
+        TvSkeletonShelf(titleWidth = 180.dp, brush = brush)
+        Spacer(modifier = Modifier.height(ErasmusDimens.RailSpacing))
+        TvSkeletonShelf(titleWidth = 140.dp, brush = brush)
     }
 }
 
 @Composable
 private fun TvSkeletonShelf(
     titleWidth: Dp,
-    shimmerBrush: Brush,
+    brush: Brush,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        // Shelf Title
-        Box(
+        SkeletonBlock(
+            brush = brush,
             modifier = Modifier
-                .padding(start = 64.dp, bottom = 10.dp)
-                .size(width = titleWidth, height = 18.dp)
-                .background(shimmerBrush, RectangleShape)
+                .padding(start = ErasmusDimens.RailStartGutter)
+                .size(width = titleWidth, height = 24.dp),
+            shape = RoundedCornerShape(5.dp)
         )
 
-        // Poster Row
+        Spacer(modifier = Modifier.height(ErasmusDimens.RailTitleGap))
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 64.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(start = ErasmusDimens.RailStartGutter),
+            horizontalArrangement = Arrangement.spacedBy(ErasmusDimens.CardSpacing)
         ) {
-            repeat(8) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 138.dp, height = 207.dp)
-                        .background(shimmerBrush, RectangleShape)
-                        .border(1.dp, BorderHairline, RectangleShape)
+            repeat(7) {
+                SkeletonBlock(
+                    brush = brush,
+                    modifier = Modifier.size(
+                        width = ErasmusDimens.PosterCardWidth,
+                        height = ErasmusDimens.PosterCardHeight
+                    ),
+                    shape = ErasmusShapes.Card
                 )
             }
         }
@@ -174,48 +169,89 @@ private fun TvSkeletonShelf(
 }
 
 /**
- * Android TV Shimmer Skeleton Placeholder for Grid Screens (Watchlist, Catalog).
+ * Skeleton for rail-based pages that have no hero (e.g. a studio catalogue).
+ * Using the feed skeleton there would flash a hero block that never arrives.
+ */
+@Composable
+fun TvRailsSkeleton(
+    modifier: Modifier = Modifier,
+    railCount: Int = 2,
+    showPageTitle: Boolean = true
+) {
+    val brush = rememberSkeletonBrush()
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(PitchBlack)
+            .padding(top = ErasmusDimens.NavPillContentClearance)
+    ) {
+        if (showPageTitle) {
+            SkeletonBlock(
+                brush = brush,
+                modifier = Modifier
+                    .padding(start = ErasmusDimens.RailStartGutter)
+                    .size(width = 240.dp, height = 34.dp),
+                shape = RoundedCornerShape(6.dp)
+            )
+            Spacer(modifier = Modifier.height(ErasmusDimens.RailSpacing))
+        }
+
+        repeat(railCount) { index ->
+            if (index > 0) {
+                Spacer(modifier = Modifier.height(ErasmusDimens.RailSpacing))
+            }
+            TvSkeletonShelf(titleWidth = if (index == 0) 200.dp else 150.dp, brush = brush)
+        }
+    }
+}
+
+/**
+ * Grid skeleton for poster-grid pages (Watch List, Categories).
  */
 @Composable
 fun TvGridSkeleton(
     modifier: Modifier = Modifier,
-    contentShift: Dp = 0.dp
+    contentShift: Dp = 0.dp,
+    columns: Int = 6
 ) {
-    val shimmerBrush = rememberShimmerBrush()
+    val brush = rememberSkeletonBrush()
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(PitchBlack)
             .graphicsLayer { translationX = contentShift.toPx() }
-            .padding(start = 64.dp, top = 36.dp, end = 48.dp)
+            .padding(
+                start = ErasmusDimens.RailStartGutter,
+                top = ErasmusDimens.NavPillContentClearance,
+                end = ErasmusDimens.RailEndGutter
+            )
     ) {
-        // Title placeholder
-        Box(
-            modifier = Modifier
-                .padding(bottom = 22.dp)
-                .size(width = 160.dp, height = 24.dp)
-                .background(shimmerBrush, RectangleShape)
+        SkeletonBlock(
+            brush = brush,
+            modifier = Modifier.size(width = 220.dp, height = 34.dp),
+            shape = RoundedCornerShape(6.dp)
         )
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            repeat(5) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    repeat(3) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(210.dp)
-                                .background(shimmerBrush, RectangleShape)
-                                .border(1.dp, BorderHairline, RectangleShape)
-                        )
-                    }
+        Spacer(modifier = Modifier.height(ErasmusDimens.GridRowSpacing))
+
+        repeat(2) { rowIndex ->
+            if (rowIndex > 0) {
+                Spacer(modifier = Modifier.height(ErasmusDimens.GridRowSpacing))
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(ErasmusDimens.GridItemSpacing),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                repeat(columns) {
+                    SkeletonBlock(
+                        brush = brush,
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(2f / 3f),
+                        shape = ErasmusShapes.Card
+                    )
                 }
             }
         }
@@ -223,14 +259,14 @@ fun TvGridSkeleton(
 }
 
 /**
- * Android TV Shimmer Skeleton Placeholder for Media Detail Screen.
+ * Detail page skeleton — mirrors the cinematic detail hero layout.
  */
 @Composable
 fun TvDetailSkeleton(
     modifier: Modifier = Modifier,
     contentShift: Dp = 0.dp
 ) {
-    val shimmerBrush = rememberShimmerBrush()
+    val brush = rememberSkeletonBrush()
 
     Box(
         modifier = modifier
@@ -238,105 +274,83 @@ fun TvDetailSkeleton(
             .background(PitchBlack)
             .graphicsLayer { translationX = contentShift.toPx() }
     ) {
-        // Backdrop wash
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            SurfaceElevated.copy(alpha = 0.5f),
-                            PitchBlack
-                        )
-                    )
-                )
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 82.dp, top = 70.dp, end = 60.dp)
+                .padding(
+                    start = ErasmusDimens.HeroContentStartInset,
+                    top = ErasmusDimens.HeroHeight * 0.38f,
+                    end = ErasmusDimens.RailEndGutter
+                )
         ) {
-            // Title
-            Box(
-                modifier = Modifier
-                    .size(width = 380.dp, height = 38.dp)
-                    .background(shimmerBrush, RectangleShape)
+            SkeletonBlock(
+                brush = brush,
+                modifier = Modifier.size(width = 360.dp, height = 38.dp),
+                shape = RoundedCornerShape(6.dp)
             )
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Metadata row (Year, Rating, Duration, Quality)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 repeat(4) {
-                    Box(
-                        modifier = Modifier
-                            .size(width = 60.dp, height = 20.dp)
-                            .background(shimmerBrush, RectangleShape)
+                    SkeletonBlock(
+                        brush = brush,
+                        modifier = Modifier.size(width = 58.dp, height = 16.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            // Overview lines
-            Box(
-                modifier = Modifier
-                    .width(540.dp)
-                    .height(14.dp)
-                    .background(shimmerBrush, RectangleShape)
+            SkeletonBlock(
+                brush = brush,
+                modifier = Modifier.size(width = 520.dp, height = 12.dp)
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Box(
-                modifier = Modifier
-                    .width(480.dp)
-                    .height(14.dp)
-                    .background(shimmerBrush, RectangleShape)
+            SkeletonBlock(
+                brush = brush,
+                modifier = Modifier.size(width = 460.dp, height = 12.dp)
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Box(
-                modifier = Modifier
-                    .width(360.dp)
-                    .height(14.dp)
-                    .background(shimmerBrush, RectangleShape)
+            SkeletonBlock(
+                brush = brush,
+                modifier = Modifier.size(width = 330.dp, height = 12.dp)
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(26.dp))
 
-            // Action Buttons
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Box(
-                    modifier = Modifier
-                        .size(width = 140.dp, height = 44.dp)
-                        .background(shimmerBrush, RectangleShape)
-                        .border(1.dp, BorderHairline, RectangleShape)
+                SkeletonBlock(
+                    brush = brush,
+                    modifier = Modifier.size(width = 150.dp, height = ErasmusDimens.HeroButtonHeight),
+                    shape = ErasmusShapes.ButtonLarge
                 )
-                Box(
-                    modifier = Modifier
-                        .size(width = 120.dp, height = 44.dp)
-                        .background(shimmerBrush, RectangleShape)
-                        .border(1.dp, BorderHairline, RectangleShape)
+                SkeletonBlock(
+                    brush = brush,
+                    modifier = Modifier.size(width = 170.dp, height = ErasmusDimens.HeroButtonHeight),
+                    shape = ErasmusShapes.ButtonLarge
                 )
             }
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(ErasmusDimens.RailSpacing))
 
-            // Cast / Similar shelf shimmer
-            Box(
-                modifier = Modifier
-                    .size(width = 150.dp, height = 20.dp)
-                    .background(shimmerBrush, RectangleShape)
+            SkeletonBlock(
+                brush = brush,
+                modifier = Modifier.size(width = 170.dp, height = 24.dp),
+                shape = RoundedCornerShape(5.dp)
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(ErasmusDimens.RailTitleGap))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                repeat(7) {
-                    Box(
-                        modifier = Modifier
-                            .size(width = 130.dp, height = 195.dp)
-                            .background(shimmerBrush, RectangleShape)
-                            .border(1.dp, BorderHairline, RectangleShape)
+            Row(horizontalArrangement = Arrangement.spacedBy(ErasmusDimens.CardSpacing)) {
+                repeat(6) {
+                    SkeletonBlock(
+                        brush = brush,
+                        modifier = Modifier.size(
+                            width = ErasmusDimens.PosterCardWidth,
+                            height = ErasmusDimens.PosterCardHeight
+                        ),
+                        shape = ErasmusShapes.Card
                     )
                 }
             }
@@ -345,42 +359,37 @@ fun TvDetailSkeleton(
 }
 
 /**
- * Android TV Shimmer Skeleton Placeholder for Search Results Panel.
+ * Search results skeleton — a poster grid matching the real results grid.
  */
 @Composable
-fun TvSearchSkeleton(modifier: Modifier = Modifier) {
-    val shimmerBrush = rememberShimmerBrush()
+fun TvSearchSkeleton(
+    modifier: Modifier = Modifier,
+    columns: Int = 4
+) {
+    val brush = rememberSkeletonBrush()
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 20.dp)
+            .padding(horizontal = ErasmusDimens.GridItemSpacing, vertical = 16.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(width = 160.dp, height = 22.dp)
-                .background(shimmerBrush, RectangleShape)
+        SkeletonBlock(
+            brush = brush,
+            modifier = Modifier.size(width = 160.dp, height = 20.dp)
         )
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(ErasmusDimens.GridRowSpacing))
         Row(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(ErasmusDimens.GridItemSpacing),
             modifier = Modifier.fillMaxWidth()
         ) {
-            repeat(4) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    repeat(2) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(190.dp)
-                                .background(shimmerBrush, RectangleShape)
-                                .border(1.dp, BorderHairline, RectangleShape)
-                        )
-                    }
-                }
+            repeat(columns) {
+                SkeletonBlock(
+                    brush = brush,
+                    modifier = Modifier
+                        .weight(1f)
+                        .aspectRatio(2f / 3f),
+                    shape = ErasmusShapes.Card
+                )
             }
         }
     }

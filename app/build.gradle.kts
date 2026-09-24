@@ -119,6 +119,9 @@ dependencies {
     // Image loading with TV caching
     implementation(libs.coil.compose)
 
+    // Palette extraction for hero-artwork-derived accent colors
+    implementation(libs.androidx.palette.ktx)
+
     // DataStore for session & active profile
     implementation(libs.androidx.datastore.preferences)
 

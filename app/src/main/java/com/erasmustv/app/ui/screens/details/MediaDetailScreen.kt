@@ -1,11 +1,15 @@
 package com.erasmustv.app.ui.screens.details
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,26 +24,25 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.gestures.BringIntoViewSpec
-import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,10 +55,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -63,9 +68,11 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -75,53 +82,117 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.erasmustv.app.core.config.AppConfig
+import com.erasmustv.app.core.theme.ErasmusDimens
+import com.erasmustv.app.core.theme.ErasmusShapes
+import com.erasmustv.app.core.theme.ErasmusSpacing
 import com.erasmustv.app.core.theme.ErasmusTvTypography
 import com.erasmustv.app.core.theme.FocusWhite
 import com.erasmustv.app.core.theme.PitchBlack
-import com.erasmustv.app.core.theme.SurfaceCard
-import com.erasmustv.app.core.theme.SurfaceDark
+import com.erasmustv.app.core.theme.SurfaceCardRest
 import com.erasmustv.app.core.theme.TextMuted
 import com.erasmustv.app.core.theme.TextPrimary
 import com.erasmustv.app.core.theme.TextSecondary
+import com.erasmustv.app.core.theme.TvMotion
+import com.erasmustv.app.core.theme.rememberHeroAmbientColor
 import com.erasmustv.app.data.model.CastMember
 import com.erasmustv.app.data.model.MediaItem
 import com.erasmustv.app.data.model.MediaRating
 import com.erasmustv.app.data.model.TvEpisode
 import com.erasmustv.app.data.model.TvSeason
+import com.erasmustv.app.ui.components.ErasmusActionButton
+import com.erasmustv.app.ui.components.ErasmusButtonStyle
+import com.erasmustv.app.ui.components.ErasmusCardArtwork
+import com.erasmustv.app.ui.components.ErasmusCardBottomScrim
+import com.erasmustv.app.ui.components.ErasmusEmptyState
+import com.erasmustv.app.ui.components.ErasmusRailHeader
+import com.erasmustv.app.ui.components.HeroFrostedBackdrop
 import com.erasmustv.app.ui.components.MediaSectionRow
 import com.erasmustv.app.ui.components.TvDetailSkeleton
+import com.erasmustv.app.ui.components.TvFloatingNavBar
 import com.erasmustv.app.ui.components.TvFocusableCard
-import com.erasmustv.app.ui.components.TvLeftNavRail
+import com.erasmustv.app.ui.focus.FeedFocusCoordinator
+import com.erasmustv.app.ui.focus.RailFocusHandle
+import com.erasmustv.app.ui.focus.RailZone
+import com.erasmustv.app.ui.focus.SingleTargetZone
+import com.erasmustv.app.ui.focus.railFocusContainer
+import com.erasmustv.app.ui.focus.railFocusItem
+import com.erasmustv.app.ui.focus.rememberFeedBringIntoViewSpec
+import com.erasmustv.app.ui.focus.rememberFeedFocusCoordinator
+import com.erasmustv.app.ui.focus.rememberFocusZoneMemory
+import com.erasmustv.app.ui.focus.rememberRailFocusHandleStore
 import com.erasmustv.app.ui.navigation.NavRoutes
 import kotlinx.coroutines.launch
 
-private val ElectricBlue = Color(0xFF1D90F5)
+/**
+ * Left inset for detail copy. Slightly deeper than a rail gutter so the hero
+ * composition reads as a title card rather than as another shelf.
+ */
+private val DETAIL_CONTENT_INSET = 82.dp
 
-// Pre-computed gradient brushes dissolving into page background
+/**
+ * Readability wash over the backdrop, weighted to the left where the copy sits.
+ * Stops are close together so the falloff has no visible banding on an OLED.
+ */
 private val DetailHeroHorizontalGradient = Brush.horizontalGradient(
-    colors = listOf(
-        PitchBlack.copy(alpha = 0.94f),
-        PitchBlack.copy(alpha = 0.82f),
-        PitchBlack.copy(alpha = 0.52f),
-        PitchBlack.copy(alpha = 0.15f),
-        Color.Transparent
-    ),
-    startX = 0f,
-    endX = 1350f
+    colorStops = arrayOf(
+        0.00f to PitchBlack.copy(alpha = 0.95f),
+        0.18f to PitchBlack.copy(alpha = 0.86f),
+        0.38f to PitchBlack.copy(alpha = 0.62f),
+        0.58f to PitchBlack.copy(alpha = 0.30f),
+        0.78f to PitchBlack.copy(alpha = 0.08f),
+        1.00f to Color.Transparent
+    )
 )
 
+/**
+ * Vertical shading that grounds the lower third for copy legibility. It no
+ * longer terminates in opaque black: the hard floor is what created a visible
+ * seam against the screen-level [HeroAmbientWash]. Instead the artwork
+ * composite is feathered to transparent by [DetailHeroBottomFadeMask] so the
+ * ambient wash shows *through* the hero's lower edge — one continuous surface.
+ */
 private val DetailHeroVerticalGradient = Brush.verticalGradient(
-    colors = listOf(
-        Color.Transparent,
-        Color.Transparent,
-        PitchBlack.copy(alpha = 0.20f),
-        PitchBlack.copy(alpha = 0.60f),
-        PitchBlack.copy(alpha = 0.90f),
-        PitchBlack
+    colorStops = arrayOf(
+        0.00f to PitchBlack.copy(alpha = 0.55f),
+        0.16f to Color.Transparent,
+        0.52f to Color.Transparent,
+        0.70f to PitchBlack.copy(alpha = 0.22f),
+        0.84f to PitchBlack.copy(alpha = 0.42f),
+        0.94f to PitchBlack.copy(alpha = 0.58f),
+        1.00f to PitchBlack.copy(alpha = 0.66f)
+    )
+)
+
+/**
+ * Alpha mask applied to the artwork composite via [BlendMode.DstIn]: keeps the
+ * hero opaque through its upper two-thirds, then feathers the entire stack
+ * (image + shading) to fully transparent at the bottom so the ambient wash
+ * beneath becomes the visible surface. This is what dissolves the detail hero
+ * into the page instead of ending on a hard black edge.
+ */
+private val DetailHeroBottomFadeMask = Brush.verticalGradient(
+    colorStops = arrayOf(
+        0.00f to Color.Black,
+        0.58f to Color.Black,
+        0.70f to Color.Black.copy(alpha = 0.88f),
+        0.80f to Color.Black.copy(alpha = 0.60f),
+        0.88f to Color.Black.copy(alpha = 0.34f),
+        0.95f to Color.Black.copy(alpha = 0.12f),
+        1.00f to Color.Transparent
     )
 )
 
 @kotlin.OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+/**
+ * Focus-engine zone keys for a detail page. The page is structurally a feed, so
+ * it declares its vertical bands the same way a browse screen does.
+ */
+private const val ZONE_ACTIONS = "__detail_actions__"
+private const val ZONE_SEASONS = "__detail_seasons__"
+private const val ZONE_EPISODES = "__detail_episodes__"
+private const val ZONE_SIMILAR = "__detail_similar__"
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MediaDetailScreen(
     viewModel: MediaDetailViewModel,
@@ -136,109 +207,164 @@ fun MediaDetailScreen(
 
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
-    val primaryActionFocusRequester = remember { FocusRequester() }
-    val similarFocusRequester = remember { FocusRequester() }
-    val episodesFocusRequester = remember { FocusRequester() }
-    val railFocusRequester = remember { FocusRequester() }
-    var isRailFocused by remember { mutableStateOf(false) }
-    var activeContentFocusRequester by remember { mutableStateOf(primaryActionFocusRequester) }
 
-    // Remote BACK Button Handling:
-    // When in content, pressing BACK hops focus cleanly to the sidebar rail.
-    androidx.activity.compose.BackHandler(enabled = !isRailFocused) {
+    // ------------------------------------------------------------------
+    // Focus engine.
+    //
+    // A detail page is structurally a feed — an actions row, then episodes, then
+    // recommendations — so it uses the same coordinator, the same travelling
+    // column, and the same zone map as the browse screens rather than its own
+    // hand-rolled chain of `animateScrollToItem` + `delay(40)` + `requestFocus`.
+    // ------------------------------------------------------------------
+    val focusMemory = rememberFocusZoneMemory()
+    val coordinator = rememberFeedFocusCoordinator(listState, coroutineScope, focusMemory)
+    val handleStore = rememberRailFocusHandleStore()
+
+    val primaryActionFocusRequester = remember { FocusRequester() }
+    val navFocusRequester = remember { FocusRequester() }
+    var isNavFocused by remember { mutableStateOf(false) }
+
+    val focusNav: () -> Boolean = {
         try {
-            railFocusRequester.requestFocus()
+            navFocusRequester.requestFocus()
+            true
         } catch (_: Exception) {
-            onBackClick()
+            false
         }
     }
-    // When in rail, pressing BACK exits the detail screen back to previous screen.
-    androidx.activity.compose.BackHandler(enabled = isRailFocused) {
+
+    // BACK on a detail page leaves the page, in one press.
+    //
+    // The browsing screens deliberately do the two-step dance (first BACK moves
+    // focus to the navigation, because they are roots with nowhere to pop to).
+    // A detail page is not a root: the user pressed BACK to go back, and making
+    // them press it twice reads as the remote having missed the first press.
+    BackHandler {
         onBackClick()
     }
 
-    val mediaId = (uiState as? DetailUiState.MovieSuccess)?.movie?.id ?: (uiState as? DetailUiState.TvSuccess)?.tv?.id
+    val mediaId = (uiState as? DetailUiState.MovieSuccess)?.movie?.id
+        ?: (uiState as? DetailUiState.TvSuccess)?.tv?.id
+
+    // Entry focus is the primary action, claimed once per title.
+    //
+    // Keyed on the media id rather than on the whole state, so the watchlist
+    // toggle, the resume position arriving, or a season being selected cannot
+    // re-run it and drag focus back to Watch Now from wherever the user is.
+    var focusedTitleId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(mediaId) {
-        if (mediaId != null) {
-            kotlinx.coroutines.delay(180)
-            try {
-                primaryActionFocusRequester.requestFocus()
-            } catch (_: Exception) {}
+        if (mediaId == null || focusedTitleId == mediaId) return@LaunchedEffect
+        // Returning from the player: restore the exact control the user left.
+        if (!coordinator.restoreRememberedFocus()) {
+            runCatching { primaryActionFocusRequester.requestFocus() }
         }
+        focusedTitleId = mediaId
     }
 
-    val contentShift by animateDpAsState(
-        targetValue = if (isRailFocused) 76.dp else 0.dp,
-        animationSpec = tween(160, easing = FastOutSlowInEasing),
-        label = "detailContentShift"
+    // The floating navigation overlays the top of the page, so anything scrolled
+    // to the top must stop clear of it; the bottom inset keeps a focused card's
+    // lift from being clipped by the screen edge.
+    val navClearancePx = with(LocalDensity.current) {
+        ErasmusDimens.NavPillContentClearance.toPx()
+    }
+    val focusClearancePx = with(LocalDensity.current) {
+        ErasmusDimens.FocusScrollClearance.toPx()
+    }
+    val detailBringIntoViewSpec = rememberFeedBringIntoViewSpec(navClearancePx, focusClearancePx)
+
+    // Artwork-derived ambience, identical to the Home/Movies/TV heroes so a
+    // detail page feels like the same world rather than a separate screen.
+    val ambientArtworkPath = (uiState as? DetailUiState.MovieSuccess)?.movie
+        ?.let { it.backdropPath ?: it.posterPath }
+        ?: (uiState as? DetailUiState.TvSuccess)?.tv?.let { it.backdropPath ?: it.posterPath }
+    val ambientPosterPath = (uiState as? DetailUiState.MovieSuccess)?.movie?.posterPath
+        ?: (uiState as? DetailUiState.TvSuccess)?.tv?.posterPath
+
+    val ambientColor = rememberHeroAmbientColor(
+        artworkPath = ambientArtworkPath,
+        imageUrl = AppConfig.backdropUrl(ambientArtworkPath),
+        fallbackImageUrl = AppConfig.posterUrl(ambientPosterPath)
     )
-
-    val detailBringIntoViewSpec = remember {
-        object : BringIntoViewSpec {
-            override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
-                // Item is ABOVE the viewport (scrolled past top) — must scroll up to reveal it.
-                // offset is negative when the item's top edge is above the visible area.
-                if (offset < 0f) {
-                    return offset // negative → scrolls LazyColumn upward
-                }
-                // Item is already on-screen and in the upper visible band — don't re-centre it.
-                // This prevents the hero from being dragged away from the top edge when its
-                // buttons receive focus.
-                if (offset + size <= containerSize) {
-                    return 0f
-                }
-                // Item is partially or fully below the viewport — centre it.
-                val childCenter = offset + (size / 2f)
-                val targetCenter = containerSize * 0.5f
-                return childCenter - targetCenter
-            }
-        }
-    }
+    val heroImageUrl = AppConfig.backdropUrl(ambientArtworkPath)
+        ?: AppConfig.posterUrl(ambientPosterPath)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(PitchBlack)
     ) {
+        if (uiState is DetailUiState.MovieSuccess || uiState is DetailUiState.TvSuccess) {
+            HeroFrostedBackdrop(
+                artworkUrl = heroImageUrl,
+                ambientColor = ambientColor,
+                heroHeight = ErasmusDimens.DetailHeroHeight,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
         when (val state = uiState) {
-            is DetailUiState.Loading -> {
-                TvDetailSkeleton(contentShift = contentShift)
-            }
+            is DetailUiState.Loading -> TvDetailSkeleton()
+
             is DetailUiState.Error -> {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(48.dp),
+                        .padding(ErasmusSpacing.XLarge),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Text(text = state.message, style = ErasmusTvTypography.Body, color = TextPrimary)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    TvFocusableCard(onClick = onBackClick) {
-                        Text(text = "Back", style = ErasmusTvTypography.ButtonText, modifier = Modifier.padding(16.dp))
+                    ErasmusEmptyState(
+                        title = "Can't load this title",
+                        message = state.message
+                    )
+                    Spacer(modifier = Modifier.height(ErasmusSpacing.Large))
+                    Row(horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.MediumSmall)) {
+                        ErasmusActionButton(
+                            text = "Try Again",
+                            onClick = { viewModel.loadDetails() },
+                            style = ErasmusButtonStyle.Primary
+                        )
+                        ErasmusActionButton(
+                            text = "Go Back",
+                            onClick = onBackClick,
+                            style = ErasmusButtonStyle.Secondary
+                        )
                     }
                 }
             }
+
             is DetailUiState.MovieSuccess -> {
                 val movie = state.movie
+
+                // Zone map for a film: the actions row, then recommendations.
+                // The cast rail sits between them and is deliberately absent —
+                // it holds no interactive elements, so making it a focus stop
+                // would mean pressing OK on a headshot and having nothing happen.
+                // It scrolls through view on the way past instead.
+                val hasSimilar = movie.similar.isNotEmpty()
+                val similarRow = 1 + (if (movie.cast.isNotEmpty()) 1 else 0)
+                val similarHandle = handleStore.handleFor(ZONE_SIMILAR)
+
+                coordinator.setZoneOrder(
+                    buildList {
+                        add(ZONE_ACTIONS)
+                        if (hasSimilar) add(ZONE_SIMILAR)
+                    }
+                )
+                coordinator.register(
+                    SingleTargetZone(ZONE_ACTIONS, 0, primaryActionFocusRequester)
+                )
+                if (hasSimilar) {
+                    coordinator.register(RailZone(similarRow, similarHandle))
+                }
 
                 CompositionLocalProvider(LocalBringIntoViewSpec provides detailBringIntoViewSpec) {
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                translationX = contentShift.toPx()
-                            }
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = ErasmusSpacing.SectionLarge)
                     ) {
-                    item {
-                        Box(
-                            modifier = Modifier.onFocusChanged {
-                                if (it.hasFocus) {
-                                    activeContentFocusRequester = primaryActionFocusRequester
-                                }
-                            }
-                        ) {
+                        item(key = ZONE_ACTIONS) {
                             DetailHero(
                                 isTv = false,
                                 title = movie.title,
@@ -249,107 +375,109 @@ fun MediaDetailScreen(
                                 voteCount = movie.voteCount,
                                 year = movie.year,
                                 runtimeOrSeasons = movie.durationFormatted,
-                                certification = movie.certification ?: "PG-13",
+                                certification = movie.certification,
                                 status = movie.status,
                                 genres = movie.genres.map { it.name },
                                 overview = movie.overview,
                                 cast = movie.cast,
                                 ratings = movie.ratings,
                                 inWatchlist = state.inWatchlist,
-                                resumePosition = state.resumePosition,
-                                primaryActionLabel = if (state.resumePosition > 0) "Resume" else "Play Movie",
+                                primaryActionLabel = if (state.resumePosition > 0) "Resume" else "Watch Now",
                                 playFocusRequester = primaryActionFocusRequester,
+                                onFocused = { coordinator.onZoneFocused(ZONE_ACTIONS) },
                                 onPlayClick = {
-                                    onPlayClick("movie", movie.id, movie.title, null, null, movie.posterPath, movie.backdropPath, movie.logoPath, movie.tagline)
+                                    onPlayClick(
+                                        "movie", movie.id, movie.title, null, null,
+                                        movie.posterPath, movie.backdropPath, movie.logoPath, movie.tagline
+                                    )
                                 },
                                 onToggleWatchlist = { viewModel.toggleWatchlist() },
-                                onNavigateLeftToRail = {
-                                    try {
-                                        railFocusRequester.requestFocus()
-                                    } catch (_: Exception) {}
-                                },
+                                onNavigateLeftToRail = { focusNav() },
+                                onNavigateUpToNav = { focusNav() },
+                                onNavigateDown = { coordinator.moveVertical(ZONE_ACTIONS, +1) },
                                 onBackClick = onBackClick
                             )
                         }
-                    }
 
-                    // Cast row
-                    if (movie.cast.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(32.dp))
-                            CastSection(movie.cast)
+                        if (movie.cast.isNotEmpty()) {
+                            item(key = "__cast__") {
+                                Spacer(modifier = Modifier.height(ErasmusDimens.RailSpacing))
+                                CastSection(movie.cast)
+                            }
                         }
-                    }
 
-                    // Similar movies
-                    if (movie.similar.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(32.dp))
-                            Box(
-                                modifier = Modifier.onFocusChanged {
-                                    if (it.hasFocus) {
-                                        activeContentFocusRequester = similarFocusRequester
-                                    }
-                                }
-                            ) {
+                        if (hasSimilar) {
+                            item(key = ZONE_SIMILAR) {
+                                Spacer(modifier = Modifier.height(ErasmusDimens.RailSpacing))
                                 MediaSectionRow(
                                     title = "More Like This",
                                     items = movie.similar,
                                     onItemClick = onSimilarClick,
-                                    firstItemFocusRequester = similarFocusRequester,
-                                    onNavigateLeftToRail = {
-                                        try {
-                                            railFocusRequester.requestFocus()
-                                        } catch (_: Exception) {}
-                                    },
-                                    onNavigateDown = null,
-                                    onNavigateUp = {
-                                        coroutineScope.launch {
-                                            try {
-                                                listState.animateScrollToItem(0)
-                                                kotlinx.coroutines.delay(40)
-                                                primaryActionFocusRequester.requestFocus()
-                                            } catch (_: Exception) {}
-                                        }
-                                    }
+                                    handle = similarHandle,
+                                    coordinator = coordinator,
+                                    onLeftEdge = focusNav
                                 )
                             }
                         }
                     }
-
-                    item {
-                        Spacer(modifier = Modifier.height(80.dp))
-                    }
-                }
                 }
             }
+
             is DetailUiState.TvSuccess -> {
                 val tv = state.tv
-
                 val selectedSeasonNum = state.selectedSeason?.seasonNumber ?: 1
                 val primaryLabel = if (state.resumePosition > 0) {
-                    "Resume · S${selectedSeasonNum}:E1"
+                    "Resume S$selectedSeasonNum E1"
                 } else {
-                    "Play · S${selectedSeasonNum}:E1"
+                    "Watch Now"
+                }
+
+                // Zone map for a series. The season chips are their own zone
+                // rather than an appendage of the episode rail, which is what
+                // gives the chips → episodes → recommendations chain a defined
+                // step in each direction instead of the dead stop that existed
+                // whenever a series had more than one season.
+                val hasEpisodes = tv.seasons.isNotEmpty()
+                val hasMultipleSeasons = tv.seasons.count { it.seasonNumber > 0 } > 1
+                val hasSimilar = tv.similar.isNotEmpty()
+
+                val episodesRow = 1
+                val similarRow = episodesRow +
+                    (if (hasEpisodes) 1 else 0) +
+                    (if (tv.cast.isNotEmpty()) 1 else 0)
+
+                val seasonHandle = handleStore.handleFor(ZONE_SEASONS)
+                val episodeHandle = handleStore.handleFor(ZONE_EPISODES)
+                val similarHandle = handleStore.handleFor(ZONE_SIMILAR)
+
+                coordinator.setZoneOrder(
+                    buildList {
+                        add(ZONE_ACTIONS)
+                        if (hasEpisodes && hasMultipleSeasons) add(ZONE_SEASONS)
+                        if (hasEpisodes) add(ZONE_EPISODES)
+                        if (hasSimilar) add(ZONE_SIMILAR)
+                    }
+                )
+                coordinator.register(
+                    SingleTargetZone(ZONE_ACTIONS, 0, primaryActionFocusRequester)
+                )
+                if (hasEpisodes) {
+                    if (hasMultipleSeasons) {
+                        coordinator.register(RailZone(episodesRow, seasonHandle))
+                    }
+                    coordinator.register(RailZone(episodesRow, episodeHandle))
+                }
+                if (hasSimilar) {
+                    coordinator.register(RailZone(similarRow, similarHandle))
                 }
 
                 CompositionLocalProvider(LocalBringIntoViewSpec provides detailBringIntoViewSpec) {
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                translationX = contentShift.toPx()
-                            }
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = ErasmusSpacing.SectionLarge)
                     ) {
-                    item {
-                        Box(
-                            modifier = Modifier.onFocusChanged {
-                                if (it.hasFocus) {
-                                    activeContentFocusRequester = primaryActionFocusRequester
-                                }
-                            }
-                        ) {
+                        item(key = ZONE_ACTIONS) {
                             DetailHero(
                                 isTv = true,
                                 title = tv.title,
@@ -359,178 +487,106 @@ fun MediaDetailScreen(
                                 voteAverage = tv.voteAverage,
                                 voteCount = tv.voteCount,
                                 year = tv.year,
-                                runtimeOrSeasons = "${tv.numberOfSeasons ?: 1} Seasons",
-                                certification = tv.certification ?: "TV-MA",
-                                status = tv.status ?: "Returning Series",
+                                runtimeOrSeasons = tv.numberOfSeasons?.let {
+                                    if (it == 1) "1 Season" else "$it Seasons"
+                                } ?: "",
+                                certification = tv.certification,
+                                status = tv.status,
                                 genres = tv.genres.map { it.name },
                                 overview = tv.overview,
                                 cast = tv.cast,
                                 ratings = tv.ratings,
                                 inWatchlist = state.inWatchlist,
-                                resumePosition = state.resumePosition,
                                 primaryActionLabel = primaryLabel,
                                 playFocusRequester = primaryActionFocusRequester,
+                                onFocused = { coordinator.onZoneFocused(ZONE_ACTIONS) },
                                 onPlayClick = {
                                     val s = state.selectedSeason?.seasonNumber ?: 1
-                                    onPlayClick("tv", tv.id, tv.title, s, 1, tv.posterPath, tv.backdropPath, tv.logoPath, tv.tagline)
+                                    onPlayClick(
+                                        "tv", tv.id, tv.title, s, 1,
+                                        tv.posterPath, tv.backdropPath, tv.logoPath, tv.tagline
+                                    )
                                 },
                                 onToggleWatchlist = { viewModel.toggleWatchlist() },
-                                onNavigateLeftToRail = {
-                                    try {
-                                        railFocusRequester.requestFocus()
-                                    } catch (_: Exception) {}
-                                },
-                                onMoreEpisodesClick = {
-                                    coroutineScope.launch {
-                                        listState.animateScrollToItem(1)
-                                    }
-                                },
+                                onNavigateLeftToRail = { focusNav() },
+                                onNavigateUpToNav = { focusNav() },
+                                onNavigateDown = { coordinator.moveVertical(ZONE_ACTIONS, +1) },
                                 onBackClick = onBackClick
                             )
                         }
-                    }
 
-                    // TV Season Selector & Episode List
-                    if (tv.seasons.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(28.dp))
-                            Box(
-                                modifier = Modifier.onFocusChanged {
-                                    if (it.hasFocus) {
-                                        activeContentFocusRequester = episodesFocusRequester
-                                    }
-                                }
-                            ) {
+                        if (hasEpisodes) {
+                            item(key = ZONE_EPISODES) {
+                                Spacer(modifier = Modifier.height(ErasmusDimens.RailSpacing))
                                 TvEpisodesSection(
                                     seasons = tv.seasons,
                                     selectedSeason = state.selectedSeason,
                                     onSeasonSelect = { viewModel.selectSeason(it) },
                                     onEpisodeClick = { ep ->
-                                        onPlayClick("tv", tv.id, tv.title, ep.seasonNumber, ep.episodeNumber, tv.posterPath, ep.stillPath ?: tv.backdropPath, tv.logoPath, tv.tagline)
+                                        onPlayClick(
+                                            "tv", tv.id, tv.title, ep.seasonNumber, ep.episodeNumber,
+                                            tv.posterPath, ep.stillPath ?: tv.backdropPath,
+                                            tv.logoPath, tv.tagline
+                                        )
                                     },
-                                    firstItemFocusRequester = episodesFocusRequester,
-                                    onNavigateLeftToRail = {
-                                        try {
-                                            railFocusRequester.requestFocus()
-                                        } catch (_: Exception) {}
-                                    }
+                                    seasonHandle = seasonHandle,
+                                    episodeHandle = episodeHandle,
+                                    coordinator = coordinator,
+                                    onLeftEdge = focusNav
                                 )
                             }
                         }
-                    }
 
-                    // Cast row
-                    if (tv.cast.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(32.dp))
-                            CastSection(tv.cast)
+                        if (tv.cast.isNotEmpty()) {
+                            item(key = "__cast__") {
+                                Spacer(modifier = Modifier.height(ErasmusDimens.RailSpacing))
+                                CastSection(tv.cast)
+                            }
                         }
-                    }
 
-                    // Similar series
-                    if (tv.similar.isNotEmpty()) {
-                        item {
-                            Spacer(modifier = Modifier.height(32.dp))
-                            Box(
-                                modifier = Modifier.onFocusChanged {
-                                    if (it.hasFocus) {
-                                        activeContentFocusRequester = similarFocusRequester
-                                    }
-                                }
-                            ) {
+                        if (hasSimilar) {
+                            item(key = ZONE_SIMILAR) {
+                                Spacer(modifier = Modifier.height(ErasmusDimens.RailSpacing))
                                 MediaSectionRow(
                                     title = "More Like This",
                                     items = tv.similar,
                                     onItemClick = onSimilarClick,
-                                    firstItemFocusRequester = similarFocusRequester,
-                                    onNavigateLeftToRail = {
-                                        try {
-                                            railFocusRequester.requestFocus()
-                                        } catch (_: Exception) {}
-                                    },
-                                    onNavigateDown = null,
-                                    onNavigateUp = {
-                                        coroutineScope.launch {
-                                            try {
-                                                if (tv.seasons.isNotEmpty()) {
-                                                    listState.animateScrollToItem(1)
-                                                    kotlinx.coroutines.delay(40)
-                                                    episodesFocusRequester.requestFocus()
-                                                } else {
-                                                    listState.animateScrollToItem(0)
-                                                    kotlinx.coroutines.delay(40)
-                                                    primaryActionFocusRequester.requestFocus()
-                                                }
-                                            } catch (_: Exception) {}
-                                        }
-                                    }
+                                    handle = similarHandle,
+                                    coordinator = coordinator,
+                                    onLeftEdge = focusNav
                                 )
                             }
                         }
                     }
-
-                    item {
-                        Spacer(modifier = Modifier.height(80.dp))
-                    }
-                }
                 }
             }
         }
 
-        // Frosted Glass Left Navigation Rail Overlay
         if (onNavigate != null) {
-            TvLeftNavRail(
+            TvFloatingNavBar(
                 currentRoute = NavRoutes.DETAILS,
                 activeProfile = activeProfile,
                 onNavigate = onNavigate,
                 onProfileClick = { onProfileClick?.invoke() },
-                railFocusRequester = railFocusRequester,
-                onFocusChanged = { isRailFocused = it },
-                onNavigateRight = {
-                    var success = false
-                    try {
-                        activeContentFocusRequester.requestFocus()
-                        success = true
-                    } catch (_: Exception) {
-                        success = false
-                    }
-                    if (!success) {
-                        val candidates = listOf(similarFocusRequester, episodesFocusRequester, primaryActionFocusRequester)
-                        for (cand in candidates) {
-                            try {
-                                cand.requestFocus()
-                                success = true
-                                break
-                            } catch (_: Exception) {}
-                        }
-                    }
-                    if (!success) {
-                        coroutineScope.launch {
-                            try {
-                                listState.scrollToItem(0)
-                                kotlinx.coroutines.delay(40)
-                                primaryActionFocusRequester.requestFocus()
-                            } catch (_: Exception) {}
-                        }
-                        success = true
-                    }
-                    success
-                },
-                modifier = Modifier.align(Alignment.CenterStart)
+                navFocusRequester = navFocusRequester,
+                onFocusChanged = { isNavFocused = it },
+                // Returns false when no zone could take focus, so the nav's own
+                // BACK fallback still works. The previous version always returned
+                // true, which silently disabled it.
+                onNavigateIntoContent = { coordinator.enterContent() },
+                modifier = Modifier.align(Alignment.TopCenter)
             )
         }
     }
 }
 
 /**
- * Immersive Movie Details Hero matching Reference Image.
- * Features:
- *  - Frosted glass sidebar bleed underneath (x = 0)
- *  - Middle-left positioned large title logo with italic tagline
- *  - Subtle classification, year, status badges
- *  - Genre pills
- *  - Multi-provider rating score cards (TMDB, IMDb, Rotten Tomatoes, Metacritic)
- *  - Play / Resume CTA with creator / cast credit
+ * DETAIL HERO.
+ *
+ * Full-bleed artwork with left-weighted copy, matching the Home/Movies/TV hero
+ * composition so the app has exactly one hero language. Only information that
+ * actually exists in the loaded data is rendered — no "—" placeholders, no
+ * empty rating tiles, no invented actions.
  */
 @Composable
 private fun DetailHero(
@@ -550,13 +606,15 @@ private fun DetailHero(
     cast: List<CastMember>,
     ratings: List<MediaRating>,
     inWatchlist: Boolean,
-    resumePosition: Long,
     primaryActionLabel: String,
     playFocusRequester: FocusRequester?,
     onPlayClick: () -> Unit,
     onToggleWatchlist: () -> Unit,
     onNavigateLeftToRail: (() -> Unit)? = null,
-    onMoreEpisodesClick: (() -> Unit)? = null,
+    onNavigateDown: (() -> Unit)? = null,
+    /** UP from the hero's Back affordance — the top of the page reaches the nav. */
+    onNavigateUpToNav: (() -> Unit)? = null,
+    onFocused: (() -> Unit)? = null,
     onBackClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -564,340 +622,221 @@ private fun DetailHero(
     val imageRequest = remember(backdropPath) {
         ImageRequest.Builder(context)
             .data(AppConfig.backdropUrl(backdropPath))
-            .crossfade(true)
+            .crossfade(TvMotion.DURATION_HERO_CROSSFADE)
             .build()
-    }
-
-    val creatorOrStar = remember(cast) {
-        cast.firstOrNull()?.name?.let { "Starring $it" } ?: ""
     }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(520.dp)
+            .height(ErasmusDimens.DetailHeroHeight)
     ) {
-        // 1. Full-bleed Backdrop Image
-        AsyncImage(
-            model = imageRequest,
-            contentDescription = title,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // 2. Dark Horizontal Vignette from left edge (x = 0)
+        // Artwork composite (image + shading) rendered into one offscreen layer,
+        // then alpha-masked at the bottom so the whole stack — not just the
+        // photo — dissolves into the screen-level ambient wash behind the feed.
+        // Masking the composite rather than the image alone is what removes the
+        // hard horizontal seam at the hero's lower edge.
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(DetailHeroHorizontalGradient)
-        )
-
-        // 3. Dark Vertical Dissolve to PitchBlack at bottom
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(DetailHeroVerticalGradient)
-        )
-
-        // Top-Left Back Button (Always visible on detail screen)
-        if (onBackClick != null) {
-            TvFocusableCard(
-                onClick = onBackClick,
-                shape = RectangleShape,
-                contentDescription = "Back to previous screen",
-                role = Role.Button,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 82.dp, top = 26.dp)
-                    .focusRequester(backFocusRequester)
-                    .focusProperties {
-                        up = FocusRequester.Cancel
-                    }
-                    .onKeyEvent { keyEvent ->
-                        if (keyEvent.type == KeyEventType.KeyDown) {
-                            when (keyEvent.key) {
-                                Key.DirectionLeft -> {
-                                    onNavigateLeftToRail?.invoke()
-                                    true
-                                }
-                                Key.DirectionUp -> true
-                                else -> false
-                            }
-                        } else false
-                    }
-            ) { isFocused ->
-                Row(
-                    modifier = Modifier
-                        .background(
-                            if (isFocused) Color.White else Color(0x2E1E1E28),
-                            RectangleShape
-                        )
-                        .border(
-                            1.dp,
-                            if (isFocused) Color.White else Color(0x26FFFFFF),
-                            RectangleShape
-                        )
-                        .padding(horizontal = 14.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = null,
-                        tint = if (isFocused) PitchBlack else Color.White,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        text = "Back",
-                        style = ErasmusTvTypography.Badge.copy(
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = if (isFocused) PitchBlack else Color.White
-                    )
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(brush = DetailHeroBottomFadeMask, blendMode = BlendMode.DstIn)
                 }
-            }
+        ) {
+            AsyncImage(
+                model = imageRequest,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(DetailHeroHorizontalGradient)
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(DetailHeroVerticalGradient)
+            )
         }
 
-        // 4. Middle-Left Hero Content Column with generous headroom
+        if (onBackClick != null) {
+            HeroBackButton(
+                onClick = onBackClick,
+                onNavigateLeftToRail = onNavigateLeftToRail,
+                onNavigateUp = onNavigateUpToNav,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = DETAIL_CONTENT_INSET, top = 24.dp)
+                    .focusRequester(backFocusRequester)
+            )
+        }
+
         Column(
             modifier = Modifier
-                .fillMaxWidth(0.60f)
-                .padding(start = 82.dp, top = 74.dp, bottom = 12.dp)
-                .align(Alignment.TopStart)
+                .align(Alignment.BottomStart)
+                .fillMaxWidth(0.58f)
+                .padding(
+                    start = DETAIL_CONTENT_INSET,
+                    bottom = ErasmusSpacing.Large
+                )
         ) {
-            // Authentic Title Logo (enlarged height ~55-95dp)
+            // Prefer the title's own logotype when the catalogue has one — it is
+            // the title's real typography and instantly more cinematic than a
+            // system font rendering of the same words.
             var isLogoError by remember(logoPath) { mutableStateOf(false) }
 
             if (!logoPath.isNullOrBlank() && !isLogoError) {
                 Box(
                     modifier = Modifier
-                        .heightIn(min = 55.dp, max = 95.dp)
-                        .fillMaxWidth(0.95f),
+                        .heightIn(
+                            min = ErasmusDimens.HeroLogoMinHeight,
+                            max = ErasmusDimens.HeroLogoMaxHeight
+                        )
+                        .fillMaxWidth(0.92f),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
+                        model = ImageRequest.Builder(context)
                             .data(AppConfig.logoUrl(logoPath))
                             .crossfade(true)
                             .build(),
                         contentDescription = title,
                         contentScale = ContentScale.Fit,
                         alignment = Alignment.CenterStart,
-                        modifier = Modifier
-                            .heightIn(min = 60.dp, max = 110.dp)
-                            .fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         onError = { isLogoError = true }
                     )
                 }
             } else {
                 Text(
                     text = title,
-                    style = ErasmusTvTypography.HeroTitleLarge.copy(
-                        fontSize = 32.sp,
-                        lineHeight = 38.sp,
-                        fontWeight = FontWeight.Black
-                    ),
+                    style = ErasmusTvTypography.HeroTitleLarge,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            // Italic Tagline
             if (!tagline.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(ErasmusSpacing.Small))
                 Text(
                     text = tagline,
                     style = ErasmusTvTypography.Body.copy(
                         fontSize = 13.sp,
-                        fontStyle = FontStyle.Italic,
-                        color = TextSecondary.copy(alpha = 0.95f)
+                        fontStyle = FontStyle.Italic
                     ),
+                    color = TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(ErasmusSpacing.MediumSmall))
 
-            // Metadata Badges Row: [TV SERIES / MOVIE] [CERTIFICATION] [YEAR] [STATUS / RUNTIME]
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                // Type badge
-                DetailMetadataBadge(text = if (isTv) "TV SERIES" else "MOVIE")
-
-                // Age rating / certification
-                certification?.let { cert ->
-                    DetailMetadataBadge(text = cert)
-                }
-
-                // Year
-                year?.let { yr ->
-                    DetailMetadataBadge(text = yr)
-                }
-
-                // Status or runtime
-                val statusText = if (isTv) (status ?: runtimeOrSeasons) else runtimeOrSeasons
-                if (statusText.isNotBlank()) {
-                    DetailMetadataBadge(text = statusText)
-                }
+            // One quiet metadata line instead of a row of bordered pills. Pills
+            // turn factual data into visual noise; a single separated line reads
+            // faster and keeps the artwork as the loudest element.
+            val metadataLine = remember(isTv, certification, year, runtimeOrSeasons, status) {
+                buildList {
+                    add(if (isTv) "Series" else "Film")
+                    certification?.takeIf { it.isNotBlank() }?.let(::add)
+                    year?.takeIf { it.isNotBlank() }?.let(::add)
+                    runtimeOrSeasons.takeIf { it.isNotBlank() }?.let(::add)
+                    if (isTv) status?.takeIf { it.isNotBlank() }?.let(::add)
+                }.joinToString("  ·  ")
             }
+            Text(
+                text = metadataLine,
+                style = ErasmusTvTypography.CardMeta,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
 
-            // Genre pills row
-            if (genres.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(7.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    genres.take(3).forEach { genreName ->
-                        Box(
-                            modifier = Modifier
-                                .background(Color(0x2E1E1E28), RectangleShape)
-                                .border(1.dp, Color(0x26FFFFFF), RectangleShape)
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                text = genreName.uppercase(),
-                                style = ErasmusTvTypography.Badge.copy(
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
-                                ),
-                                color = Color.White
-                            )
-                        }
-                    }
-                }
+            val ratingLine = remember(ratings, voteAverage, voteCount) {
+                buildRatingLine(ratings, voteAverage, voteCount)
             }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Multi-Provider Rating Cards (TMDB, IMDb, Rotten Tomatoes, Metacritic)
-            RatingCardsRow(ratings = ratings, voteAverage = voteAverage, voteCount = voteCount)
-
-            // Synopsis / Overview
-            overview?.let { ov ->
-                Spacer(modifier = Modifier.height(8.dp))
+            if (ratingLine.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = ov,
-                    style = ErasmusTvTypography.Body.copy(
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp,
-                        color = TextSecondary.copy(alpha = 0.9f)
-                    ),
-                    maxLines = 3,
+                    text = ratingLine,
+                    style = ErasmusTvTypography.CardMeta,
+                    color = TextSecondary,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            if (genres.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = genres.take(3).joinToString("  ·  "),
+                    style = ErasmusTvTypography.CardMeta,
+                    color = TextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
-            // Action Buttons Row (Play Button in Solid White + Add to List)
+            overview?.takeIf { it.isNotBlank() }?.let { text ->
+                Spacer(modifier = Modifier.height(ErasmusSpacing.MediumSmall))
+                Text(
+                    text = text,
+                    style = ErasmusTvTypography.BodyLarge,
+                    color = TextPrimary.copy(alpha = 0.78f),
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 560.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(ErasmusSpacing.Medium))
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.focusProperties {
-                    up = backFocusRequester
-                }
+                horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.MediumSmall),
+                modifier = Modifier
+                    // UP from the actions goes to the visible Back affordance
+                    // directly above them, and UP again reaches the navigation.
+                    // Two presses, both landing on a real control in its true
+                    // spatial position — rather than teleporting past a control
+                    // the user can plainly see.
+                    .focusProperties { up = backFocusRequester }
+                    .onFocusChanged { if (it.hasFocus) onFocused?.invoke() }
             ) {
-                // Primary Play Rectangle Button
-                TvFocusableCard(
+                ErasmusActionButton(
+                    text = primaryActionLabel,
                     onClick = onPlayClick,
-                    shape = RectangleShape,
-                    focusedBorderColor = Color.White,
-                    contentDescription = primaryActionLabel,
-                    role = Role.Button,
-                    modifier = (playFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
-                        .onKeyEvent { keyEvent ->
-                            if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionLeft) {
-                                onNavigateLeftToRail?.invoke()
-                                true
-                            } else false
-                        }
-                ) { isFocused ->
-                    Row(
-                        modifier = Modifier
-                            .background(
-                                if (isFocused) Color.White else Color(0xEBFFFFFF),
-                                RectangleShape
-                            )
-                            .border(
-                                width = if (isFocused) 2.dp else 1.dp,
-                                color = if (isFocused) Color.White else Color.Transparent,
-                                shape = RectangleShape
-                            )
-                            .padding(horizontal = 20.dp, vertical = 9.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = PitchBlack,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = primaryActionLabel,
-                            style = ErasmusTvTypography.ButtonText.copy(
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = PitchBlack
-                        )
-                    }
-                }
+                    icon = Icons.Default.PlayArrow,
+                    style = ErasmusButtonStyle.Primary,
+                    shape = CircleShape,
+                    modifier = playFocusRequester?.let { Modifier.focusRequester(it) } ?: Modifier,
+                    onNavigateLeft = onNavigateLeftToRail,
+                    onNavigateDown = onNavigateDown
+                )
 
-                // Add to List frosted rectangular button
-                TvFocusableCard(
+                ErasmusActionButton(
+                    text = if (inWatchlist) "In Watch List" else "Add to Watch List",
                     onClick = onToggleWatchlist,
-                    shape = RectangleShape,
-                    focusedBorderColor = Color.White,
-                    contentDescription = if (inWatchlist) "In List, click to remove from Watchlist" else "Add to Watchlist",
-                    role = Role.Button
-                ) { isFocused ->
-                    Row(
-                        modifier = Modifier
-                            .background(
-                                if (isFocused) Color(0x55FFFFFF) else Color(0x22FFFFFF),
-                                RectangleShape
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = if (isFocused) Color.White else Color(0x26FFFFFF),
-                                shape = RectangleShape
-                            )
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (inWatchlist) Icons.Default.Check else Icons.Default.BookmarkBorder,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Text(
-                            text = if (inWatchlist) "In List" else "Add to List",
-                            style = ErasmusTvTypography.ButtonText.copy(
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium
-                            ),
-                            color = Color.White
-                        )
-                    }
-                }
+                    icon = if (inWatchlist) Icons.Default.Check else Icons.Default.BookmarkBorder,
+                    style = ErasmusButtonStyle.Secondary,
+                    shape = CircleShape,
+                    contentDescriptionOverride = if (inWatchlist) {
+                        "In your Watch List. Select to remove."
+                    } else {
+                        "Add to your Watch List"
+                    },
+                    onNavigateDown = onNavigateDown
+                )
 
-                // Creator / Star attribution text
-                if (creatorOrStar.isNotBlank()) {
+                cast.firstOrNull()?.name?.let { lead ->
                     Text(
-                        text = creatorOrStar,
-                        style = ErasmusTvTypography.Badge.copy(
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
-                        ),
+                        text = "Starring $lead",
+                        style = ErasmusTvTypography.CardMeta,
                         color = TextMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -908,237 +847,207 @@ private fun DetailHero(
     }
 }
 
+/**
+ * Builds a single line from whichever external ratings actually resolved, e.g.
+ * `TMDB 7.8 · IMDb 8.1 · Rotten Tomatoes 94%`. Providers that returned nothing
+ * are omitted entirely rather than rendered as an empty tile.
+ *
+ * The raw vote count is deliberately excluded: with four providers resolved it
+ * pushed the line past the copy column and got ellipsised, and "how many people
+ * voted" is the least useful number on the page.
+ */
+private fun buildRatingLine(
+    ratings: List<MediaRating>,
+    voteAverage: Double?,
+    voteCount: Int?
+): String {
+    fun scoreFor(vararg keys: String): String? = ratings.firstOrNull { rating ->
+        keys.any { key ->
+            rating.provider.equals(key, ignoreCase = true) ||
+                rating.label.contains(key, ignoreCase = true)
+        }
+    }?.score?.takeIf { it.isNotBlank() && it != "—" }
+
+    val parts = buildList {
+        val tmdb = scoreFor("tmdb")
+            ?: voteAverage?.takeIf { it > 0 }?.let { String.format(java.util.Locale.US, "%.1f", it) }
+        tmdb?.let { add("TMDB $it") }
+        scoreFor("imdb")?.let { add("IMDb $it") }
+        scoreFor("rotten_tomatoes", "rotten")?.let { add("Rotten Tomatoes $it") }
+        scoreFor("metacritic")?.let { add("Metacritic $it") }
+    }
+
+    return parts.joinToString("  ·  ")
+}
+
+/**
+ * Quiet circular Back affordance. The remote's BACK button is the primary way
+ * out; this exists as a visible equivalent, so it is sized and toned to be
+ * findable without competing with the title treatment beside it.
+ */
 @Composable
-private fun DetailMetadataBadge(text: String) {
+private fun HeroBackButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onNavigateLeftToRail: (() -> Unit)? = null,
+    onNavigateUp: (() -> Unit)? = null
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
     Box(
-        modifier = Modifier
-            .background(Color(0x2E1E1E28), RectangleShape)
-            .border(1.dp, Color(0x26FFFFFF), RectangleShape)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+        modifier = modifier
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                contentDescription = "Back"
+            }
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(
+                color = if (isFocused) Color.White else Color.White.copy(alpha = 0.12f),
+                shape = CircleShape
+            )
+            .border(
+                width = 1.dp,
+                color = if (isFocused) FocusWhite else Color.White.copy(alpha = 0.18f),
+                shape = CircleShape
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyDown) {
+                    when (keyEvent.key) {
+                        Key.DirectionLeft -> {
+                            onNavigateLeftToRail?.invoke()
+                            true
+                        }
+                        // The Back affordance is the topmost control in the page
+                        // body, so UP from here is the page's route into the
+                        // floating navigation. Consumed either way, so focus can
+                        // never escape off the top of the page.
+                        Key.DirectionUp -> {
+                            onNavigateUp?.invoke()
+                            true
+                        }
+                        else -> false
+                    }
+                } else false
+            }
+            .focusable(interactionSource = interactionSource),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = text,
-            style = ErasmusTvTypography.Badge.copy(
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.SemiBold
-            ),
-            color = Color.White
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+            contentDescription = null,
+            tint = if (isFocused) PitchBlack else TextPrimary,
+            modifier = Modifier.size(17.dp)
         )
     }
 }
 
 /**
- * 4 Multi-Provider Rating score cards matching Reference Image.
- * TMDB, IMDb, Rotten Tomatoes, and Metacritic with real fetched ratings.
+ * EPISODES.
+ *
+ * Season chips above a horizontal rail of 16:9 episode stills. Episode stills
+ * are landscape because they are frames of video, not catalogue posters — this
+ * is the one other place where wide artwork is correct, and it is never a
+ * content *shelf*.
+ *
+ * ## Focus
+ *
+ * The chips and the episode rail are two distinct zones in the page's focus map,
+ * both driven by the shared engine. Previously neither was: the page's single
+ * `episodesFocusRequester` was attached to the first episode card only when
+ * `realSeasons.size <= 1`, so on *every multi-season series* it was attached to
+ * nothing at all. DOWN from Watch Now silently did nothing, and the whole
+ * episodes region was unreachable by remote. Registering both as zones makes
+ * the season → episode → recommendations chain fall out of the same mechanism
+ * every shelf on every other page uses.
  */
-@Composable
-private fun RatingCardsRow(
-    ratings: List<MediaRating>,
-    voteAverage: Double?,
-    voteCount: Int?
-) {
-    val tmdbRating = ratings.firstOrNull { it.provider == "tmdb" || it.label.equals("tmdb", ignoreCase = true) }
-    val imdbRating = ratings.firstOrNull { it.provider == "imdb" || it.label.equals("imdb", ignoreCase = true) }
-    val rtRating = ratings.firstOrNull { it.provider == "rotten_tomatoes" || it.label.contains("rotten", ignoreCase = true) }
-    val metaRating = ratings.firstOrNull { it.provider == "metacritic" || it.label.contains("metacritic", ignoreCase = true) }
-
-    val tmdbScore = tmdbRating?.score?.takeIf { it.isNotBlank() && it != "—" }
-        ?: if (voteAverage != null && voteAverage > 0) String.format(java.util.Locale.US, "%.1f/10", voteAverage) else "—"
-    val tmdbSub = tmdbRating?.subText?.takeIf { it.isNotBlank() && it != "—" }
-        ?: if (voteCount != null && voteCount > 0) "$voteCount votes" else "—"
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // TMDB Card
-        RatingScoreCard(
-            label = "TMDB",
-            score = tmdbScore,
-            subText = tmdbSub
-        )
-
-        // IMDb Card
-        RatingScoreCard(
-            label = "IMDb",
-            score = imdbRating?.score ?: "—",
-            subText = imdbRating?.subText ?: "—"
-        )
-
-        // Rotten Tomatoes Card
-        RatingScoreCard(
-            label = "ROTTEN TOMATOES",
-            score = rtRating?.score ?: "—",
-            subText = rtRating?.subText ?: "—"
-        )
-
-        // Metacritic Card
-        RatingScoreCard(
-            label = "METACRITIC",
-            score = metaRating?.score ?: "—",
-            subText = metaRating?.subText ?: "—"
-        )
-    }
-}
-
-@Composable
-private fun RatingScoreCard(
-    label: String,
-    score: String,
-    subText: String
-) {
-    Box(
-        modifier = Modifier
-            .width(112.dp)
-            .background(Color(0x3D14141E), RectangleShape)
-            .border(1.dp, Color(0x26FFFFFF), RectangleShape)
-            .padding(horizontal = 8.dp, vertical = 6.dp)
-    ) {
-        Column {
-            Text(
-                text = label,
-                style = ErasmusTvTypography.Badge.copy(
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.4.sp
-                ),
-                color = TextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-                text = score,
-                style = ErasmusTvTypography.Badge.copy(
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.ExtraBold
-                ),
-                color = Color.White
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subText,
-                style = ErasmusTvTypography.Badge.copy(fontSize = 10.sp),
-                color = TextMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TvEpisodesSection(
     seasons: List<TvSeason>,
     selectedSeason: TvSeason?,
     onSeasonSelect: (Int) -> Unit,
     onEpisodeClick: (TvEpisode) -> Unit,
-    firstItemFocusRequester: FocusRequester? = null,
-    onNavigateLeftToRail: (() -> Unit)? = null
+    seasonHandle: RailFocusHandle,
+    episodeHandle: RailFocusHandle,
+    coordinator: FeedFocusCoordinator,
+    onLeftEdge: () -> Boolean
 ) {
+    val realSeasons = remember(seasons) { seasons.filter { it.seasonNumber > 0 } }
+    val episodes = selectedSeason?.episodes ?: emptyList()
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 82.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "EPISODES",
-                style = ErasmusTvTypography.SectionTitle.copy(
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.6.sp
+        ErasmusRailHeader(title = "Episodes")
+
+        Spacer(modifier = Modifier.height(ErasmusSpacing.MediumSmall))
+
+        if (realSeasons.size > 1) {
+            val seasonListState = rememberLazyListState()
+            LazyRow(
+                state = seasonListState,
+                contentPadding = PaddingValues(
+                    start = ErasmusDimens.RailStartGutter,
+                    end = ErasmusDimens.RailEndGutter
                 ),
-                color = Color.White
-            )
-
-            Text(
-                text = "ALL EPISODES",
-                style = ErasmusTvTypography.Badge.copy(
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.6.sp
-                ),
-                color = TextMuted
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Season Selection Tabs
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 82.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            itemsIndexed(seasons.filter { it.seasonNumber > 0 }) { index, season ->
-                val isSelected = season.seasonNumber == selectedSeason?.seasonNumber
-                TvFocusableCard(
-                    onClick = { onSeasonSelect(season.seasonNumber) },
-                    shape = RectangleShape,
-                    focusedScale = 1.0f,
-                    focusedBorderColor = Color.White,
-                    focusedBorderWidth = 1.5.dp,
-                    contentDescription = "${season.name}, tab${if (isSelected) ", selected" else ""}",
-                    role = Role.Tab,
-                    modifier = (if (index == 0 && firstItemFocusRequester != null) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
-                        .onKeyEvent { keyEvent ->
-                            if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionLeft && index == 0) {
-                                onNavigateLeftToRail?.invoke()
-                                true
-                            } else false
-                        }
-                ) { isFocused ->
-                    Text(
-                        text = season.name,
-                        style = ErasmusTvTypography.Badge.copy(
-                            fontSize = 12.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                        ),
-                        color = when {
-                            isSelected -> PitchBlack
-                            isFocused -> Color.White
-                            else -> TextSecondary
-                        },
-                        modifier = Modifier
-                            .background(
-                                when {
-                                    isSelected -> Color.White
-                                    isFocused -> Color(0x33FFFFFF)
-                                    else -> Color(0x1F1E1E28)
-                                },
-                                RectangleShape
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = when {
-                                    isSelected -> Color.White
-                                    isFocused -> Color.White
-                                    else -> Color(0x1FFFFFFF)
-                                },
-                                RectangleShape
-                            )
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.Small),
+                modifier = Modifier.railFocusContainer(
+                    seasonHandle,
+                    seasonListState,
+                    realSeasons.size
+                )
+            ) {
+                itemsIndexed(realSeasons, key = { _, season -> season.seasonNumber }) { index, season ->
+                    SeasonChip(
+                        label = season.name,
+                        isSelected = season.seasonNumber == selectedSeason?.seasonNumber,
+                        onClick = { onSeasonSelect(season.seasonNumber) },
+                        dpadModifier = Modifier.railFocusItem(
+                            handle = seasonHandle,
+                            coordinator = coordinator,
+                            index = index,
+                            isFirstItem = index == 0,
+                            onLeftEdge = onLeftEdge
+                        )
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.height(ErasmusSpacing.Medium))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Episodes Horizontal Carousel (16:9 widescreen thumbnails)
-        val episodes = selectedSeason?.episodes ?: emptyList()
+        val episodeListState = rememberLazyListState()
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 82.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            state = episodeListState,
+            contentPadding = PaddingValues(
+                start = ErasmusDimens.RailStartGutter,
+                end = ErasmusDimens.RailEndGutter,
+                top = ErasmusDimens.RailFocusHeadroom,
+                bottom = ErasmusDimens.RailFocusHeadroom
+            ),
+            horizontalArrangement = Arrangement.spacedBy(ErasmusDimens.CardSpacing),
+            modifier = Modifier.railFocusContainer(
+                episodeHandle,
+                episodeListState,
+                episodes.size
+            )
         ) {
             itemsIndexed(episodes, key = { _, it -> it.id }) { index, ep ->
                 EpisodeCard(
                     episode = ep,
                     onClick = { onEpisodeClick(ep) },
-                    onNavigateLeftToRail = if (index == 0) onNavigateLeftToRail else null
+                    dpadModifier = Modifier.railFocusItem(
+                        handle = episodeHandle,
+                        coordinator = coordinator,
+                        index = index,
+                        isFirstItem = index == 0,
+                        onLeftEdge = onLeftEdge
+                    )
                 )
             }
         }
@@ -1146,17 +1055,77 @@ private fun TvEpisodesSection(
 }
 
 @Composable
+private fun SeasonChip(
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    dpadModifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    Box(
+        modifier = modifier
+            .semantics(mergeDescendants = true) {
+                role = Role.Tab
+                selected = isSelected
+                contentDescription = "$label${if (isSelected) ", selected" else ""}"
+            }
+            .height(34.dp)
+            .clip(ErasmusShapes.Button)
+            .background(
+                color = when {
+                    isFocused -> Color.White
+                    isSelected -> Color.White.copy(alpha = 0.16f)
+                    else -> Color.White.copy(alpha = 0.05f)
+                },
+                shape = ErasmusShapes.Button
+            )
+            .border(
+                width = 1.dp,
+                color = when {
+                    isFocused -> FocusWhite
+                    isSelected -> Color.White.copy(alpha = 0.3f)
+                    else -> Color.Transparent
+                },
+                shape = ErasmusShapes.Button
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+            .then(dpadModifier)
+            .focusable(interactionSource = interactionSource)
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            style = ErasmusTvTypography.ButtonText.copy(
+                fontSize = 13.sp,
+                fontWeight = if (isSelected || isFocused) FontWeight.SemiBold else FontWeight.Medium
+            ),
+            color = when {
+                isFocused -> PitchBlack
+                isSelected -> TextPrimary
+                else -> TextSecondary
+            },
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
 private fun EpisodeCard(
     episode: TvEpisode,
     onClick: () -> Unit,
-    onNavigateLeftToRail: (() -> Unit)? = null
+    modifier: Modifier = Modifier,
+    dpadModifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val imageRequest = remember(episode.stillPath) {
-        ImageRequest.Builder(context)
-            .data(AppConfig.stillUrl(episode.stillPath))
-            .crossfade(true)
-            .build()
+        AppConfig.stillUrl(episode.stillPath)
     }
 
     val a11yDescription = remember(episode) {
@@ -1167,114 +1136,89 @@ private fun EpisodeCard(
         }
     }
 
-    Column(modifier = Modifier.width(230.dp)) {
+    Column(modifier = modifier.width(226.dp)) {
         TvFocusableCard(
             onClick = onClick,
             contentDescription = a11yDescription,
             role = Role.Button,
+            shape = ErasmusShapes.CardLarge,
+            focusedScale = TvMotion.FocusScaleCard,
+            focusedBorderColor = FocusWhite,
+            focusedBorderWidth = 1.5.dp,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
-                .onKeyEvent { keyEvent ->
-                    if (keyEvent.type == KeyEventType.KeyDown && keyEvent.key == Key.DirectionLeft) {
-                        if (onNavigateLeftToRail != null) {
-                            onNavigateLeftToRail()
-                            true
-                        } else false
-                    } else false
-                },
-            shape = RectangleShape,
-            focusedScale = 1.025f,
-            focusedBorderColor = Color.White,
-            focusedBorderWidth = 1.5.dp
+                .then(dpadModifier)
         ) { isFocused ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RectangleShape)
-                    .background(SurfaceCard)
+            ErasmusCardArtwork(
+                model = imageRequest,
+                isFocused = isFocused,
+                shape = ErasmusShapes.CardLarge,
+                modifier = Modifier.fillMaxSize()
             ) {
-                AsyncImage(
-                    model = imageRequest,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+                ErasmusCardBottomScrim(strength = 0.5f)
 
-                // Dark vignette over thumbnail
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    PitchBlack.copy(alpha = 0.65f)
-                                )
-                            )
+                if (isFocused) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(38.dp)
+                            .background(PitchBlack.copy(alpha = 0.58f), CircleShape)
+                            .border(1.dp, Color.White.copy(alpha = 0.34f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = FocusWhite,
+                            modifier = Modifier.size(20.dp)
                         )
-                )
-
-                // Play icon overlay
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(34.dp)
-                        .clip(RectangleShape)
-                        .background(
-                            if (isFocused) Color.White else PitchBlack.copy(alpha = 0.6f),
-                            RectangleShape
-                        )
-                        .border(
-                            1.dp,
-                            if (isFocused) Color.White else Color(0x33FFFFFF),
-                            RectangleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = if (isFocused) PitchBlack else Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(ErasmusDimens.CardMetadataGap))
 
         Text(
-            text = "${episode.episodeNumber}. ${episode.name}",
+            text = "${episode.episodeNumber}.  ${episode.name}",
             style = ErasmusTvTypography.CardTitle,
+            color = TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
 
-        Text(
-            text = episode.durationFormatted,
-            style = ErasmusTvTypography.Badge.copy(fontSize = 11.sp),
-            color = TextMuted
-        )
+        episode.durationFormatted.takeIf { it.isNotBlank() }?.let { duration ->
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = duration,
+                style = ErasmusTvTypography.CardMeta,
+                color = TextMuted,
+                maxLines = 1
+            )
+        }
     }
 }
 
+/**
+ * Cast rail. Circular portraits, because a circle crops a headshot far more
+ * gracefully than a rectangle and visually separates people from titles.
+ */
 @Composable
 private fun CastSection(cast: List<CastMember>) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = "Top Cast",
-            style = ErasmusTvTypography.SectionTitle,
-            modifier = Modifier.padding(horizontal = 82.dp)
-        )
+        ErasmusRailHeader(title = "Cast")
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(ErasmusDimens.RailTitleGap))
 
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 82.dp),
-            horizontalArrangement = Arrangement.spacedBy(18.dp)
+            contentPadding = PaddingValues(
+                start = ErasmusDimens.RailStartGutter,
+                end = ErasmusDimens.RailEndGutter
+            ),
+            horizontalArrangement = Arrangement.spacedBy(ErasmusSpacing.Large)
         ) {
-            items(cast.take(12)) { member ->
+            items(cast.take(12), key = { it.name }) { member ->
                 CastMemberItem(member = member)
             }
         }
@@ -1287,34 +1231,35 @@ private fun CastMemberItem(member: CastMember) {
     val imageRequest = remember(member.profilePath) {
         ImageRequest.Builder(context)
             .data(AppConfig.posterUrl(member.profilePath))
-            .crossfade(true)
+            .crossfade(180)
             .build()
     }
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(84.dp)
+        modifier = Modifier.width(92.dp)
     ) {
         AsyncImage(
             model = imageRequest,
-            contentDescription = member.name,
+            contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier
-                .size(72.dp)
-                .clip(RectangleShape)
-                .background(SurfaceDark)
+                .size(74.dp)
+                .clip(CircleShape)
+                .background(SurfaceCardRest, CircleShape)
         )
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(ErasmusSpacing.Small))
         Text(
             text = member.name,
-            style = ErasmusTvTypography.Badge.copy(fontSize = 11.sp),
+            style = ErasmusTvTypography.CardMeta.copy(color = TextPrimary),
+            color = TextPrimary.copy(alpha = 0.9f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        member.character?.let { char ->
+        member.character?.takeIf { it.isNotBlank() }?.let { character ->
             Text(
-                text = char,
-                style = ErasmusTvTypography.Badge.copy(fontSize = 9.sp),
+                text = character,
+                style = ErasmusTvTypography.CardMeta.copy(fontSize = 11.sp),
                 color = TextMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -1322,4 +1267,3 @@ private fun CastMemberItem(member: CastMember) {
         }
     }
 }
-

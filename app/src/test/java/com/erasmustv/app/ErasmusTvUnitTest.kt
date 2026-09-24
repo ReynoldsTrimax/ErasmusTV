@@ -325,15 +325,39 @@ class ErasmusTvUnitTest {
     }
 
     @Test
-    fun testNavRailDestinationsIntegrity() {
-        val destinations = com.erasmustv.app.ui.components.NAV_RAIL_ITEMS
-        assertEquals(6, destinations.size)
-        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.HOME, destinations[0].route)
-        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.SEARCH, destinations[1].route)
-        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.TV, destinations[2].route)
-        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.MOVIES, destinations[3].route)
-        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.ANIME, destinations[4].route)
-        assertEquals(com.erasmustv.app.ui.navigation.NavRoutes.STUDIOS, destinations[5].route)
+    fun testFloatingNavDestinationsIntegrity() {
+        val routes = com.erasmustv.app.ui.navigation.NavRoutes
+
+        // Primary destinations are rendered as text labels in the pill.
+        val primary = com.erasmustv.app.ui.components.FLOATING_NAV_PRIMARY
+        assertEquals(5, primary.size)
+        assertEquals(routes.HOME, primary[0].route)
+        assertEquals(routes.TV, primary[1].route)
+        assertEquals(routes.MOVIES, primary[2].route)
+        assertEquals(routes.ANIME, primary[3].route)
+        assertEquals(routes.STUDIOS, primary[4].route)
+        assertTrue("Primary destinations must show text labels", primary.all { it.showLabel })
+
+        // Secondary actions are icon-only so the pill doesn't overcrowd.
+        val secondary = com.erasmustv.app.ui.components.FLOATING_NAV_SECONDARY
+        assertEquals(2, secondary.size)
+        assertEquals(routes.SEARCH, secondary[0].route)
+        assertEquals(routes.WATCHLIST, secondary[1].route)
+        assertTrue("Secondary actions must be icon-only", secondary.none { it.showLabel })
+
+        // Every destination must carry a renderable glyph or a label.
+        (primary + secondary).forEach { d ->
+            assertTrue(
+                "Destination ${d.route} must be renderable",
+                d.showLabel || d.icon != null || d.drawableRes != null
+            )
+        }
+
+        // Watch List must live inside the nav, not as a separate button elsewhere.
+        assertTrue(
+            "Watch List must be integrated into the floating navigation",
+            (primary + secondary).any { it.route == routes.WATCHLIST }
+        )
     }
 
     @Test
@@ -840,8 +864,184 @@ class ErasmusTvUnitTest {
         assertTrue(sorted.any { it.label == "French #2" })
         assertTrue(sorted.any { it.label == "French #3" })
     }
+
+    // ======================================================================
+    // ERASMUS REDESIGN — responsive layout, hero ambience, and design tokens
+    // ======================================================================
+
+    @Test
+    fun testPosterGridColumnsAreResponsiveAcrossTvResolutions() {
+        // Android TV panels report dp, not pixels: a 1080p set is ~960x540dp at
+        // density 2.0, and a 4K set is the same 960x540dp at density 4.0 — which
+        // is why the 1080p and 4K expectations below are deliberately identical.
+        val target = 132f
+        val spacing = 20f
+
+        // 1080p / 4K: 960dp wide, 5% safe margin each side -> 864dp available.
+        val columns1080p = com.erasmustv.app.core.theme.posterGridColumnsFor(
+            availableWidthDp = 960f - (960f * 0.05f * 2f),
+            targetItemWidthDp = target,
+            itemSpacingDp = spacing
+        )
+        assertEquals(5, columns1080p)
+
+        // 720p: 640dp wide -> 576dp available.
+        val columns720p = com.erasmustv.app.core.theme.posterGridColumnsFor(
+            availableWidthDp = 640f - (640f * 0.05f * 2f),
+            targetItemWidthDp = target,
+            itemSpacingDp = spacing
+        )
+        assertEquals(3, columns720p)
+
+        // A smaller panel must still stay inside the readable band, never 1-2.
+        assertTrue(columns720p >= 3)
+        // A very wide panel must not degenerate into a wall of thumbnails.
+        val columnsUltraWide = com.erasmustv.app.core.theme.posterGridColumnsFor(
+            availableWidthDp = 4000f,
+            targetItemWidthDp = target,
+            itemSpacingDp = spacing
+        )
+        assertEquals(8, columnsUltraWide)
+
+        // Fewer columns at 720p than at 1080p is the whole point of the helper.
+        assertTrue(columns720p < columns1080p)
+    }
+
+    @Test
+    fun testPosterGridColumnsHandlesDegenerateInput() {
+        assertEquals(
+            3,
+            com.erasmustv.app.core.theme.posterGridColumnsFor(
+                availableWidthDp = 800f,
+                targetItemWidthDp = 0f,
+                itemSpacingDp = 20f
+            )
+        )
+        assertEquals(
+            3,
+            com.erasmustv.app.core.theme.posterGridColumnsFor(
+                availableWidthDp = 0f,
+                targetItemWidthDp = 132f,
+                itemSpacingDp = 20f
+            )
+        )
+    }
+
+    @Test
+    fun testHeroAmbientIntensityFalloff() {
+        val heroPx = 720f
+
+        // At the very top of the feed the wash is at full strength.
+        assertEquals(
+            1f,
+            com.erasmustv.app.ui.components.heroAmbientIntensity(0, 0, heroPx),
+            0.0001f
+        )
+
+        // Scrolled a full hero height past the top, the wash is gone.
+        assertEquals(
+            0f,
+            com.erasmustv.app.ui.components.heroAmbientIntensity(0, 720, heroPx),
+            0.0001f
+        )
+
+        // Once the hero item itself is off-list, the wash must not linger.
+        assertEquals(
+            0f,
+            com.erasmustv.app.ui.components.heroAmbientIntensity(1, 0, heroPx),
+            0.0001f
+        )
+
+        // The falloff is monotonic — the atmosphere never brightens while
+        // scrolling away from the hero.
+        var previous = Float.MAX_VALUE
+        for (offset in 0..720 step 60) {
+            val value = com.erasmustv.app.ui.components.heroAmbientIntensity(0, offset, heroPx)
+            assertTrue("intensity must not increase while scrolling away", value <= previous)
+            assertTrue("intensity must stay in 0..1", value in 0f..1f)
+            previous = value
+        }
+
+        // Held near full strength early rather than fading immediately.
+        assertTrue(com.erasmustv.app.ui.components.heroAmbientIntensity(0, 72, heroPx) > 0.75f)
+    }
+
+    @Test
+    fun testCardSystemUsesRoundedGeometryWithinSpec() {
+        // The whole card language depends on these staying in the 14-18dp band,
+        // and on studio tiles staying in the 18-24dp band.
+        assertEquals(14f, com.erasmustv.app.core.theme.ErasmusRadius.CardMedium.value, 0.001f)
+        assertEquals(18f, com.erasmustv.app.core.theme.ErasmusRadius.CardLarge.value, 0.001f)
+        assertEquals(20f, com.erasmustv.app.core.theme.ErasmusRadius.Tile.value, 0.001f)
+
+        assertTrue(
+            "poster radius must sit in the 14-18dp card band",
+            com.erasmustv.app.core.theme.ErasmusRadius.CardMedium.value in 14f..18f
+        )
+        assertTrue(
+            "studio tile radius must sit in the 18-24dp tile band",
+            com.erasmustv.app.core.theme.ErasmusRadius.Tile.value in 18f..24f
+        )
+    }
+
+    @Test
+    fun testCardAspectRatiosKeepContinueWatchingTheOnlyLandscapeType() {
+        // Portrait poster: 2:3.
+        val posterRatio =
+            com.erasmustv.app.core.theme.ErasmusDimens.PosterCardWidth.value /
+                com.erasmustv.app.core.theme.ErasmusDimens.PosterCardHeight.value
+        assertEquals(2f / 3f, posterRatio, 0.01f)
+        assertTrue("poster cards must be taller than wide", posterRatio < 1f)
+
+        // Continue Watching: 16:9 landscape.
+        val landscapeRatio =
+            com.erasmustv.app.core.theme.ErasmusDimens.LandscapeCardWidth.value /
+                com.erasmustv.app.core.theme.ErasmusDimens.LandscapeCardHeight.value
+        assertEquals(16f / 9f, landscapeRatio, 0.02f)
+        assertTrue("continue watching cards must be wider than tall", landscapeRatio > 1f)
+    }
+
+    @Test
+    fun testFocusMotionDurationsAreInsideTheSpecBand() {
+        // Spec: card focus response 180-250ms, calm rather than snappy.
+        assertTrue(
+            com.erasmustv.app.core.theme.TvMotion.DURATION_FOCUS in 180..250
+        )
+        assertTrue(
+            com.erasmustv.app.core.theme.TvMotion.DURATION_FOCUS_FAST in 150..250
+        )
+        // Spec: hero transitions 300-700ms.
+        assertTrue(
+            com.erasmustv.app.core.theme.TvMotion.DURATION_HERO_CROSSFADE in 300..700
+        )
+        assertTrue(
+            com.erasmustv.app.core.theme.TvMotion.DURATION_HERO_AMBIENT in 300..700
+        )
+        // Spec: focus scale 1.04-1.06.
+        assertTrue(com.erasmustv.app.core.theme.TvMotion.FocusScaleCard in 1.04f..1.06f)
+        assertTrue(com.erasmustv.app.core.theme.TvMotion.FocusScaleButton in 1.04f..1.06f)
+    }
+
+    @Test
+    fun testRailRhythmKeepsSectionsGenerouslySpaced() {
+        val headroom = com.erasmustv.app.core.theme.ErasmusDimens.RailFocusHeadroom.value
+        val spacing = com.erasmustv.app.core.theme.ErasmusDimens.RailSpacing.value
+
+        // The gap a viewer actually perceives between one shelf's cards and the
+        // next shelf's heading includes the focus headroom on both sides.
+        val perceivedGap = spacing + headroom
+        assertTrue(
+            "perceived rail gap ${'$'}perceivedGap should land in the 48-72dp band",
+            perceivedGap in 48f..72f
+        )
+
+        // Focus headroom must be large enough to contain a 1.04 scale lift on a
+        // full-height poster, or focused artwork gets clipped by the rail.
+        val posterHeight = com.erasmustv.app.core.theme.ErasmusDimens.PosterCardHeight.value
+        val liftPerEdge = posterHeight * (com.erasmustv.app.core.theme.TvMotion.FocusScaleCard - 1f) / 2f
+        assertTrue(
+            "headroom ${'$'}headroom must cover the ${'$'}liftPerEdge dp focus lift",
+            headroom >= liftPerEdge
+        )
+    }
 }
-
-
-
-

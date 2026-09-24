@@ -44,6 +44,25 @@ import com.erasmustv.app.ui.navigation.AppContainer
 import com.erasmustv.app.ui.navigation.AppNavigation
 import com.erasmustv.app.ui.navigation.NavRoutes
 
+/**
+ * Routes an external launch intent is allowed to open directly.
+ *
+ * Deliberately a small allow-list of argument-free browse destinations. Routes
+ * that take arguments, and the login/player flows, are excluded: they either
+ * cannot be constructed from a bare route string or would land the user in a
+ * half-initialised state.
+ */
+private val LAUNCH_SAFE_ROUTES = setOf(
+    NavRoutes.PROFILES,
+    NavRoutes.HOME,
+    NavRoutes.MOVIES,
+    NavRoutes.TV,
+    NavRoutes.ANIME,
+    NavRoutes.STUDIOS,
+    NavRoutes.SEARCH,
+    NavRoutes.WATCHLIST
+)
+
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -146,11 +165,31 @@ class MainActivity : ComponentActivity() {
                         is com.erasmustv.app.data.model.SessionCheckResult.Authenticated,
                         is com.erasmustv.app.data.model.SessionCheckResult.Guest -> {
                             val navController = rememberNavController()
-                            val targetRoute = intent?.getStringExtra("target_route")?.takeIf { it.isNotBlank() } ?: NavRoutes.PROFILES
+                            // ------------------------------------------------------
+                            // `target_route` arrives from an intent on an exported
+                            // activity, so it is untrusted input. Two things go
+                            // wrong if it is used as-is:
+                            //
+                            //  - a value with no registered composable crashes
+                            //    during graph construction, outside any try/catch;
+                            //  - any non-Profiles value bypasses the profile gate
+                            //    and starts the graph somewhere Home is absent, so
+                            //    `saveState`/`restoreState` never engage and every
+                            //    tab switch leaks a back stack entry.
+                            //
+                            // Only routes that are genuinely safe entry points are
+                            // honoured; anything else falls back to the normal
+                            // start destination.
+                            // ------------------------------------------------------
+                            val startDestination = remember {
+                                intent?.getStringExtra("target_route")
+                                    ?.takeIf { it in LAUNCH_SAFE_ROUTES }
+                                    ?: NavRoutes.PROFILES
+                            }
                             AppNavigation(
                                 navController = navController,
                                 container = container,
-                                startDestination = targetRoute
+                                startDestination = startDestination
                             )
                         }
                         is com.erasmustv.app.data.model.SessionCheckResult.Unauthenticated -> {

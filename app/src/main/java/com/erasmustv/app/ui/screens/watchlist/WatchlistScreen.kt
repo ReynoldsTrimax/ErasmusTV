@@ -1,9 +1,6 @@
 package com.erasmustv.app.ui.screens.watchlist
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
@@ -13,16 +10,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,42 +32,43 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material3.Icon
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
-import com.erasmustv.app.core.theme.BorderHairline
-import com.erasmustv.app.core.theme.ErasmusTvTypography
-import com.erasmustv.app.core.theme.FocusWhite
+import androidx.compose.ui.unit.Dp
+import com.erasmustv.app.core.theme.ErasmusDimens
+import com.erasmustv.app.core.theme.ErasmusSpacing
 import com.erasmustv.app.core.theme.PitchBlack
-import com.erasmustv.app.core.theme.RatingGold
-import com.erasmustv.app.core.theme.SurfaceElevated
-import com.erasmustv.app.core.theme.TextMuted
-import com.erasmustv.app.core.theme.TextPrimary
-import com.erasmustv.app.core.theme.TextSecondary
+import com.erasmustv.app.core.theme.rememberPosterGridColumns
+import com.erasmustv.app.core.theme.rememberScreenHorizontalMargin
 import com.erasmustv.app.data.model.MediaItem
+import com.erasmustv.app.ui.components.ErasmusActionButton
+import com.erasmustv.app.ui.components.ErasmusButtonStyle
+import com.erasmustv.app.ui.components.ErasmusEmptyState
+import com.erasmustv.app.ui.components.ErasmusPageHeader
 import com.erasmustv.app.ui.components.MediaPosterCard
-import com.erasmustv.app.ui.components.TvFocusableCard
+import com.erasmustv.app.ui.components.TvFloatingNavBar
 import com.erasmustv.app.ui.components.TvGridSkeleton
-import com.erasmustv.app.ui.components.TvLeftNavRail
 import com.erasmustv.app.ui.components.TvPivotBringIntoViewSpec
+import com.erasmustv.app.ui.focus.SpatialDirection
+import com.erasmustv.app.ui.focus.gridFocusContainer
+import com.erasmustv.app.ui.focus.gridFocusItem
+import com.erasmustv.app.ui.focus.rememberFocusZoneMemory
+import com.erasmustv.app.ui.focus.rememberGridFocusHandle
 import com.erasmustv.app.ui.navigation.NavRoutes
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
+/** Focus-engine zone key for the single Watch List grid. */
+private const val WATCHLIST_GRID_KEY = "watchlist_grid"
 
+/**
+ * ERASMUS WATCH LIST.
+ *
+ * A single responsive grid of vertical posters — the same poster card used by
+ * every rail elsewhere, so a saved title looks identical here and on Home.
+ *
+ * The list is read straight from [WatchlistViewModel] / `WatchlistRepository`;
+ * there is no second store or local copy, which is what keeps this page, the
+ * detail pages' saved state, and the underlying persistence in agreement.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WatchlistScreen(
@@ -78,38 +79,91 @@ fun WatchlistScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val contentFocusRequester = remember { FocusRequester() }
-    val railFocusRequester = remember { FocusRequester() }
-    var isRailFocused by remember { mutableStateOf(false) }
+    val navFocusRequester = remember { FocusRequester() }
+    var isNavFocused by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
-    val contentShift by animateDpAsState(
-        targetValue = if (isRailFocused) 76.dp else 0.dp,
-        animationSpec = tween(160, easing = FastOutSlowInEasing),
-        label = "watchlistContentShift"
-    )
+    val horizontalMargin = rememberScreenHorizontalMargin()
+    val columns = rememberPosterGridColumns()
 
-    // Request initial focus on first load; never steal focus if rail is already active
-    var hasRequestedInitialFocus by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(uiState) {
-        if (!hasRequestedInitialFocus && !isRailFocused && uiState is WatchlistUiState.Success) {
-            try {
-                contentFocusRequester.requestFocus()
-                hasRequestedInitialFocus = true
-            } catch (_: Exception) {}
+    // ------------------------------------------------------------------
+    // Focus engine.
+    //
+    // The grid state is remembered here so the scroll offset survives a detail
+    // round trip. Without it the remembered *index* pointed at a cell the grid
+    // had not composed — it had reset to offset 0 — so restoration silently
+    // failed even though the memory was correct.
+    // ------------------------------------------------------------------
+    val gridState = rememberLazyGridState()
+    val gridHandle = rememberGridFocusHandle(WATCHLIST_GRID_KEY)
+    val focusMemory = rememberFocusZoneMemory()
+
+    // Re-read on every entry so a title removed from a detail page is gone the
+    // moment the user arrives back here.
+    LaunchedEffect(Unit) {
+        viewModel.loadWatchlist()
+    }
+
+    // ------------------------------------------------------------------
+    // Focus restoration, driven by *item identity* rather than a one-shot flag.
+    //
+    // The previous implementation guarded its single `requestFocus()` behind a
+    // `rememberSaveable` boolean. That flag survives the trip to a detail page,
+    // so on the way back it was already true and the restore never ran — and
+    // because `loadWatchlist()` flushes the grid through Loading (which swaps in
+    // a non-focusable skeleton and destroys the focused node), the page ended up
+    // with no focus at all after every return and after every removal.
+    //
+    // Keying on the loaded item identities instead means focus is re-established
+    // exactly when the grid is rebuilt, whatever the reason.
+    // ------------------------------------------------------------------
+
+    /**
+     * Whether this screen instance has claimed its entry focus yet.
+     *
+     * Deliberately *not* saveable, and deliberately checked before `isNavFocused`
+     * rather than after. On arrival the framework parks default focus on the
+     * first focusable it finds, which is the floating nav — so a plain
+     * "don't steal focus from the nav" guard permanently lost the race and left
+     * the page's intentional entry target (the first poster) unfocused. Claiming
+     * once per screen instance fixes entry, while still refusing to pull focus
+     * back out of the nav on later refreshes once the user has gone there on
+     * purpose.
+     */
+    var hasClaimedEntryFocus by remember { mutableStateOf(false) }
+
+    val loadedKeys = (uiState as? WatchlistUiState.Success)?.items
+        ?.joinToString(",") { "${it.mediaType}:${it.id}" }
+    LaunchedEffect(loadedKeys) {
+        if (loadedKeys.isNullOrEmpty()) return@LaunchedEffect
+        if (hasClaimedEntryFocus && isNavFocused) return@LaunchedEffect
+        val remembered = focusMemory.indexFor(WATCHLIST_GRID_KEY) ?: 0
+        // Clamped, because the remembered cell may have been the one the user
+        // just removed — in which case focus lands on its neighbour rather than
+        // being lost.
+        val itemCount = (uiState as? WatchlistUiState.Success)?.items?.size ?: 0
+        if (itemCount == 0) return@LaunchedEffect
+        val target = remembered.coerceIn(0, itemCount - 1)
+        if (gridHandle.focusIndexOrNearest(target) ||
+            runCatching { contentFocusRequester.requestFocus() }.isSuccess
+        ) {
+            hasClaimedEntryFocus = true
         }
     }
 
-    // Deterministic Back Handler:
-    // When in content, pressing BACK hops focus cleanly to the sidebar rail
-    BackHandler(enabled = !isRailFocused) {
+    BackHandler(enabled = !isNavFocused) {
         try {
-            railFocusRequester.requestFocus()
+            navFocusRequester.requestFocus()
         } catch (_: Exception) {
             onNavigate(NavRoutes.HOME)
         }
     }
-    // When in rail, pressing BACK returns to Home screen
-    BackHandler(enabled = isRailFocused) {
+    BackHandler(enabled = isNavFocused) {
         onNavigate(NavRoutes.HOME)
+    }
+
+    val focusNav: () -> Boolean = {
+        runCatching { navFocusRequester.requestFocus() }.isSuccess
     }
 
     Box(
@@ -118,208 +172,151 @@ fun WatchlistScreen(
             .background(PitchBlack)
     ) {
         when (val state = uiState) {
-            is WatchlistUiState.Loading -> {
-                TvGridSkeleton(contentShift = contentShift)
-            }
+            is WatchlistUiState.Loading -> TvGridSkeleton(columns = columns)
+
             is WatchlistUiState.Error -> {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(start = 64.dp),
+                        .padding(horizontal = horizontalMargin),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(text = state.message, style = ErasmusTvTypography.Body, color = TextPrimary)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    TvFocusableCard(
+                    ErasmusEmptyState(
+                        title = "Can't load your Watch List",
+                        message = state.message
+                    )
+                    Spacer(modifier = Modifier.height(ErasmusSpacing.Large))
+                    ErasmusActionButton(
+                        text = "Try Again",
                         onClick = { viewModel.loadWatchlist() },
-                        shape = RectangleShape,
-                        focusedScale = 1.025f,
-                        focusedBorderColor = FocusWhite,
-                        focusedBorderWidth = 1.5.dp,
-                        modifier = Modifier.focusRequester(contentFocusRequester)
-                    ) { isFocused ->
-                        Text(
-                            text = "Retry",
-                            style = ErasmusTvTypography.ButtonText,
-                            color = if (isFocused) PitchBlack else TextPrimary,
-                            modifier = Modifier
-                                .background(if (isFocused) Color.White else SurfaceElevated, RectangleShape)
-                                .padding(horizontal = 24.dp, vertical = 12.dp)
-                        )
-                    }
+                        style = ErasmusButtonStyle.Primary,
+                        modifier = Modifier.focusRequester(contentFocusRequester),
+                        onNavigateLeft = { focusNav() },
+                        onNavigateUp = { focusNav() },
+                        // Nothing lies below or beside this button. Consuming
+                        // those directions is what the empty-state branch already
+                        // did; omitting it here let focus vanish off the retry
+                        // button on the error branch.
+                        onNavigateDown = {},
+                        onNavigateRight = {}
+                    )
                 }
             }
+
             is WatchlistUiState.Success -> {
                 if (state.items.isEmpty()) {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .graphicsLayer {
-                                translationX = contentShift.toPx()
-                            }
-                            .padding(start = 64.dp, end = 48.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(
+                                start = horizontalMargin,
+                                end = horizontalMargin,
+                                top = ErasmusDimens.NavPillContentClearance
+                            ),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .background(SurfaceElevated, RectangleShape)
-                                    .border(1.dp, BorderHairline, RectangleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Bookmark,
-                                    contentDescription = null,
-                                    tint = RatingGold,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(18.dp))
-                            Text(
-                                text = "MY LIST",
-                                style = ErasmusTvTypography.Badge.copy(
-                                    fontSize = 11.sp,
-                                    letterSpacing = 1.6.sp,
-                                    color = RatingGold
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "Your Watchlist is empty",
-                                style = ErasmusTvTypography.SectionTitle.copy(fontSize = 22.sp),
-                                color = TextPrimary
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Explore movies and TV shows to add them to your watchlist.",
-                                style = ErasmusTvTypography.Body.copy(fontSize = 13.sp),
-                                color = TextMuted
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-                            TvFocusableCard(
-                                onClick = { onNavigate(NavRoutes.HOME) },
-                                shape = RectangleShape,
-                                focusedScale = 1.025f,
-                                focusedBorderColor = FocusWhite,
-                                focusedBorderWidth = 1.5.dp,
-                                contentDescription = "Explore Movies & Shows",
-                                role = androidx.compose.ui.semantics.Role.Button,
-                                modifier = Modifier
-                                    .focusRequester(contentFocusRequester)
-                                    .onKeyEvent { keyEvent ->
-                                        if (keyEvent.type == KeyEventType.KeyDown) {
-                                            when (keyEvent.key) {
-                                                Key.DirectionLeft -> {
-                                                    try {
-                                                        railFocusRequester.requestFocus()
-                                                        true
-                                                    } catch (_: Exception) {
-                                                        false
-                                                    }
-                                                }
-                                                Key.DirectionUp, Key.DirectionRight, Key.DirectionDown -> true
-                                                else -> false
-                                            }
-                                        } else false
-                                    }
-                            ) { isFocused ->
-                                Row(
-                                    modifier = Modifier
-                                        .background(
-                                            color = if (isFocused) Color.White else SurfaceElevated,
-                                            shape = RectangleShape
-                                        )
-                                        .border(
-                                            width = 1.dp,
-                                            color = if (isFocused) Color.Transparent else BorderHairline,
-                                            shape = RectangleShape
-                                        )
-                                        .padding(horizontal = 24.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Home,
-                                        contentDescription = null,
-                                        tint = if (isFocused) PitchBlack else TextPrimary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Text(
-                                        text = "Explore Movies & Shows",
-                                        style = ErasmusTvTypography.ButtonText,
-                                        color = if (isFocused) PitchBlack else TextPrimary
-                                    )
-                                }
-                            }
-                        }
+                        ErasmusEmptyState(
+                            icon = Icons.Default.BookmarkBorder,
+                            title = "Your Watch List is empty",
+                            message = "Open any film or series and choose Add to Watch List to keep it here."
+                        )
+                        Spacer(modifier = Modifier.height(ErasmusSpacing.Large))
+                        ErasmusActionButton(
+                            text = "Browse Titles",
+                            onClick = { onNavigate(NavRoutes.HOME) },
+                            icon = Icons.Default.Home,
+                            style = ErasmusButtonStyle.Primary,
+                            modifier = Modifier.focusRequester(contentFocusRequester),
+                            onNavigateLeft = { focusNav() },
+                            onNavigateUp = { focusNav() },
+                            // Nothing lies below or beside this button; consume
+                            // those directions so focus cannot vanish.
+                            onNavigateDown = {},
+                            onNavigateRight = {}
+                        )
                     }
                 } else {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .graphicsLayer {
-                                translationX = contentShift.toPx()
-                            }
-                            .padding(start = 64.dp, top = 36.dp, end = 48.dp)
+                            .padding(
+                                start = horizontalMargin,
+                                end = horizontalMargin,
+                                top = ErasmusDimens.NavPillContentClearance
+                            )
                     ) {
-                        Text(
-                            text = "My List (${state.items.size})",
-                            style = ErasmusTvTypography.SectionTitle.copy(fontSize = 24.sp),
-                            modifier = Modifier.padding(bottom = 18.dp)
+                        ErasmusPageHeader(
+                            title = "Watch List",
+                            subtitle = if (state.items.size == 1) {
+                                "1 saved title"
+                            } else {
+                                "${state.items.size} saved titles"
+                            }
                         )
+
+                        Spacer(modifier = Modifier.height(ErasmusSpacing.Large))
 
                         CompositionLocalProvider(
                             LocalBringIntoViewSpec provides remember { TvPivotBringIntoViewSpec(0.5f) }
                         ) {
                             LazyVerticalGrid(
-                                columns = GridCells.Fixed(5),
-                                contentPadding = PaddingValues(bottom = 32.dp),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(16.dp),
-                                modifier = Modifier.fillMaxSize()
+                                state = gridState,
+                                columns = GridCells.Fixed(columns),
+                                contentPadding = PaddingValues(
+                                    top = ErasmusDimens.RailFocusHeadroom,
+                                    bottom = ErasmusSpacing.XLarge
+                                ),
+                                horizontalArrangement = Arrangement.spacedBy(ErasmusDimens.GridItemSpacing),
+                                verticalArrangement = Arrangement.spacedBy(ErasmusDimens.GridRowSpacing),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .gridFocusContainer(gridHandle, gridState, state.items.size)
                             ) {
-                                itemsIndexed(state.items, key = { _, it -> "${it.mediaType}:${it.id}" }) { index, item ->
-                                    val isFirstCol = index % 5 == 0
-                                    val isTopRow = index < 5
-                                    val isBottomRow = index >= (state.items.size - ((state.items.size - 1) % 5 + 1))
-                                    Box(
-                                        modifier = Modifier
-                                            .then(if (index == 0) Modifier.focusRequester(contentFocusRequester) else Modifier)
-                                            .onKeyEvent { event ->
-                                                if (event.type == KeyEventType.KeyDown) {
-                                                    when (event.key) {
-                                                        Key.DirectionLeft -> {
-                                                            if (isFirstCol) {
-                                                                try {
-                                                                    railFocusRequester.requestFocus()
-                                                                    true
-                                                                } catch (_: Exception) {
-                                                                    false
-                                                                }
-                                                            } else false
+                                itemsIndexed(
+                                    items = state.items,
+                                    // Content-derived identity, so removing a
+                                    // title cannot slide focus onto a different
+                                    // one by way of a shifted index.
+                                    key = { _, item -> "${item.mediaType}:${item.id}" }
+                                ) { index, item ->
+                                    MediaPosterCard(
+                                        item = item,
+                                        onClick = { onMediaClick(item) },
+                                        cardWidth = Dp.Unspecified,
+                                        cardModifier = Modifier.gridFocusItem(
+                                            handle = gridHandle,
+                                            index = index,
+                                            onFocused = { focusedIndex ->
+                                                focusMemory.record(
+                                                    WATCHLIST_GRID_KEY,
+                                                    focusedIndex,
+                                                    gridHandle.centerXOf(focusedIndex)
+                                                )
+                                            },
+                                            onEscapeUp = focusNav,
+                                            onEscapeLeft = focusNav,
+                                            // More rows exist below the fold:
+                                            // scroll rather than treating the last
+                                            // visible row as the grid's edge.
+                                            onScrollRequest = { direction ->
+                                                coroutineScope.launch {
+                                                    runCatching {
+                                                        val delta = if (direction == SpatialDirection.Down) {
+                                                            columns
+                                                        } else {
+                                                            -columns
                                                         }
-                                                        Key.DirectionUp -> {
-                                                            if (isTopRow) true else false
-                                                        }
-                                                        Key.DirectionDown -> {
-                                                            if (isBottomRow) true else false
-                                                        }
-                                                        else -> false
+                                                        gridState.animateScrollToItem(
+                                                            (index + delta)
+                                                                .coerceIn(0, state.items.size - 1)
+                                                        )
                                                     }
-                                                } else false
+                                                }
                                             }
-                                    ) {
-                                        MediaPosterCard(
-                                            item = item,
-                                            onClick = { onMediaClick(item) },
-                                            cardWidth = 140
                                         )
-                                    }
+                                    )
                                 }
                             }
                         }
@@ -328,30 +325,26 @@ fun WatchlistScreen(
             }
         }
 
-        // Persistent Left Nav Rail
-        val activeProfile = (uiState as? WatchlistUiState.Success)?.activeProfile
-        TvLeftNavRail(
+        TvFloatingNavBar(
             currentRoute = NavRoutes.WATCHLIST,
-            activeProfile = activeProfile,
+            activeProfile = (uiState as? WatchlistUiState.Success)?.activeProfile,
             onNavigate = onNavigate,
             onProfileClick = onProfileClick,
-            railFocusRequester = railFocusRequester,
-            onFocusChanged = { isRailFocused = it },
-            onNavigateRight = {
-                try {
-                    contentFocusRequester.requestFocus()
-                    true
-                } catch (_: Exception) {
-                    false
-                }
+            navFocusRequester = navFocusRequester,
+            onFocusChanged = { isNavFocused = it },
+            onNavigateIntoContent = {
+                // Back to the poster the user was on, not the top-left cell.
+                val remembered = focusMemory.indexFor(WATCHLIST_GRID_KEY) ?: 0
+                gridHandle.focusIndexOrNearest(remembered) ||
+                    runCatching { contentFocusRequester.requestFocus() }.isSuccess
             },
             onReselectCurrent = {
-                try {
-                    contentFocusRequester.requestFocus()
-                } catch (_: Exception) {}
+                coroutineScope.launch {
+                    runCatching { gridState.animateScrollToItem(0) }
+                    gridHandle.focusIndexOrNearest(0)
+                }
             },
-            modifier = Modifier.align(Alignment.CenterStart)
+            modifier = Modifier.align(Alignment.TopCenter)
         )
     }
 }
-

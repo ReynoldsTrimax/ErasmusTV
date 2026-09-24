@@ -29,16 +29,56 @@ All tokens are defined in [`Color.kt`](file:///Users/paarthsharma/Developer/Eras
 
 ### 10-Foot Typography Scale
 On living-room displays viewed from 7–10 feet, sub-11sp text becomes illegible. The typographic scale enforces a minimum of 11–12sp for all readable metadata:
-- **HeroTitleLarge**: 28sp, line height 34sp, Black weight
-- **BillboardTitle**: 24sp, line height 30sp, Bold weight
-- **SectionTitle**: 17sp, line height 22sp, SemiBold weight
-- **CardTitle**: 12sp, line height 16sp, Medium weight
-- **Body / BodyLarge**: 12sp / 13sp, line height 17sp / 18sp
-- **Badge / ButtonText**: 12sp, SemiBold weight
-- **BrandBadge**: 12sp, Bostone typeface, 1.5sp letter spacing
-- **HeroMeta / MatchScore**: 12sp, Medium / Bold weight
-- **CastSummary**: 12.5sp, line height 17sp, Normal weight
+- **PageTitle**: 34sp, line height 40sp, Bold weight, tracking `-0.6sp`
+- **HeroTitleLarge**: 32sp, line height 38sp, Black weight, tracking `-0.6sp`
+- **BillboardTitle**: 24sp, line height 30sp, Bold weight, tracking `-0.3sp`
+- **SectionTitle**: 24sp, line height 30sp, SemiBold weight, tracking `-0.3sp`
+- **CardTitle**: 14sp, line height 18sp, Medium weight, tracking `-0.1sp`
+- **CardMeta**: 12.5sp, line height 16sp, Medium weight, tracking `+0.2sp`
+- **Body / BodyLarge**: 12.5sp / 13.5sp, line height 18sp / 19sp, tracking `+0.2sp`
+- **Badge / ButtonText**: 12sp / 13sp, Bold / SemiBold weight
+- **BrandBadge**: 12.5sp, Bostone typeface, 1.5sp letter spacing
+- **HeroMeta / MatchScore**: 12.5sp / 12sp, Medium / Bold weight
+- **CastSummary**: 12.5sp, line height 17sp, Normal weight, tracking `+0.2sp`
+- **HeroRankNumber**: 80sp, Black weight, tracking `-5sp` (graphic numeral)
 - **Top10Badge**: 11sp, Black weight, 0.4sp letter spacing
+
+#### Tracking ladder
+Letter spacing is a function of size, never one value across the scale: large type reads too loose as it grows, small type too tight across a room.
+
+| Size band | Tracking | Example |
+|---|---|---|
+| ≥ 30sp | `−0.018em` | PageTitle 34sp → `−0.6sp` |
+| 24–29sp | `−0.012em` | SectionTitle 24sp → `−0.3sp` |
+| 14–18sp | `−0.007em` | CardTitle 14sp → `−0.1sp` |
+| ≤ 13.5sp | `+0.015em` | Body 12.5sp → `+0.2sp` |
+
+Display numerals (`HeroRankNumber`) and the Bostone wordmark sit outside the ladder — both are graphic marks, tracked by eye.
+
+---
+
+## 1a. Motion — Spring Vocabulary
+
+Defined in [`Motion.kt`](file:///Users/paarthsharma/Developer/ErasmusTV/app/src/main/java/com/erasmustv/app/core/theme/Motion.kt). Anything that **moves, lifts, or resizes** uses a spring; only opacity and colour use a duration curve.
+
+Why: on TV the remote outruns the animation. A viewer holding D-pad right retargets the focus animation every ~80ms, and a duration-based tween restarts its interpolation on each retarget, so fast traversal visibly stutters. A spring continues from the value and velocity already on screen.
+
+Motion is specified with two numbers — **damping ratio** (overshoot) and **response** (seconds to reach target, not a duration).
+
+| Profile | Damping | Response | Compose stiffness | Used for |
+|---|---|---|---|---|
+| `TvSpring.FocusFast` | `1.0` | `0.25s` | ≈ 632 | Button, chip, nav-item, player-control focus |
+| `TvSpring.Focus` | `1.0` | `0.30s` | ≈ 439 | Card and tile focus lift + shadow |
+| `TvSpring.Reposition` | `1.0` | `0.40s` | ≈ 247 | Nav pill geometry, timeline track/thumb |
+| `TvSpring.Sheet` | `0.8` | `0.30s` | ≈ 439 | Panels arriving from an edge (episode switcher, submenu) |
+| `TvSpring.Momentum` | `0.8` | `0.40s` | ≈ 247 | Motion the user threw |
+
+Rules:
+- **Damping `1.0` by default.** Overshoot is reserved for momentum-carrying motion (a panel thrown in from an edge). A menu that merely appeared must not bounce.
+- **Compose conversion**: `stiffness = ω²` where `ω = 2π / response` at unit mass — `TvMotion.stiffnessFor(response)`. Pinned by `MotionSpringTest`.
+- **Symmetric paths.** A panel entering from the right exits to the right, on the same spring in both directions.
+- **Reduced motion snaps.** `TvSpring.*.floatSpec(isReducedMotion)` / `dpSpec` / `offsetSpec` return `snap()` when the system animator scale is 0 — the state change still lands, it just doesn't travel.
+- **Durations remain** (`TvMotion.DURATION_*`) for opacity crossfades, colour shifts, and the skeleton pulse only.
 
 ---
 

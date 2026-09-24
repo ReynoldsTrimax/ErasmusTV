@@ -12,6 +12,18 @@ val BostoneFontFamily = FontFamily(
 )
 
 object ErasmusTvTypography {
+    // Tracking is a function of size, never one value for everything. Large type
+    // reads too loose as it grows, small type too tight at 10 feet, so the ladder
+    // runs negative at display sizes and slightly positive for supporting copy:
+    //
+    //   ≥ 30sp   −0.018em   (34sp → −0.6sp, 32sp → −0.6sp)
+    //   24–29sp  −0.012em   (24sp → −0.3sp)
+    //   14–18sp  −0.007em   (14sp → −0.1sp)
+    //   ≤ 13.5sp +0.015em   (12.5–13.5sp → +0.2sp)
+    //
+    // Display numerals and the Bostone wordmark sit outside the ladder: both are
+    // graphic marks, tracked by eye.
+
     // Wordmark typography
     val Wordmark = TextStyle(
         fontFamily = BostoneFontFamily,
@@ -26,31 +38,69 @@ object ErasmusTvTypography {
         fontWeight = FontWeight.Bold,
         fontSize = 24.sp,
         lineHeight = 30.sp,
+        letterSpacing = (-0.3).sp,
         color = TextPrimary
     )
 
+    // Shelf headings. Strong enough to anchor a section from across a room,
+    // deliberately held at the low end of the spec range (24-30sp) so headings
+    // never start competing with the hero or with the artwork below them.
     val SectionTitle = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 18.sp,
-        lineHeight = 24.sp,
-        letterSpacing = (-0.2).sp,
+        fontSize = 24.sp,
+        lineHeight = 30.sp,
+        letterSpacing = (-0.3).sp,
         color = TextPrimary
     )
 
     val SectionAction = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
-        fontSize = 12.5.sp,
+        fontSize = 13.sp,
+        letterSpacing = 0.2.sp,
         color = TextMuted
     )
 
     val CardTitle = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
-        fontSize = 13.sp,
-        lineHeight = 17.sp,
+        fontSize = 14.sp,
+        lineHeight = 18.sp,
+        letterSpacing = (-0.1).sp,
         color = TextPrimary
+    )
+
+    /** Muted supporting line beneath a card title: rating · year · type. */
+    val CardMeta = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.5.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.2.sp,
+        color = TextSecondary
+    )
+
+    /**
+     * Top-level page heading (Watch List, Studios, Search). Larger than a shelf
+     * heading so a page reads as a place, but well below hero scale.
+     */
+    val PageTitle = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 34.sp,
+        lineHeight = 40.sp,
+        letterSpacing = (-0.6).sp,
+        color = TextPrimary
+    )
+
+    /** Quiet one-line subtitle under a [PageTitle]. */
+    val PageSubtitle = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        color = TextSecondary
     )
 
     val Body = TextStyle(
@@ -58,6 +108,7 @@ object ErasmusTvTypography {
         fontWeight = FontWeight.Normal,
         fontSize = 12.5.sp,
         lineHeight = 18.sp,
+        letterSpacing = 0.2.sp,
         color = TextSecondary
     )
 
@@ -66,6 +117,7 @@ object ErasmusTvTypography {
         fontWeight = FontWeight.Normal,
         fontSize = 13.5.sp,
         lineHeight = 19.sp,
+        letterSpacing = 0.2.sp,
         color = TextSecondary
     )
 
@@ -81,6 +133,7 @@ object ErasmusTvTypography {
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.SemiBold,
         fontSize = 13.sp,
+        letterSpacing = 0.2.sp,
         color = TextPrimary
     )
 
@@ -104,7 +157,7 @@ object ErasmusTvTypography {
         fontWeight = FontWeight.Black,
         fontSize = 32.sp,
         lineHeight = 38.sp,
-        letterSpacing = (-0.3).sp,
+        letterSpacing = (-0.6).sp,
         color = TextPrimary
     )
 
@@ -112,6 +165,7 @@ object ErasmusTvTypography {
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Medium,
         fontSize = 12.5.sp,
+        letterSpacing = 0.2.sp,
         color = TextSecondary
     )
 
@@ -130,6 +184,7 @@ object ErasmusTvTypography {
         fontWeight = FontWeight.Normal,
         fontSize = 12.5.sp,
         lineHeight = 17.sp,
+        letterSpacing = 0.2.sp,
         color = TextSecondary
     )
 
